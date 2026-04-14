@@ -1,0 +1,205 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required, immutable)
+    //   - email: string (required)
+    //   - displayName: string (optional)
+    //   - photoURL: string (optional)
+    //   - createdAt: timestamp (optional, immutable)
+    //
+    // Collection: products
+    // Document ID: {productId}
+    // Fields:
+    //   - id: string (required)
+    //   - userId: string (required, immutable)
+    //   - name: string (required)
+    //   - website: string (optional)
+    //   - positioning: string (optional)
+    //   - audience: string (optional)
+    //   - tone: string (optional)
+    //   - stage: string (optional)
+    //   - visualStyle: string (optional)
+    //
+    // Collection: campaigns
+    // Document ID: {campaignId}
+    // Fields:
+    //   - id: string (required)
+    //   - userId: string (required, immutable)
+    //   - productId: string (required)
+    //   - productName: string (optional)
+    //   - productLogoUrl: string (optional)
+    //   - isShared: boolean (optional)
+    //   - theme: string (required)
+    //   - targetAudience: string (optional)
+    //   - coreMessage: string (optional)
+    //   - hook: string (optional)
+    //   - cta: string (optional)
+    //   - contentFormat: string (optional)
+    //   - repurposingNotes: string (optional)
+    //   - confidenceScore: number (optional)
+    //   - pillar: string (optional)
+    //   - researchSummary: string (optional)
+    //   - platformVersions: list (optional)
+    //   - dailyPosts: list (optional)
+    //   - createdAt: string (optional)
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function idUnchanged() {
+      return !('id' in request.resource.data) || request.resource.data.id == resource.data.id;
+    }
+
+    function userIdUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    function productIdUnchanged() {
+      return !('productId' in request.resource.data) || request.resource.data.productId == resource.data.productId;
+    }
+
+    function createdAtUnchanged() {
+      return !('createdAt' in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isNewDocOwner() {
+      return isAuthenticated() && request.auth.uid == request.resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email == 'garvitbansal2303@gmail.com';
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.email is string && isValidEmail(data.email) && data.email.size() < 256 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 2048)) &&
+             (!('createdAt' in data) || data.createdAt is timestamp);
+    }
+
+    function isValidProduct(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() < 128 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 256 &&
+             (!('website' in data) || (data.website is string && data.website.size() < 2048)) &&
+             (!('positioning' in data) || (data.positioning is string && data.positioning.size() < 5000)) &&
+             (!('audience' in data) || (data.audience is string && data.audience.size() < 5000)) &&
+             (!('tone' in data) || (data.tone is string && data.tone.size() < 1000)) &&
+             (!('stage' in data) || (data.stage is string && data.stage.size() < 1000)) &&
+             (!('visualStyle' in data) || (data.visualStyle is string && data.visualStyle.size() < 5000));
+    }
+
+    function isValidCampaign(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() < 128 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.productId is string && data.productId.size() > 0 && data.productId.size() < 128 &&
+             data.theme is string && data.theme.size() > 0 && data.theme.size() < 1000;
+             // Allowing other fields to be flexible for now as they are generated by AI
+    }
+
+    function isValidCreative(data) {
+      return data.productId is string && data.productId.size() > 0 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.url is string && data.url.size() > 0 && data.url.size() < 2048 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 256 &&
+             data.createdAt is string;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged();
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && uidNotModified() && createdAtUnchanged();
+      allow delete: if isOwner(userId);
+    }
+
+    match /products/{productId} {
+      allow read: if isDocOwner();
+      allow create: if isNewDocOwner() && isValidProduct(request.resource.data);
+      allow update: if isDocOwner() && isNewDocOwner() && isValidProduct(request.resource.data) && userIdUnchanged() && idUnchanged();
+      allow delete: if isDocOwner();
+    }
+
+    match /creatives/{creativeId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if isDocOwner() || resource.data.get('isShared', false) == true;
+      allow create: if isNewDocOwner() && isValidCampaign(request.resource.data);
+      allow update: if isDocOwner() && isValidCampaign(request.resource.data) && userIdUnchanged() && idUnchanged() && productIdUnchanged();
+      allow delete: if isDocOwner();
+      
+      match /images/{imageId} {
+        allow read: if (isAuthenticated() && get(/databases/$(database)/documents/campaigns/$(campaignId)).data.userId == request.auth.uid) || get(/databases/$(database)/documents/campaigns/$(campaignId)).data.get('isShared', false) == true;
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+        allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+        allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      }
+      
+      match /feedbacks/{feedbackId} {
+        allow read: if (isAuthenticated() && get(/databases/$(database)/documents/campaigns/$(campaignId)).data.userId == request.auth.uid) || get(/databases/$(database)/documents/campaigns/$(campaignId)).data.get('isShared', false) == true;
+        allow create: if get(/databases/$(database)/documents/campaigns/$(campaignId)).data.get('isShared', false) == true;
+        allow update, delete: if isAuthenticated() && get(/databases/$(database)/documents/campaigns/$(campaignId)).data.userId == request.auth.uid;
+      }
+    }
+
+    match /token_usage/{logId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /error_logs/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

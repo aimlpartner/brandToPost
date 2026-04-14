@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user's unique ID"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "The user's profile photo URL"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user was created"
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A Brand Position profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "website": { "type": "string" },
+        "positioning": { "type": "string" },
+        "audience": { "type": "string" },
+        "tone": { "type": "string" },
+        "stage": { "type": "string" },
+        "visualStyle": { "type": "string" }
+      },
+      "required": ["id", "userId", "name"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "A generated weekly campaign",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "productId": { "type": "string" },
+        "theme": { "type": "string" },
+        "targetAudience": { "type": "string" },
+        "coreMessage": { "type": "string" },
+        "hook": { "type": "string" },
+        "cta": { "type": "string" },
+        "contentFormat": { "type": "string" },
+        "repurposingNotes": { "type": "string" },
+        "confidenceScore": { "type": "number" },
+        "pillar": { "type": "string" },
+        "researchSummary": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "productId", "theme"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores user profiles"
+    },
+    "products/{productId}": {
+      "schema": {
+        "$ref": "#/entities/Product"
+      },
+      "description": "Stores user products"
+    },
+    "campaigns/{campaignId}": {
+      "schema": {
+        "$ref": "#/entities/Campaign"
+      },
+      "description": "Stores generated campaigns"
+    }
+  }
+}
