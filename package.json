@@ -44,11 +44,15 @@
     "vite": "^6.4.2",
     "vite-plugin-pwa": "^1.2.0"
   },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "overrides": {
     "glob": "^13.0.6",
     "source-map": "^0.7.6",
-    "whatwg-encoding": "^3.1.1",
-    "sourcemap-codec": "^1.4.8",
+    "whatwg-encoding": "npm:@exodus/bytes@^1.15.0",
+    "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@^1.5.5",
     "node-domexception": "^2.0.2",
     "serialize-javascript": "^7.0.5"
   }
