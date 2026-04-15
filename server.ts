@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import cookieParser from 'cookie-parser';
+import fs from 'fs';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { GoogleGenAI } from '@google/genai';
@@ -225,7 +226,8 @@ setInterval(async () => {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
+  const HOST = process.env.HOST || '0.0.0.0';
 
   app.use(express.json({ limit: '50mb' }));
   app.use(cookieParser());
@@ -948,23 +950,24 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  const distPath = path.join(process.cwd(), 'dist');
+
+  // Serve the built client when available in production or when dist exists.
+  if (process.env.NODE_ENV === "production" || fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Server running on http://${HOST}:${PORT}`);
   });
 }
 
