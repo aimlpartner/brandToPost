@@ -198,8 +198,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Server-only collections (accessed via firebase-admin)
+    match /server_schedules/{document=**} {
+      allow read, write: if false;
+    }
+    match /server_queues/{document=**} {
+      allow read, write: if false;
+    }
+    match /server_tokens/{document=**} {
+      allow read, write: if false;
+    }
+
     match /error_logs/{document=**} {
-      allow read, write: if true;
+      allow create: if true; // Allow anyone to log errors
+      allow read, update, delete: if isAdmin(); // Only admins can read/modify
     }
   }
 }

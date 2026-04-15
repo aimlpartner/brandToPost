@@ -5,7 +5,7 @@ import { Loader2, Plus, Calendar, Target, MessageSquare, Zap, RefreshCw, Layers,
 import { cn, formatCopy } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { collection, query, where, onSnapshot, setDoc, doc, getDocs, deleteDoc } from "firebase/firestore";
 import { handleFirestoreError, OperationType, logSilentError } from "../lib/firestore-error";
 import { ImageLoader } from "../components/ImageLoader";
@@ -658,9 +658,13 @@ export function Campaigns() {
         const pdfDoc = await generateCampaignPDF(campaignToSave, activeProduct!);
         const pdfBase64 = pdfDoc.output('datauristring');
         
+        const token = await auth.currentUser?.getIdToken();
         const emailRes = await fetch('/api/campaigns/email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({
             email: user.email,
             pdfBase64,
@@ -690,9 +694,13 @@ export function Campaigns() {
     setPublishing(prev => ({ ...prev, [publishKey]: true }));
     
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/linkedin/publish', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ text: copy, productId: activeProduct.id, imageUrl })
       });
       
@@ -718,9 +726,13 @@ export function Campaigns() {
     setQueuing(prev => ({ ...prev, [queueKey]: true }));
     
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/schedule/queue', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ text: copy, campaignId, platform, productId: activeProduct.id, day, date })
       });
       
@@ -742,9 +754,13 @@ export function Campaigns() {
     setQueuing(prev => ({ ...prev, [queueKey]: true }));
     
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/schedule/queue/remove', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ campaignId, platform, productId: activeProduct.id, day })
       });
       

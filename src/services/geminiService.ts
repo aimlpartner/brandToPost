@@ -1,13 +1,17 @@
 import { Type } from "@google/genai";
 import { ProductDNA, WeeklyCampaign, Creative } from "../types";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { logSilentError } from "../lib/firestore-error";
 
 async function generateContentProxy(model: string, contents: any, config?: any) {
+  const token = await auth.currentUser?.getIdToken();
   const response = await fetch('/api/ai/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
     body: JSON.stringify({ model, contents, config })
   });
   
@@ -88,9 +92,13 @@ export async function researchProductDNA(website: string, currentDna?: Partial<P
     
     // Attempt to scrape the website for better context, especially for typography
     try {
+      const token = await auth.currentUser?.getIdToken();
       const scrapeRes = await fetch('/api/scrape', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ url: website })
       });
       

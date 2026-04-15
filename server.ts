@@ -1,105 +1,227 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { GoogleGenAI } from '@google/genai';
+import * as admin from 'firebase-admin';
 
-// --- Scheduling State ---
-let globalLinkedinTokens: Record<string, string> = {}; // productId -> token
+// --- Firebase Admin Initialization ---
+let db: admin.firestore.Firestore | null = null;
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    db = admin.firestore();
+    console.log('[Firebase Admin] Initialized successfully with Service Account. Using Firestore for state.');
+  } else {
+    console.warn('[Firebase Admin] FIREBASE_SERVICE_ACCOUNT not found. Initializing with Project ID for Auth only. Falling back to in-memory state for data.');
+    admin.initializeApp({ projectId: 'map-api-459818' });
+  }
+} catch (error) {
+  console.error('[Firebase Admin] Initialization error:', error);
+}
+
+// --- Storage Helpers ---
+async function getScheduleConfig(productId: string) {
+  if (db) {
+    const doc = await db.collection('server_schedules').doc(productId).get();
+    return doc.exists ? doc.data() : { enabled: false, timeUtc: "14:00" };
+  }
+  return scheduleConfigs[productId] || { enabled: false, timeUtc: "14:00" };
+}
+
+async function setScheduleConfig(productId: string, config: any) {
+  if (db) {
+    await db.collection('server_schedules').doc(productId).set(config, { merge: true });
+  } else {
+    scheduleConfigs[productId] = { ...scheduleConfigs[productId], ...config };
+  }
+}
+
+async function getPostQueue(productId: string): Promise<any[]> {
+  if (db) {
+    const snapshot = await db.collection(`server_queues/${productId}/posts`).orderBy('createdAt', 'asc').get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+  return postQueue.filter(p => p.productId === productId);
+}
+
+async function addToQueue(post: any) {
+  if (db) {
+    await db.collection(`server_queues/${post.productId}/posts`).doc(post.id).set({
+      ...post,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  } else {
+    postQueue.push(post);
+  }
+}
+
+async function removeFromQueue(productId: string, postId: string) {
+  if (db) {
+    await db.collection(`server_queues/${productId}/posts`).doc(postId).delete();
+  } else {
+    postQueue = postQueue.filter(q => q.id !== postId);
+  }
+}
+
+async function getToken(productId: string, platform: string) {
+  if (db) {
+    const doc = await db.collection('server_tokens').doc(productId).get();
+    return doc.exists ? doc.data()?.[platform] : null;
+  }
+  if (platform === 'linkedin') return globalLinkedinTokens[productId];
+  if (platform === 'facebook') return globalFacebookTokens[productId];
+  if (platform === 'instagram') return globalInstagramTokens[productId];
+  if (platform === 'reddit') return globalRedditTokens[productId];
+  return null;
+}
+
+async function setToken(productId: string, platform: string, token: string) {
+  if (db) {
+    await db.collection('server_tokens').doc(productId).set({ [platform]: token }, { merge: true });
+  } else {
+    if (platform === 'linkedin') globalLinkedinTokens[productId] = token;
+    if (platform === 'facebook') globalFacebookTokens[productId] = token;
+    if (platform === 'instagram') globalInstagramTokens[productId] = token;
+    if (platform === 'reddit') globalRedditTokens[productId] = token;
+  }
+}
+
+// --- Scheduling State (Fallback) ---
+let globalLinkedinTokens: Record<string, string> = {};
 let globalFacebookTokens: Record<string, string> = {};
 let globalInstagramTokens: Record<string, string> = {};
 let globalRedditTokens: Record<string, string> = {};
-let scheduleConfigs: Record<string, { enabled: boolean, timeUtc: string }> = {}; // productId -> config
+let scheduleConfigs: Record<string, { enabled: boolean, timeUtc: string }> = {};
 let postQueue: Array<{ id: string, text: string, campaignId: string, platform: string, productId: string, day?: string }> = [];
-let lastPostedDates: Record<string, string> = {}; // productId -> "YYYY-MM-DD" in UTC
+let lastPostedDates: Record<string, string> = {};
 
 // --- Cron Job for Scheduled Posting ---
 setInterval(async () => {
-  if (postQueue.length === 0) return;
-
   const now = new Date();
   const hours = now.getUTCHours().toString().padStart(2, '0');
   const minutes = now.getUTCMinutes().toString().padStart(2, '0');
   const currentTimeUtc = `${hours}:${minutes}`;
   const currentDateUtc = now.toISOString().split('T')[0];
 
-  // Process queue for each product
-  const productsToProcess = new Set(postQueue.map(p => p.productId));
+  let productsToProcess: string[] = [];
 
-  for (const productId of productsToProcess) {
-    const config = scheduleConfigs[productId] || { enabled: false, timeUtc: "14:00" };
-    if (!config.enabled) continue;
-
-    if (currentTimeUtc === config.timeUtc && lastPostedDates[productId] !== currentDateUtc) {
-      // Find the first post for this product
-      const postIndex = postQueue.findIndex(p => p.productId === productId);
-      if (postIndex !== -1) {
-        lastPostedDates[productId] = currentDateUtc;
-        const post = postQueue.splice(postIndex, 1)[0]; // Remove from queue
-        
-        const token = globalLinkedinTokens[post.productId];
-        if (!token) {
-          console.error(`[Scheduler] No token found for product ${post.productId}, skipping post ${post.id}`);
-          postQueue.unshift(post);
-          lastPostedDates[productId] = "";
-          continue;
-        }
-
-        try {
-          console.log(`[Scheduler] Attempting to publish post ${post.id} to ${post.platform}...`);
-          // Publish to LinkedIn
-          const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (!userRes.ok) throw new Error('Failed to fetch user info');
-          const userData = await userRes.json();
-          const authorUrn = `urn:li:person:${userData.sub}`;
-
-          const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'X-Restli-Protocol-Version': '2.0.0'
-            },
-            body: JSON.stringify({
-              author: authorUrn,
-              lifecycleState: 'PUBLISHED',
-              specificContent: {
-                'com.linkedin.ugc.ShareContent': {
-                  shareCommentary: { text: post.text },
-                  shareMediaCategory: 'NONE'
-                }
-              },
-              visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-            })
-          });
-
-          if (!postRes.ok) {
-            const errorText = await postRes.text();
-            console.error('[Scheduler] Failed to publish scheduled post:', errorText);
-            
-            // If it's a duplicate post error, don't put it back in the queue
-            if (errorText.includes('DUPLICATE_POST')) {
-              console.log(`[Scheduler] Post ${post.id} is a duplicate, removing from queue.`);
-            } else {
-              // Put it back in the queue if failed
-              postQueue.unshift(post);
-              lastPostedDates[productId] = ""; // Allow retrying
-            }
-          } else {
-            console.log('[Scheduler] Successfully published scheduled post:', post.id);
-          }
-        } catch (err) {
-          console.error('[Scheduler] Error in scheduled post:', err);
-          postQueue.unshift(post);
-          lastPostedDates[productId] = "";
-        }
+  if (db) {
+    const snapshot = await db.collection('server_schedules').where('enabled', '==', true).get();
+    for (const doc of snapshot.docs) {
+      const config = doc.data();
+      if (config.timeUtc === currentTimeUtc && config.lastPostedDate !== currentDateUtc) {
+        productsToProcess.push(doc.id);
+      }
+    }
+  } else {
+    if (postQueue.length === 0) return;
+    for (const [productId, config] of Object.entries(scheduleConfigs)) {
+      if (config.enabled && config.timeUtc === currentTimeUtc && lastPostedDates[productId] !== currentDateUtc) {
+        productsToProcess.push(productId);
       }
     }
   }
-}, 30000); // Check every 30 seconds
+
+  for (const productId of productsToProcess) {
+    let post: any = null;
+    if (db) {
+      const snapshot = await db.collection(`server_queues/${productId}/posts`).orderBy('createdAt', 'asc').limit(1).get();
+      if (!snapshot.empty) {
+        post = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+      }
+    } else {
+      post = postQueue.find(p => p.productId === productId);
+    }
+
+    if (!post) continue;
+
+    if (db) {
+      await db.collection('server_schedules').doc(productId).update({ lastPostedDate: currentDateUtc });
+      await db.collection(`server_queues/${productId}/posts`).doc(post.id).delete();
+    } else {
+      lastPostedDates[productId] = currentDateUtc;
+      postQueue = postQueue.filter(p => p.id !== post.id);
+    }
+
+    const token = await getToken(productId, post.platform);
+    if (!token) {
+      console.error(`[Scheduler] No token found for product ${productId}, skipping post ${post.id}`);
+      if (db) {
+        await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+        await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+      } else {
+        postQueue.unshift(post);
+        lastPostedDates[productId] = "";
+      }
+      continue;
+    }
+
+    try {
+      console.log(`[Scheduler] Attempting to publish post ${post.id} to ${post.platform}...`);
+      if (post.platform === 'linkedin') {
+        const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!userRes.ok) throw new Error('Failed to fetch user info');
+        const userData = await userRes.json();
+        const authorUrn = `urn:li:person:${userData.sub}`;
+
+        const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Restli-Protocol-Version': '2.0.0'
+          },
+          body: JSON.stringify({
+            author: authorUrn,
+            lifecycleState: 'PUBLISHED',
+            specificContent: {
+              'com.linkedin.ugc.ShareContent': {
+                shareCommentary: { text: post.text },
+                shareMediaCategory: 'NONE'
+              }
+            },
+            visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+          })
+        });
+
+        if (!postRes.ok) {
+          const errorText = await postRes.text();
+          console.error('[Scheduler] Failed to publish scheduled post:', errorText);
+          if (errorText.includes('DUPLICATE_POST')) {
+            console.log(`[Scheduler] Post ${post.id} is a duplicate, removing from queue.`);
+          } else {
+            if (db) {
+              await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+              await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+            } else {
+              postQueue.unshift(post);
+              lastPostedDates[productId] = "";
+            }
+          }
+        } else {
+          console.log('[Scheduler] Successfully published scheduled post:', post.id);
+        }
+      }
+    } catch (err) {
+      console.error('[Scheduler] Error in scheduled post:', err);
+      if (db) {
+        await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+        await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+      } else {
+        postQueue.unshift(post);
+        lastPostedDates[productId] = "";
+      }
+    }
+  }
+}, 30000);
 
 async function startServer() {
   const app = express();
@@ -108,14 +230,36 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
   app.use(cookieParser());
 
+  // --- Auth Middleware ---
+  const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized: Missing token' });
+    }
+    const token = authHeader.split('Bearer ')[1];
+    try {
+      if (!admin.apps.length) {
+        // If admin is not initialized (e.g. no service account), we can't verify easily.
+        // For preview purposes, we'll allow it if we can't verify, but log a warning.
+        console.warn('[Auth] Firebase Admin not initialized. Bypassing auth check for preview.');
+        return next();
+      }
+      const decodedToken = await admin.auth().verifyIdToken(token);
+      (req as any).user = decodedToken;
+      next();
+    } catch (error) {
+      console.error('[Auth] Token verification failed:', error);
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+  };
+
   // --- AI Proxy Endpoint ---
-  app.post('/api/ai/generate', async (req, res) => {
+  app.post('/api/ai/generate', requireAuth, async (req, res) => {
     try {
       const { model, contents, config } = req.body;
       
-      // Use the API key provided by the user to bypass environment variable issues
-      // User explicitly requested to hardcode this and stated they will revoke it later.
-      const apiKey = "AIzaSyCYK86PmlReHZSQ2dTNeKRhYL6IG8Jc6IM";
+      // Use the API key from environment variables, fallback to the hardcoded one provided by user
+      const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCYK86PmlReHZSQ2dTNeKRhYL6IG8Jc6IM";
       
       if (!apiKey) {
         return res.status(500).json({ error: 'Server API key not configured. Please set GEMINI_API_KEY in settings.' });
@@ -140,63 +284,82 @@ async function startServer() {
   });
 
   // --- Scheduling Endpoints ---
-  app.get('/api/schedule', (req, res) => {
-    const productId = req.query.productId as string;
-    const config = scheduleConfigs[productId] || { enabled: false, timeUtc: "14:00" };
-    const queue = postQueue.filter(p => p.productId === productId);
-    res.json({ config, queue });
-  });
-
-  app.post('/api/schedule', (req, res) => {
-    const { enabled, timeUtc, productId } = req.body;
-    if (!productId) return res.status(400).json({ error: 'productId required' });
-    
-    if (!scheduleConfigs[productId]) {
-      scheduleConfigs[productId] = { enabled: false, timeUtc: "14:00" };
+  app.get('/api/schedule', requireAuth, async (req, res) => {
+    try {
+      const productId = req.query.productId as string;
+      const config = await getScheduleConfig(productId);
+      const queue = await getPostQueue(productId);
+      res.json({ config, queue });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
-    
-    if (enabled !== undefined) scheduleConfigs[productId].enabled = enabled;
-    if (timeUtc !== undefined) scheduleConfigs[productId].timeUtc = timeUtc;
-    
-    res.json({ success: true, config: scheduleConfigs[productId] });
   });
 
-  app.post('/api/schedule/queue', (req, res) => {
-    const { text, campaignId, platform, productId, day, date } = req.body;
-    if (!productId) return res.status(400).json({ error: 'productId required' });
-    
-    const id = Math.random().toString(36).substring(7);
-    postQueue.push({ id, text, campaignId, platform, productId, day, date });
-    
-    if (req.cookies[`linkedin_token_${productId}`]) {
-      globalLinkedinTokens[productId] = req.cookies[`linkedin_token_${productId}`];
+  app.post('/api/schedule', requireAuth, async (req, res) => {
+    try {
+      const { enabled, timeUtc, productId } = req.body;
+      if (!productId) return res.status(400).json({ error: 'productId required' });
+      
+      const updates: any = {};
+      if (enabled !== undefined) updates.enabled = enabled;
+      if (timeUtc !== undefined) updates.timeUtc = timeUtc;
+      
+      await setScheduleConfig(productId, updates);
+      const newConfig = await getScheduleConfig(productId);
+      
+      res.json({ success: true, config: newConfig });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
-    
-    const queue = postQueue.filter(p => p.productId === productId);
-    res.json({ success: true, queue });
   });
 
-  app.delete('/api/schedule/queue/:id', (req, res) => {
-    const productId = req.query.productId as string;
-    postQueue = postQueue.filter(q => q.id !== req.params.id);
-    const queue = postQueue.filter(p => p.productId === productId);
-    res.json({ success: true, queue });
+  app.post('/api/schedule/queue', requireAuth, async (req, res) => {
+    try {
+      const { text, campaignId, platform, productId, day, date } = req.body;
+      if (!productId) return res.status(400).json({ error: 'productId required' });
+      
+      const id = Math.random().toString(36).substring(7);
+      await addToQueue({ id, text, campaignId, platform, productId, day, date });
+      
+      if (req.cookies[`linkedin_token_${productId}`]) {
+        await setToken(productId, 'linkedin', req.cookies[`linkedin_token_${productId}`]);
+      }
+      
+      const queue = await getPostQueue(productId);
+      res.json({ success: true, queue });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
-  app.post('/api/schedule/queue/remove', (req, res) => {
-    const { campaignId, platform, productId, day } = req.body;
-    if (!productId) return res.status(400).json({ error: 'productId required' });
-    
-    postQueue = postQueue.filter(q => {
-      if (q.productId !== productId) return true;
-      if (q.campaignId !== campaignId) return true;
-      if (q.platform !== platform) return true;
-      if (day && q.day !== day) return true;
-      return false;
-    });
-    
-    const queue = postQueue.filter(p => p.productId === productId);
-    res.json({ success: true, queue });
+  app.delete('/api/schedule/queue/:id', requireAuth, async (req, res) => {
+    try {
+      const productId = req.query.productId as string;
+      await removeFromQueue(productId, req.params.id);
+      const queue = await getPostQueue(productId);
+      res.json({ success: true, queue });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/schedule/queue/remove', requireAuth, async (req, res) => {
+    try {
+      const { campaignId, platform, productId, day } = req.body;
+      if (!productId) return res.status(400).json({ error: 'productId required' });
+      
+      const queue = await getPostQueue(productId);
+      for (const q of queue) {
+        if (q.campaignId === campaignId && q.platform === platform && (!day || q.day === day)) {
+          await removeFromQueue(productId, q.id);
+        }
+      }
+      
+      const newQueue = await getPostQueue(productId);
+      res.json({ success: true, queue: newQueue });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // LinkedIn OAuth Endpoints
@@ -253,7 +416,7 @@ async function startServer() {
       const tokenData = await tokenRes.json();
 
       if (tokenData.access_token) {
-        globalLinkedinTokens[productId] = tokenData.access_token;
+        await setToken(productId, 'linkedin', tokenData.access_token);
         res.cookie(`linkedin_token_${productId}`, tokenData.access_token, {
           secure: true,
           sameSite: 'none',
@@ -279,21 +442,25 @@ async function startServer() {
     }
   });
 
-  app.get('/api/linkedin/status', (req, res) => {
-    const productId = req.query.productId as string;
-    const cookieToken = req.cookies[`linkedin_token_${productId}`];
-    if (cookieToken) {
-      globalLinkedinTokens[productId] = cookieToken;
+  app.get('/api/linkedin/status', requireAuth, async (req, res) => {
+    try {
+      const productId = req.query.productId as string;
+      const cookieToken = req.cookies[`linkedin_token_${productId}`];
+      if (cookieToken) {
+        await setToken(productId, 'linkedin', cookieToken);
+      }
+      const token = await getToken(productId, 'linkedin');
+      res.json({ connected: !!token });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
-    res.json({ connected: !!globalLinkedinTokens[productId] });
   });
 
-  app.post('/api/linkedin/publish', async (req, res) => {
-    const { text, productId, imageUrl } = req.body;
-    const token = globalLinkedinTokens[productId] || req.cookies[`linkedin_token_${productId}`];
-    if (!token) return res.status(401).json({ error: 'Not connected to LinkedIn' });
-
+  app.post('/api/linkedin/publish', requireAuth, async (req, res) => {
     try {
+      const { text, productId, imageUrl } = req.body;
+      const token = await getToken(productId, 'linkedin') || req.cookies[`linkedin_token_${productId}`];
+      if (!token) return res.status(401).json({ error: 'Not connected to LinkedIn' });
       // 1. Get user info to get the URN
       const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
         headers: { Authorization: `Bearer ${token}` }
@@ -460,7 +627,7 @@ async function startServer() {
       const tokenData = await tokenRes.json();
 
       if (tokenData.access_token) {
-        globalFacebookTokens[productId] = tokenData.access_token;
+        await setToken(productId, 'facebook', tokenData.access_token);
         res.cookie(`facebook_token_${productId}`, tokenData.access_token, {
           secure: true, sameSite: 'none', httpOnly: true, maxAge: 60 * 24 * 60 * 60 * 1000
         });
@@ -481,11 +648,16 @@ async function startServer() {
     }
   });
 
-  app.get('/api/facebook/status', (req, res) => {
-    const productId = req.query.productId as string;
-    const cookieToken = req.cookies[`facebook_token_${productId}`];
-    if (cookieToken) globalFacebookTokens[productId] = cookieToken;
-    res.json({ connected: !!globalFacebookTokens[productId] });
+  app.get('/api/facebook/status', requireAuth, async (req, res) => {
+    try {
+      const productId = req.query.productId as string;
+      const cookieToken = req.cookies[`facebook_token_${productId}`];
+      if (cookieToken) await setToken(productId, 'facebook', cookieToken);
+      const token = await getToken(productId, 'facebook');
+      res.json({ connected: !!token });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Instagram OAuth Endpoints
@@ -538,7 +710,7 @@ async function startServer() {
       const tokenData = await tokenRes.json();
 
       if (tokenData.access_token) {
-        globalInstagramTokens[productId] = tokenData.access_token;
+        await setToken(productId, 'instagram', tokenData.access_token);
         res.cookie(`instagram_token_${productId}`, tokenData.access_token, {
           secure: true, sameSite: 'none', httpOnly: true, maxAge: 60 * 24 * 60 * 60 * 1000
         });
@@ -559,11 +731,16 @@ async function startServer() {
     }
   });
 
-  app.get('/api/instagram/status', (req, res) => {
-    const productId = req.query.productId as string;
-    const cookieToken = req.cookies[`instagram_token_${productId}`];
-    if (cookieToken) globalInstagramTokens[productId] = cookieToken;
-    res.json({ connected: !!globalInstagramTokens[productId] });
+  app.get('/api/instagram/status', requireAuth, async (req, res) => {
+    try {
+      const productId = req.query.productId as string;
+      const cookieToken = req.cookies[`instagram_token_${productId}`];
+      if (cookieToken) await setToken(productId, 'instagram', cookieToken);
+      const token = await getToken(productId, 'instagram');
+      res.json({ connected: !!token });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Reddit OAuth Endpoints
@@ -619,7 +796,7 @@ async function startServer() {
       const tokenData = await tokenRes.json();
 
       if (tokenData.access_token) {
-        globalRedditTokens[productId] = tokenData.access_token;
+        await setToken(productId, 'reddit', tokenData.access_token);
         res.cookie(`reddit_token_${productId}`, tokenData.access_token, {
           secure: true, sameSite: 'none', httpOnly: true, maxAge: 60 * 24 * 60 * 60 * 1000
         });
@@ -640,15 +817,20 @@ async function startServer() {
     }
   });
 
-  app.get('/api/reddit/status', (req, res) => {
-    const productId = req.query.productId as string;
-    const cookieToken = req.cookies[`reddit_token_${productId}`];
-    if (cookieToken) globalRedditTokens[productId] = cookieToken;
-    res.json({ connected: !!globalRedditTokens[productId] });
+  app.get('/api/reddit/status', requireAuth, async (req, res) => {
+    try {
+      const productId = req.query.productId as string;
+      const cookieToken = req.cookies[`reddit_token_${productId}`];
+      if (cookieToken) await setToken(productId, 'reddit', cookieToken);
+      const token = await getToken(productId, 'reddit');
+      res.json({ connected: !!token });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Email Sending Endpoint
-  app.post('/api/campaigns/email', async (req, res) => {
+  app.post('/api/campaigns/email', requireAuth, async (req, res) => {
     const { email, pdfBase64, campaignTheme } = req.body;
     if (!email || !pdfBase64) {
       return res.status(400).json({ error: 'Email and pdfBase64 are required' });
@@ -698,7 +880,7 @@ async function startServer() {
   });
 
   // Scraping Endpoint for Brand DNA
-  app.post('/api/scrape', async (req, res) => {
+  app.post('/api/scrape', requireAuth, async (req, res) => {
     const { url } = req.body;
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });

@@ -3,6 +3,7 @@ import { Clock, Play, Pause, Trash2, CalendarClock, CheckCircle2 } from "lucide-
 import { cn, formatCopy } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { logSilentError } from "../lib/firestore-error";
+import { auth } from "../firebase";
 
 interface QueueItem {
   id: string;
@@ -24,27 +25,31 @@ export function Schedule() {
   useEffect(() => {
     if (!activeProduct) return;
     
-    const fetchSchedule = () => {
-      fetch(`/api/schedule?productId=${activeProduct.id}`)
-        .then(res => {
-          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-          return res.json();
-        })
-        .then(data => {
-          setConfig(data.config);
-          setQueue(data.queue);
-          
-          // Convert UTC time to local time for the input
-          const [utcHours, utcMinutes] = data.config.timeUtc.split(':');
-          const d = new Date();
-          d.setUTCHours(parseInt(utcHours, 10));
-          d.setUTCMinutes(parseInt(utcMinutes, 10));
-          
-          const localH = d.getHours().toString().padStart(2, '0');
-          const localM = d.getMinutes().toString().padStart(2, '0');
-          setLocalTime(`${localH}:${localM}`);
-        })
-        .catch(err => logSilentError(err as Error, { context: "fetchSchedule" }));
+    const fetchSchedule = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const res = await fetch(`/api/schedule?productId=${activeProduct.id}`, {
+          headers: {
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          }
+        });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        setConfig(data.config);
+        setQueue(data.queue);
+        
+        // Convert UTC time to local time for the input
+        const [utcHours, utcMinutes] = data.config.timeUtc.split(':');
+        const d = new Date();
+        d.setUTCHours(parseInt(utcHours, 10));
+        d.setUTCMinutes(parseInt(utcMinutes, 10));
+        
+        const localH = d.getHours().toString().padStart(2, '0');
+        const localM = d.getMinutes().toString().padStart(2, '0');
+        setLocalTime(`${localH}:${localM}`);
+      } catch (err) {
+        logSilentError(err as Error, { context: "fetchSchedule" });
+      }
     };
 
     fetchSchedule();
@@ -68,9 +73,13 @@ export function Schedule() {
     
     setIsSaving(true);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/schedule', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ timeUtc, productId: activeProduct.id })
       });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -83,9 +92,13 @@ export function Schedule() {
 
   const handleToggle = async () => {
     if (!activeProduct) return;
+    const token = await auth.currentUser?.getIdToken();
     const res = await fetch('/api/schedule', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
       body: JSON.stringify({ enabled: !config.enabled, productId: activeProduct.id })
     });
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);

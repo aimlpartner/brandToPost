@@ -21,7 +21,14 @@ export function Creatives() {
   const [error, setError] = useState<string | null>(null);
 
   // Google Drive State
-  const [driveToken, setDriveToken] = useState<string | null>(null);
+  const [driveToken, setDriveToken] = useState<string | null>(() => {
+    const stored = sessionStorage.getItem('driveToken');
+    const expiry = sessionStorage.getItem('driveTokenExpiry');
+    if (stored && expiry && Date.now() < parseInt(expiry, 10)) {
+      return stored;
+    }
+    return null;
+  });
   const [isConnecting, setIsConnecting] = useState(false);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
@@ -60,6 +67,12 @@ export function Creatives() {
     return () => unsubscribe();
   }, [activeProduct, user]);
 
+  useEffect(() => {
+    if (driveToken && folders.length === 0) {
+      fetchFolders(driveToken);
+    }
+  }, [driveToken]);
+
   const handleConnectDrive = async () => {
     setIsConnecting(true);
     setError(null);
@@ -75,6 +88,8 @@ export function Creatives() {
       
       if (token) {
         setDriveToken(token);
+        sessionStorage.setItem('driveToken', token);
+        sessionStorage.setItem('driveTokenExpiry', (Date.now() + 3500 * 1000).toString()); // 58 mins
         fetchFolders(token);
       } else {
         throw new Error("Failed to retrieve access token.");
@@ -112,6 +127,8 @@ export function Creatives() {
       console.error("Fetch folders error:", err);
       setError(err.message || "Failed to fetch folders.");
       setDriveToken(null); // Reset token if it's invalid
+      sessionStorage.removeItem('driveToken');
+      sessionStorage.removeItem('driveTokenExpiry');
     } finally {
       setIsFetchingFolders(false);
     }
@@ -306,7 +323,11 @@ export function Creatives() {
                     <span className="font-medium text-sm">Connected to Google Drive</span>
                   </div>
                   <button 
-                    onClick={() => setDriveToken(null)}
+                    onClick={() => {
+                      setDriveToken(null);
+                      sessionStorage.removeItem('driveToken');
+                      sessionStorage.removeItem('driveTokenExpiry');
+                    }}
                     className="text-sm underline hover:text-green-800"
                   >
                     Disconnect
