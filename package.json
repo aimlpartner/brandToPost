@@ -13,7 +13,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "postinstall": "npm run build",
-    "start": "tsx server.ts"
+    "start": "node server.js"
   },
   "dependencies": {
     "@google/genai": "^1.50.1",
