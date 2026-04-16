@@ -11,7 +11,6 @@ import { ProductProvider } from "./contexts/ProductContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
-const LandingPage = lazy(() => import("./pages/LandingPage").then((m) => ({ default: m.LandingPage })));
 const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const ProductDNA = lazy(() => import("./pages/ProductDNA").then((m) => ({ default: m.ProductDNA })));
 const Campaigns = lazy(() => import("./pages/Campaigns").then((m) => ({ default: m.Campaigns })));
@@ -30,7 +29,7 @@ export default function App() {
         <BrowserRouter>
           <Suspense fallback={<div className="p-4 text-sm text-[#6b7280]">Loading...</div>}>
             <Routes>
-              <Route path="/" element={<LandingPage />} />
+              <Route path="/" element={<Waitlist />} />
               <Route path="/login" element={<Login />} />
               <Route path="/waitlist" element={<Waitlist />} />
               <Route path="/shared/:campaignId" element={<SharedCampaign />} />

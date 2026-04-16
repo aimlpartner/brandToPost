@@ -952,8 +952,8 @@ async function startServer() {
 
   const distPath = path.join(process.cwd(), 'dist');
 
-  // Serve the built client when available in production or when dist exists.
-  if (process.env.NODE_ENV === "production" || fs.existsSync(distPath)) {
+  // Serve the built client in production only.
+  if (process.env.NODE_ENV === "production") {
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
