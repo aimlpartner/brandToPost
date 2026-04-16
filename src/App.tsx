@@ -21,6 +21,7 @@ const Schedule = lazy(() => import("./pages/Schedule").then((m) => ({ default: m
 const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
 const SharedCampaign = lazy(() => import("./pages/SharedCampaign").then((m) => ({ default: m.SharedCampaign })));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const Waitlist = lazy(() => import("./pages/Waitlist"));
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/waitlist" element={<Waitlist />} />
               <Route path="/shared/:campaignId" element={<SharedCampaign />} />
               <Route element={<ProtectedRoute />}>
                 <Route
