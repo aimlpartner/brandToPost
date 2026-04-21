@@ -63,7 +63,7 @@ const gameRounds = [
       promo: '"I NEED A 14-PART THREAD ABOUT B2B SAAS ARCHITECTURE, BUT MAKE IT SOUND LIKE WENDY\'S ON TWITTER."',
       optCorporate: "I'll brainstorm some edgy concepts by EOD.",
       optIntrusive: '"EAT MY ENTIRE *SS, YOU ABSOLUTE PSYCHO."',
-      optWrestling: "TAG TEAM WITH BEACON! (FINISHING MOVE)"
+      optWrestling: "TAG TEAM WITH TROR! (FINISHING MOVE)"
   }
 ];
 
@@ -149,8 +149,6 @@ export default function App() {
       setIsSuccess(true);
     } catch (err) {
       console.error("Error saving email to Google Sheets:", err);
-      // Even if there's a console error due to opaque response, 
-      // the data usually makes it. Show success anyway to not break UX.
       setIsSuccess(true);
     } finally {
       setIsSubmitting(false);
@@ -224,7 +222,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0A0A0F] text-white font-sans selection:bg-[#7C3AED] selection:text-white overflow-x-hidden relative">
+    <div className={`min-h-screen flex flex-col bg-[#0A0A0F] text-white font-sans selection:bg-[#7C3AED] selection:text-white overflow-x-hidden relative ${appState === 'reveal' ? 'pb-20 md:pb-0' : ''}`}>
       
       {/* Global Styles */}
       <style>{`
@@ -326,10 +324,10 @@ export default function App() {
               <div className="w-full max-w-3xl mb-4 relative flex items-end justify-between">
                   <div className="flex items-center gap-3">
                       <div className="relative">
-                          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="Beacon Avatar" className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-[#7C3AED] object-cover bg-black shadow-[0_0_15px_rgba(124,58,237,0.5)]" />
+                          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="TROR Avatar" className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 border-[#7C3AED] object-cover bg-black shadow-[0_0_15px_rgba(124,58,237,0.5)]" />
                           <div className="absolute -bottom-1 -right-1 bg-[#18F07A] w-3 h-3 rounded-full border-2 border-[#0A0A0F]"></div>
                       </div>
-                      <span className="text-sm md:text-lg font-display font-bold text-white uppercase tracking-widest hidden sm:block">Beacon (You)</span>
+                      <span className="text-sm md:text-lg font-display font-bold text-white uppercase tracking-widest hidden sm:block">TROR (You)</span>
                   </div>
                   
                   <div className="flex flex-col items-end w-2/3 md:w-[60%]">
@@ -398,14 +396,14 @@ export default function App() {
           </div>
         )}
 
-        {/* === PHASE 2: THE REVEAL === */}
+        {/* === PHASE 2: THE REVEAL (PRODUCT INFO & WAITLIST) === */}
         {appState === 'reveal' && (
           <div className="w-full max-w-6xl py-10 md:py-16 my-auto animate-in fade-in slide-in-from-bottom-8 duration-700 relative">
               
               <div className="text-center mb-12 md:mb-16">
                   <div className="inline-flex items-center gap-3 bg-[#18F07A] text-black font-display font-bold text-xl md:text-3xl uppercase tracking-widest px-6 md:px-8 py-2 transform -rotate-3 mb-6 border-2 md:border-4 border-white shadow-[4px_4px_0_#2583EB] md:shadow-[8px_8px_0_#2583EB]">
-                      <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="Beacon" className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-black object-cover" />
-                      K.O.! BEACON WINS!
+                      <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="TROR" className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-black object-cover" />
+                      K.O.! TROR WINS!
                   </div>
                   <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-display font-extrabold tracking-wide text-white uppercase max-w-4xl mx-auto italic leading-[1.1]">
                       You just destroyed bad copywriting.<br/>
@@ -413,8 +411,8 @@ export default function App() {
                   </h2>
               </div>
 
-              {/* Bento Box Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch mb-12 relative">
+              {/* 1. Hero Bento Box (The Hook) */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch mb-16 relative">
                   
                   {/* Decorative Sticky Note from Moodboard */}
                   <div className="hidden lg:block absolute -right-8 -top-10 z-30 transform rotate-6 bg-[#7C3AED] p-6 shadow-[8px_8px_0_#2583EB] w-48 border-2 border-white">
@@ -434,11 +432,11 @@ export default function App() {
                           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#2583EB] flex items-center justify-center shadow-[4px_4px_0_#FFFFFF] border border-white shrink-0">
                             <Layers className="w-6 h-6 text-white" />
                           </div>
-                          <h3 className="text-2xl md:text-3xl font-display font-extrabold uppercase text-white tracking-wide">Tag Team with Beacon.</h3>
+                          <h3 className="text-2xl md:text-3xl font-display font-extrabold uppercase text-white tracking-wide">Tag Team with TROR.</h3>
                         </div>
                         
                         <p className="text-zinc-400 text-base md:text-lg leading-relaxed mb-6 font-medium relative z-10">
-                            Beacon is your Brand Strategist & Signal Spotter. He sees what others miss, extracting your client's exact brand DNA to turn starting into momentum.
+                            TROR is your Brand Strategist & Signal Spotter. He sees what others miss, extracting your client's exact brand DNA to turn starting into momentum.
                         </p>
                         
                         <div className="flex flex-wrap gap-2 mt-auto relative z-10">
@@ -452,7 +450,7 @@ export default function App() {
                       <div className="w-full h-56 md:w-2/5 md:h-auto relative bg-gradient-to-t from-[#7C3AED]/10 to-transparent flex items-end justify-center md:justify-end mt-4 md:mt-0 pt-8 overflow-hidden">
                           <img 
                               src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/Mask-group.png" 
-                              alt="Beacon Full Mascot" 
+                              alt="TROR Full Mascot" 
                               className="absolute bottom-[-10%] md:bottom-0 h-[120%] md:h-[110%] w-auto object-contain transform md:translate-x-4 group-hover:scale-105 group-hover:-translate-y-2 transition-all duration-500 drop-shadow-[0_0_30px_rgba(124,58,237,0.4)]"
                               onError={(e) => e.target.style.display = 'none'}
                           />
@@ -475,12 +473,82 @@ export default function App() {
                   </div>
               </div>
 
-              {/* Secure Native Waitlist Form connected to Google Sheets */}
+              {/* 2. Expanded Product Info: How It Works */}
+              <div className="w-full mb-16 mt-8">
+                  <div className="text-center mb-10">
+                      <h3 className="text-3xl md:text-4xl font-display font-extrabold text-white uppercase tracking-wide">How BrandToPost Works</h3>
+                      <p className="text-zinc-400 mt-2 font-medium text-lg">From a single URL or brief to a month of high-traction content.</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Step 1 */}
+                      <TiltCard className="bg-[#1C1C22] border-2 border-zinc-800 rounded-2xl p-6 md:p-8 relative overflow-hidden group">
+                          <div className="w-12 h-12 bg-[#7C3AED]/10 text-[#7C3AED] rounded-xl flex items-center justify-center mb-6 border border-[#7C3AED]/30 group-hover:scale-110 transition-transform">
+                              <span className="font-display font-bold text-2xl">01</span>
+                          </div>
+                          <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">Extract The Signal</h4>
+                          <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Paste a URL, or drop a quick description/doc if you're pre-revenue. TROR analyzes the tone and builds a custom Brand DNA profile in seconds. No more 5-page prompt engineering.</p>
+                      </TiltCard>
+
+                      {/* Step 2 */}
+                      <TiltCard className="bg-[#1C1C22] border-2 border-zinc-800 rounded-2xl p-6 md:p-8 relative overflow-hidden group">
+                          <div className="w-12 h-12 bg-[#2583EB]/10 text-[#2583EB] rounded-xl flex items-center justify-center mb-6 border border-[#2583EB]/30 group-hover:scale-110 transition-transform">
+                              <span className="font-display font-bold text-2xl">02</span>
+                          </div>
+                          <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">Generate Momentum</h4>
+                          <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Turn that DNA into a 30-day omnichannel campaign. LinkedIn hooks, Twitter threads, and newsletters that actually sound like your client wrote them.</p>
+                      </TiltCard>
+
+                      {/* Step 3 */}
+                      <TiltCard className="bg-[#1C1C22] border-2 border-zinc-800 rounded-2xl p-6 md:p-8 relative overflow-hidden group">
+                          <div className="w-12 h-12 bg-[#18F07A]/10 text-[#18F07A] rounded-xl flex items-center justify-center mb-6 border border-[#18F07A]/30 group-hover:scale-110 transition-transform">
+                              <span className="font-display font-bold text-2xl">03</span>
+                          </div>
+                          <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">Gain Traction</h4>
+                          <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Review, edit, and schedule natively across all platforms from a single 1-Tab Arena. Stop juggling 10 different scheduling tools.</p>
+                      </TiltCard>
+                  </div>
+                  
+                  {/* Signal vs Noise Comparison */}
+                  <div className="mt-10 md:mt-16 bg-gradient-to-br from-zinc-900 to-[#1C1C22] border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl">
+                      <h3 className="text-2xl md:text-4xl font-display font-extrabold text-white text-center mb-10 uppercase tracking-wide">The BrandToPost Difference</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+                          {/* Noise */}
+                          <div className="space-y-5">
+                              <div className="flex items-center gap-3 text-[#EF4444] border-b border-zinc-800 pb-3">
+                                  <Skull className="w-6 h-6" />
+                                  <span className="font-display font-bold text-xl uppercase tracking-widest">The Old Way (Noise)</span>
+                              </div>
+                              <ul className="space-y-4 text-zinc-500 text-base font-medium">
+                                  <li className="flex items-start gap-3"><span className="text-[#EF4444] font-bold text-lg mt-[-2px]">×</span> Hours writing 10-page ChatGPT prompts.</li>
+                                  <li className="flex items-start gap-3"><span className="text-[#EF4444] font-bold text-lg mt-[-2px]">×</span> Copy that constantly says "Delve" and "Synergy".</li>
+                                  <li className="flex items-start gap-3"><span className="text-[#EF4444] font-bold text-lg mt-[-2px]">×</span> Juggling Google Docs, Notion, and Hootsuite.</li>
+                                  <li className="flex items-start gap-3"><span className="text-[#EF4444] font-bold text-lg mt-[-2px]">×</span> Clients rejecting posts for sounding "robotic".</li>
+                              </ul>
+                          </div>
+                          {/* Signal */}
+                          <div className="space-y-5">
+                              <div className="flex items-center gap-3 text-[#18F07A] border-b border-zinc-800 pb-3">
+                                  <Target className="w-6 h-6" />
+                                  <span className="font-display font-bold text-xl uppercase tracking-widest">With BrandToPost (Signal)</span>
+                              </div>
+                              <ul className="space-y-4 text-zinc-300 text-base font-medium">
+                                  <li className="flex items-start gap-3"><span className="text-[#18F07A] font-bold text-lg mt-[-2px]">✓</span> 1-click Brand DNA extraction from any URL, doc, or brief.</li>
+                                  <li className="flex items-start gap-3"><span className="text-[#18F07A] font-bold text-lg mt-[-2px]">✓</span> Authentic, zero-jargon copy that sounds human.</li>
+                                  <li className="flex items-start gap-3"><span className="text-[#18F07A] font-bold text-lg mt-[-2px]">✓</span> All ideation, writing, and scheduling in 1 tab.</li>
+                                  <li className="flex items-start gap-3"><span className="text-[#18F07A] font-bold text-lg mt-[-2px]">✓</span> Instant client approval on the first draft.</li>
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+
+              {/* 3. Secure Native Waitlist Form connected to Google Sheets */}
               <TiltCard className="max-w-3xl mx-auto bg-gradient-to-br from-[#7C3AED] to-[#2583EB] border-4 border-white p-6 sm:p-8 md:p-12 text-center shadow-[8px_8px_0_#18F07A] relative">
                   
                   <h3 className="text-3xl md:text-5xl font-display font-extrabold text-white mb-2 uppercase tracking-widest drop-shadow-md">Defend Your Title.</h3>
                   <p className="text-white/90 mb-8 font-medium text-base md:text-lg">
-                      Join the waitlist to lock in early access and get <span className="text-[#18F07A] font-bold underline">free onboarding</span> when we launch. Limited to the first 500 agencies.
+                      Join the waitlist to lock in early access and get <span className="text-[#18F07A] font-bold underline">free VIP onboarding</span>. Strictly limited to 50 founding agencies.
                   </p>
                   
                   <div className="max-w-xl mx-auto mt-4">
@@ -490,7 +558,7 @@ export default function App() {
                                   <CheckCircle2 className="w-6 h-6" />
                               </div>
                               <h4 className="text-2xl font-display font-bold text-white mb-2 uppercase tracking-wide">Spot Secured!</h4>
-                              <p className="text-zinc-400 text-sm">You're officially on the roster. Watch your inbox.</p>
+                              <p className="text-zinc-400 text-sm">You're officially on the roster. We will reach out to you soon.</p>
                           </div>
                       ) : (
                           <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row gap-3">
@@ -516,10 +584,46 @@ export default function App() {
               </TiltCard>
           </div>
         )}
+
+      {/* Mobile Floating Waitlist Form (Only visible in 'reveal' phase) */}
+      {appState === 'reveal' && (
+        <div className="fixed bottom-0 left-0 w-full z-50 bg-[#1C1C22]/95 backdrop-blur-xl border-t-2 border-[#7C3AED] p-3 pb-5 md:hidden shadow-[0_-10px_40px_rgba(124,58,237,0.25)] animate-in slide-in-from-bottom-full duration-500">
+            {isSuccess ? (
+                <div className="flex items-center justify-center gap-2 text-[#18F07A] font-display font-bold uppercase tracking-widest text-sm py-3">
+                    <CheckCircle2 className="w-6 h-6" /> Spot Secured! We'll be in touch.
+                </div>
+            ) : (
+                <div className="max-w-md mx-auto">
+                    <div className="flex items-center justify-between mb-2 px-1">
+                        <span className="text-[#18F07A] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 animate-pulse"><Target className="w-3 h-3" /> VIP Access</span>
+                        <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest">50 Spots Only</span>
+                    </div>
+                    <form onSubmit={handleWaitlistSubmit} className="flex gap-2 px-1">
+                        <input 
+                            type="email" 
+                            required
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="name@agency.com" 
+                            className="flex-1 bg-[#0A0A0F] border border-[#7C3AED]/50 px-3 py-2.5 text-white focus:outline-none focus:border-[#7C3AED] transition-all text-sm font-medium placeholder:text-zinc-500 transform skew-x-[-5deg]"
+                            disabled={isSubmitting}
+                        />
+                        <button 
+                            type="submit" 
+                            disabled={isSubmitting}
+                            className="bg-[#18F07A] text-black font-display font-bold text-sm uppercase tracking-widest px-5 py-2.5 hover:bg-white transition-colors active:scale-[0.98] transform skew-x-[-5deg] disabled:opacity-50 shadow-[2px_2px_0_#0A0A0F] whitespace-nowrap"
+                        >
+                            {isSubmitting ? '...' : 'CLAIM'}
+                        </button>
+                    </form>
+                </div>
+            )}
+        </div>
+      )}
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/5 py-8 px-4 text-center mt-auto">
+      <footer className="relative z-10 border-t border-white/5 py-8 px-4 text-center mt-auto pb-28 md:pb-8">
           <p className="text-zinc-500 text-xs md:text-sm font-medium uppercase tracking-widest">Designed with intent. Built for brands that lead. © 2026 BrandToPost.</p>
       </footer>
 
