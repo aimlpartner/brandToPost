@@ -108,16 +108,26 @@ const BrandLogo = () => (
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmMybk6WP283pvxNDwv1Bgfb_au5VQxoRrQwZZbh6Kf_rsPZBiQx2rVMSSV650lXPHiw/exec";
 
 export default function App() {
-  // App States
+  // --- Core & Tracking States ---
+  const [userId] = useState(() => {
+    // Generate a unique ID for the user and save it in localStorage so it persists across refreshes
+    let id = localStorage.getItem('b2p_visitor_id');
+    if (!id) {
+      id = 'user_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('b2p_visitor_id', id);
+    }
+    return id;
+  });
+
   const [appState, setAppState] = useState('game'); // 'game' | 'reveal'
   const [currentRound, setCurrentRound] = useState(0);
+  const [interactions, setInteractions] = useState([]);
+  
+  // Visual States
   const [particles, setParticles] = useState([]);
   const [isFlashing, setIsFlashing] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
-
-  // Tracking State
-  const [interactions, setInteractions] = useState([]);
 
   // Form States
   const [email, setEmail] = useState('');
@@ -127,29 +137,54 @@ export default function App() {
   const maxRounds = gameRounds.length;
   const currentData = gameRounds[Math.min(currentRound, maxRounds - 1)];
 
-  // Handle Waitlist Submission & Sending to Google Sheets
+  // --- Unified Background Tracking Function ---
+  const trackEvent = useCallback((eventName, userEmail = "No Email", currentInteractions = interactions) => {
+    try {
+      const formData = new FormData();
+      formData.append('email', userEmail);
+      
+      // Pack the event type and user ID into the interactions column
+      formData.append('interactions', JSON.stringify({
+        userId: userId,
+        event: eventName,
+        history: currentInteractions,
+        timestamp: new Date().toISOString()
+      }));
+
+      // Fire-and-forget fetch to Google Sheets
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: formData
+      });
+    } catch (err) {
+      console.error("Tracking Error:", err);
+    }
+  }, [userId, interactions]);
+
+  // Track Initial Page Visit (Once per session)
+  useEffect(() => {
+    if (!sessionStorage.getItem('b2p_visit_tracked')) {
+      trackEvent('page_visit', 'No Email', []);
+      sessionStorage.setItem('b2p_visit_tracked', 'true');
+    }
+  }, [trackEvent]);
+
+  // Handle Waitlist Submission
   const handleWaitlistSubmit = async (e) => {
     e.preventDefault();
     if (!email) return;
     
     setIsSubmitting(true);
     try {
-      // Package the data for Google Apps Script
-      const formData = new FormData();
-      formData.append('email', email);
-      formData.append('interactions', JSON.stringify(interactions));
-
-      // Send to Google Sheets (no-cors is required for Apps Script from frontend)
-      await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        body: formData
-      });
-
+      // Send the final explicit waitlist join event
+      trackEvent('waitlist_submitted', email, interactions);
+      
+      // Small artificial delay for UX
+      await new Promise(resolve => setTimeout(resolve, 800));
       setIsSuccess(true);
     } catch (err) {
-      console.error("Error saving email to Google Sheets:", err);
-      setIsSuccess(true);
+      setIsSuccess(true); // Fallback success
     } finally {
       setIsSubmitting(false);
     }
@@ -188,11 +223,13 @@ export default function App() {
     }, 1000);
   }, []);
 
+  // Handle Game Choices
   const handleChoice = (type, e) => {
     if (currentRound >= maxRounds || isFadingOut) return;
 
-    // Track the interaction
-    setInteractions(prev => [...prev, { round: currentRound + 1, choice: type }]);
+    // Track the interaction locally
+    const newInteractions = [...interactions, { round: currentRound + 1, choice: type }];
+    setInteractions(newInteractions);
 
     // 1. Visual Feedback
     setIsFlashing(true);
@@ -213,6 +250,9 @@ export default function App() {
       setCurrentRound(maxRounds); // Caps out at max
       spawnParticles(window.innerWidth / 2, window.innerHeight / 2, 'wrestling', 5);
       
+      // Ping Google Sheets that they finished the game (even if they don't submit email later)
+      trackEvent('game_completed', 'No Email', newInteractions);
+
       setIsFadingOut(true);
       setTimeout(() => {
         setAppState('reveal');
