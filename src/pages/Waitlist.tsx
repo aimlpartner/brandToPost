@@ -1,22 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Target, Zap, CheckCircle2, ArrowRight, Layers, ScanLine, Activity, ArrowUp, Skull, Sparkles } from 'lucide-react';
+import { Target, Zap, CheckCircle2, ArrowRight, Layers, ScanLine, Activity, ArrowUp, Skull, Sparkles, Bomb } from 'lucide-react';
 
 // --- The "Corporate BS" Feed ---
 const swipeFeed = [
   {
       bad: '"We need to synergize our cross-functional bandwidth to deliver scalable growth."',
       truth: '"I literally just copy-pasted this from ChatGPT."',
-      tag: "AI Slop Detected"
+      tag: "AI Slop Detected",
+      btnText: "NUKE THE AI SLOP 💥"
   },
   {
       bad: '"Per my last email, let\'s circle back offline to align on this."',
       truth: '"Read the damn email I already sent you. I want to end this meeting."',
-      tag: "Passive Aggressive"
+      tag: "Passive Aggressive",
+      btnText: "TRANSLATE THIS 💥"
   },
   {
       bad: '"We are thrilled and humbled to announce a tapestry of low-hanging fruit."',
       truth: '"I have absolutely no idea what my company actually sells."',
-      tag: "The LinkedIn Lunatic"
+      tag: "The LinkedIn Lunatic",
+      btnText: "BODYSLAM THE BS 💥"
   }
 ];
 
@@ -80,7 +83,7 @@ const BrandLogo = () => (
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmMybk6WP283pvxNDwv1Bgfb_au5VQxoRrQwZZbh6Kf_rsPZBiQx2rVMSSV650lXPHiw/exec";
 
 export default function App() {
-  // Tracking
+  // Tracking & Device State
   const [userId] = useState(() => {
     let id = localStorage.getItem('b2p_visitor_id');
     if (!id) {
@@ -90,13 +93,26 @@ export default function App() {
     return id;
   });
 
+  const [deviceType, setDeviceType] = useState('Desktop');
+
+  // Check if Mobile or Desktop for UX routing
+  useEffect(() => {
+    const checkDevice = () => {
+      const isMobile = window.matchMedia("(max-width: 768px)").matches || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setDeviceType(isMobile ? 'Mobile' : 'Desktop');
+    };
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
+
   const [interactions, setInteractions] = useState([]);
   
   // App States
   const [appState, setAppState] = useState('feed'); // 'feed' | 'reveal'
   const [step, setStep] = useState(0); // 0: BS1, 1: Truth1, 2: BS2, 3: Truth2, 4: BS3, 5: Truth3
   
-  // Swipe Mechanics
+  // Swipe Mechanics (Mobile Only)
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
@@ -122,6 +138,7 @@ export default function App() {
       formData.append('email', userEmail);
       formData.append('interactions', JSON.stringify({
         userId: userId,
+        device: deviceType, // Sends "Mobile" or "Desktop" to Google Sheets
         event: eventName,
         history: currentInteractions,
         timestamp: new Date().toISOString()
@@ -130,7 +147,7 @@ export default function App() {
     } catch (err) {
       console.error("Tracking Error:", err);
     }
-  }, [userId, interactions]);
+  }, [userId, interactions, deviceType]);
 
   // Initial Page Visit Tracking
   useEffect(() => {
@@ -157,17 +174,18 @@ export default function App() {
   };
 
   // Particle Generator
-  const spawnParticles = useCallback((count = 5) => {
+  const spawnParticles = useCallback((clientX = null, clientY = null, count = 5) => {
     const newParticles = [];
     const screenWidth = window.innerWidth;
-    const spawnY = window.innerHeight / 2;
+    const spawnX = clientX || screenWidth / 2;
+    const spawnY = clientY || window.innerHeight / 2;
 
     for (let i = 0; i < count; i++) {
       const randomText = particleEffects.texts[Math.floor(Math.random() * particleEffects.texts.length)];
       const randomColor = particleEffects.colors[Math.floor(Math.random() * particleEffects.colors.length)];
       
       const offsetX = (Math.random() - 0.5) * 300;
-      let finalX = (screenWidth / 2) + offsetX;
+      let finalX = spawnX + offsetX;
       finalX = Math.max(20, Math.min(finalX, screenWidth - 200));
 
       newParticles.push({
@@ -182,7 +200,7 @@ export default function App() {
     setTimeout(() => setParticles(prev => prev.filter(p => !newParticles.find(np => np.id === p.id))), 1000);
   }, []);
 
-  // --- SWIPE LOGIC ---
+  // --- MOBILE SWIPE LOGIC ---
   const handlePointerDown = (e) => {
     setIsDragging(true);
     startY.current = e.clientY || e.touches?.[0]?.clientY;
@@ -195,11 +213,10 @@ export default function App() {
     
     const diff = currentY - startY.current;
     
-    // Only allow dragging upwards (negative Y), with slight resistance downwards
     if (diff < 0) {
       setDragY(diff);
     } else {
-      setDragY(diff * 0.15); // Hard resistance pulling down
+      setDragY(diff * 0.15); 
     }
   };
 
@@ -207,29 +224,29 @@ export default function App() {
     if (!isDragging) return;
     setIsDragging(false);
     
-    // If swiped up past threshold (100px)
     if (dragY < -100) {
-      // Fire card out of screen
       setDragY(-window.innerHeight);
-      
       setTimeout(() => {
-        advanceFeed();
-      }, 300); // Wait for card to fly away
-
+        advanceFeed(null, null);
+      }, 300); 
     } else {
-      // Snap back to center
       setDragY(0);
     }
   };
 
-  const advanceFeed = () => {
+  // --- DESKTOP CLICK LOGIC ---
+  const handleDesktopAction = (e) => {
+    advanceFeed(e.clientX, e.clientY);
+  };
+
+  // --- CORE PROGRESSION LOGIC ---
+  const advanceFeed = (clientX, clientY) => {
     const nextStep = step + 1;
     
     // Log Interaction
-    setInteractions(prev => [...prev, { step: step, state: isTruthState ? 'truth_swiped' : 'bs_decoded' }]);
+    setInteractions(prev => [...prev, { step: step, state: isTruthState ? 'truth_cleared' : 'bs_decoded' }]);
 
     if (nextStep > 5) {
-      // Game Complete! Go to Waitlist
       trackEvent('feed_completed', 'No Email', interactions);
       setAppState('reveal');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -240,23 +257,25 @@ export default function App() {
     if (nextStep % 2 !== 0) {
       setIsFlashing(true);
       setTimeout(() => setIsFlashing(false), 150);
-      spawnParticles(4);
+      spawnParticles(clientX, clientY, 4);
     }
 
     setStep(nextStep);
     setDragY(0);
     
-    // Animate new card in from bottom
-    setIsAnimatingIn(true);
-    setTimeout(() => setIsAnimatingIn(false), 400);
+    // Only animate fly-in if on mobile swipe
+    if (deviceType === 'Mobile') {
+        setIsAnimatingIn(true);
+        setTimeout(() => setIsAnimatingIn(false), 400);
+    }
   };
 
-  // Card Dynamic Styles
-  const cardStyle = {
+  // Card Dynamic Styles (Applied ONLY on Mobile)
+  const cardStyle = deviceType === 'Mobile' ? {
     transform: `translateY(${isAnimatingIn ? '100vh' : dragY + 'px'}) scale(${isDragging ? 1 - Math.abs(dragY)/2000 : 1}) rotate(${dragY/50}deg)`,
     transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-    touchAction: 'none' // CRITICAL: Prevents mobile screen scrolling while dragging
-  };
+    touchAction: 'none' 
+  } : {};
 
   return (
     <div className={`min-h-screen flex flex-col bg-[#0A0A0F] text-white font-sans selection:bg-[#7C3AED] selection:text-white relative ${appState === 'reveal' ? 'overflow-x-hidden pb-20 md:pb-0' : 'overflow-hidden fixed inset-0'}`}>
@@ -294,6 +313,13 @@ export default function App() {
           50% { transform: translateY(-10px); }
         }
         .animate-bounce-up { animation: bounceUp 1.5s infinite ease-in-out; }
+
+        /* Button Pulsing (Desktop) */
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 15px rgba(239,68,68,0.4); transform: scale(1) skewX(-5deg); }
+          50% { box-shadow: 0 0 40px rgba(239,68,68,0.8); transform: scale(1.02) skewX(-5deg); }
+        }
+        .animate-pulse-glow { animation: pulseGlow 1.5s infinite ease-in-out; }
         
         /* Reveal Animation */
         @keyframes slideUpFade {
@@ -338,7 +364,7 @@ export default function App() {
       {/* Main Content Area */}
       <main className="relative z-10 flex-1 flex flex-col items-center w-full px-4 h-full">
         
-        {/* === PHASE 1: THE REELS SWIPE FEED === */}
+        {/* === PHASE 1: THE HYBRID FEED (Desktop Click / Mobile Swipe) === */}
         {appState === 'feed' && (
           <div className="w-full flex-1 flex flex-col items-center justify-center relative pb-10">
               
@@ -349,47 +375,63 @@ export default function App() {
                   ))}
               </div>
 
-              {/* Swipe Instruction Overlay */}
-              <div className="absolute top-4 text-center w-full z-0 opacity-50 flex flex-col items-center">
-                  <ArrowUp className="w-8 h-8 text-zinc-500 animate-bounce-up mb-2" />
-                  <span className="font-display font-bold uppercase tracking-widest text-zinc-500 text-sm">Swipe Up</span>
-              </div>
+              {/* Swipe Instruction Overlay (MOBILE ONLY) */}
+              {deviceType === 'Mobile' && (
+                  <div className="absolute top-4 text-center w-full z-0 opacity-50 flex flex-col items-center">
+                      <ArrowUp className="w-8 h-8 text-zinc-500 animate-bounce-up mb-2" />
+                      <span className="font-display font-bold uppercase tracking-widest text-zinc-500 text-sm">Swipe Up</span>
+                  </div>
+              )}
 
-              {/* The Draggable Swipe Card */}
+              {/* Click Instruction Overlay (DESKTOP ONLY) */}
+              {deviceType === 'Desktop' && (
+                  <div className="absolute top-4 text-center w-full z-0 flex flex-col items-center">
+                      <span className="inline-flex items-center gap-2 bg-[#7C3AED]/20 text-[#7C3AED] font-display font-bold text-xs md:text-sm uppercase tracking-widest px-4 py-1.5 rounded-full border border-[#7C3AED]/50">
+                          <Target className="w-4 h-4" /> Stop posting AI slop
+                      </span>
+                  </div>
+              )}
+
+              {/* The Interactive Card */}
               <div 
-                  className="w-full max-w-lg cursor-grab active:cursor-grabbing z-20 relative select-none"
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerLeave={handlePointerUp}
+                  className={`w-full max-w-2xl flex flex-col items-center justify-center relative select-none 
+                      ${deviceType === 'Mobile' ? 'cursor-grab active:cursor-grabbing z-20' : 'z-20'}
+                  `}
+                  onPointerDown={deviceType === 'Mobile' ? handlePointerDown : undefined}
+                  onPointerMove={deviceType === 'Mobile' ? handlePointerMove : undefined}
+                  onPointerUp={deviceType === 'Mobile' ? handlePointerUp : undefined}
+                  onPointerLeave={deviceType === 'Mobile' ? handlePointerUp : undefined}
                   style={cardStyle}
               >
-                  <div className={`w-full bg-[#1C1C22] border-2 ${isTruthState ? 'border-[#18F07A]' : 'border-red-500/50'} rounded-3xl p-8 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col min-h-[350px] relative overflow-hidden`}>
+                  <TiltCard className={`w-full bg-[#1C1C22] border-2 ${isTruthState ? 'border-[#18F07A]/50' : 'border-zinc-800'} rounded-3xl p-8 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col ${deviceType === 'Mobile' ? 'min-h-[350px]' : 'min-h-[250px]'} relative overflow-hidden transition-colors duration-300`}>
+                      <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/50 pointer-events-none"></div>
                       
-                      {/* Swipe Handle (Pill) */}
-                      <div className="w-16 h-1.5 bg-zinc-700 rounded-full mx-auto mb-6 opacity-50"></div>
+                      {/* Mobile Swipe Handle */}
+                      {deviceType === 'Mobile' && (
+                          <div className="w-16 h-1.5 bg-zinc-700 rounded-full mx-auto mb-6 opacity-50"></div>
+                      )}
 
                       {/* Card Content */}
                       <div className="flex-1 flex flex-col justify-center relative z-10">
                           
                           {!isTruthState ? (
                               // THE BS (Bad Copy)
-                              <div className="flex flex-col items-center text-center">
+                              <div className="flex flex-col items-center text-center animate-in fade-in duration-300">
                                   <span className="inline-flex items-center gap-2 bg-red-500/10 text-red-400 font-display font-bold text-xs uppercase tracking-widest px-3 py-1 rounded-full mb-6 border border-red-500/30">
                                       <Skull className="w-3 h-3" /> {activeQuote.tag}
                                   </span>
-                                  <p className="text-2xl sm:text-3xl font-display font-bold text-zinc-300 leading-tight uppercase pointer-events-none">
+                                  <p className="text-2xl sm:text-3xl md:text-5xl font-display font-bold text-zinc-300 leading-tight uppercase pointer-events-none">
                                       {activeQuote.bad}
                                   </p>
                               </div>
                           ) : (
                               // THE TRUTH (Good Copy)
-                              <div className="flex flex-col items-center text-center">
+                              <div className="flex flex-col items-center text-center animate-in fade-in zoom-in duration-300">
                                   <div className="flex items-center gap-3 mb-6">
                                       <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="TROR" className="w-10 h-10 rounded-full border-2 border-[#18F07A] bg-black shadow-[0_0_15px_rgba(24,240,122,0.4)] pointer-events-none" />
                                       <span className="text-[#18F07A] font-bold uppercase tracking-widest text-sm pointer-events-none">TROR Translation:</span>
                                   </div>
-                                  <p className="text-2xl sm:text-3xl font-display font-extrabold text-white leading-tight pointer-events-none">
+                                  <p className="text-2xl sm:text-3xl md:text-5xl font-display font-extrabold text-white leading-tight pointer-events-none">
                                       {activeQuote.truth}
                                   </p>
                               </div>
@@ -397,19 +439,42 @@ export default function App() {
 
                       </div>
 
-                      {/* Swipe Up CTA Inside Card */}
-                      <div className="mt-8 pt-6 border-t border-white/5 flex flex-col items-center">
-                          <span className={`font-display font-bold uppercase tracking-widest text-lg md:text-xl flex items-center gap-2 animate-bounce-up ${isTruthState ? 'text-white' : 'text-red-400'}`}>
-                              <ArrowUp className="w-5 h-5" /> 
-                              {isTruthState ? (step === 5 ? 'SWIPE UP TO UNLOCK' : 'SWIPE UP FOR NEXT') : 'SWIPE UP TO DECODE'}
-                          </span>
-                      </div>
+                      {/* Swipe Up CTA Inside Card (MOBILE ONLY) */}
+                      {deviceType === 'Mobile' && (
+                          <div className="mt-8 pt-6 border-t border-white/5 flex flex-col items-center">
+                              <span className={`font-display font-bold uppercase tracking-widest text-lg md:text-xl flex items-center gap-2 animate-bounce-up ${isTruthState ? 'text-white' : 'text-red-400'}`}>
+                                  <ArrowUp className="w-5 h-5" /> 
+                                  {isTruthState ? (step === 5 ? 'SWIPE UP TO UNLOCK' : 'SWIPE UP FOR NEXT') : 'SWIPE UP TO DECODE'}
+                              </span>
+                          </div>
+                      )}
                       
                       {/* Glow effects inside card */}
                       {isTruthState && <div className="absolute inset-0 bg-gradient-to-t from-[#18F07A]/10 to-transparent pointer-events-none rounded-3xl"></div>}
                       {!isTruthState && <div className="absolute inset-0 bg-gradient-to-t from-red-500/5 to-transparent pointer-events-none rounded-3xl"></div>}
 
-                  </div>
+                  </TiltCard>
+
+                  {/* Action Button (DESKTOP ONLY) */}
+                  {deviceType === 'Desktop' && (
+                      <div className="w-full mt-10 flex justify-center">
+                          {!isTruthState ? (
+                              <button 
+                                  onClick={handleDesktopAction}
+                                  className="bg-gradient-to-r from-red-600 to-red-500 border-2 border-red-400 text-white font-display font-bold text-2xl uppercase tracking-widest px-10 py-5 transform skew-x-[-5deg] hover:brightness-110 transition-all flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(239,68,68,0.5)] active:scale-[0.95] animate-pulse-glow"
+                              >
+                                  <Bomb className="w-6 h-6" /> {activeQuote.btnText}
+                              </button>
+                          ) : (
+                              <button 
+                                  onClick={handleDesktopAction}
+                                  className="bg-[#18F07A] border-2 border-white text-black font-display font-extrabold text-2xl uppercase tracking-widest px-10 py-5 transform skew-x-[-5deg] hover:bg-white transition-all flex items-center justify-center gap-3 shadow-[0_0_40px_rgba(24,240,122,0.3)] active:scale-[0.95]"
+                              >
+                                  {step === 5 ? 'UNLOCK TROR' : 'NEXT TARGET'} <ArrowRight className="w-6 h-6" />
+                              </button>
+                          )}
+                      </div>
+                  )}
               </div>
 
               {/* Mobile Progress Dots */}
