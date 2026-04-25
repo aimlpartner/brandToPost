@@ -257,15 +257,15 @@ export default function App() {
                   <div className="fade-in">
                     <div className="inline-flex items-center gap-2 bg-[#18F07A]/10 text-[#18F07A] font-sans font-bold text-xs md:text-sm uppercase tracking-widest px-5 py-2 rounded-full mb-8 border border-[#18F07A]/30 shadow-[0_0_20px_rgba(24,240,122,0.15)] mx-auto lg:mx-0">
                         <span className="w-2 h-2 rounded-full bg-[#18F07A] animate-pulse"></span>
-                        The AI Brand Strategist
+                        Top Secret Beta
                     </div>
                     
                     <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-[5.5rem] font-display font-extrabold tracking-tight mb-6 text-white leading-[1.05]">
-                        Copy that actually sounds like <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] to-[#2583EB]">a human.</span>
+                        We cracked the code on <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] to-[#2583EB]">human AI copy.</span>
                     </h1>
                     
                     <p className="text-zinc-400 text-lg md:text-xl font-medium mb-10 max-w-lg leading-relaxed mx-auto lg:mx-0">
-                        TROR extracts your exact Brand DNA from a single URL, generating high-traction omnichannel campaigns without the corporate cringe.
+                        You're wasting hours trying to make AI sound like your clients, only to get robotic garbage they hate. We built a system that generates 30 days of authentic, high-traction campaigns that get approved on the first draft. How? That's our secret.
                     </p>
 
                     <div className="w-full max-w-lg relative z-30 mb-8 mx-auto lg:mx-0">
@@ -380,54 +380,93 @@ export default function App() {
                 )}
             </div>
 
-            {/* Right Side: The Visual Anticipation (Reward Preview) */}
+            {/* Right Side: The Visual Anticipation (Reward Preview - Now a Curiosity Trap) */}
             <div className={`lg:col-span-6 w-full flex justify-center lg:justify-end slide-up relative z-10 hidden md:flex ${formState !== 'capture' ? 'opacity-50 blur-sm pointer-events-none transition-all duration-700' : 'transition-all duration-700'}`}>
                 <div className="animate-float w-full max-w-[500px]">
-                    <TiltCard className="w-full bg-[#111116] border border-white/10 rounded-3xl p-6 shadow-[0_30px_80px_rgba(0,0,0,0.8)] relative overflow-hidden will-change-transform transform-style-3d">
+                    <TiltCard className="w-full bg-[#111116] border border-white/10 rounded-3xl p-4 md:p-8 shadow-[0_30px_80px_rgba(0,0,0,0.8)] relative overflow-hidden will-change-transform transform-style-3d">
                         
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-[#7C3AED]/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                        {/* "Bad" Input */}
-                        <div className="mb-6 opacity-50 border-b border-zinc-800 pb-6 relative z-10">
-                            <div className="flex items-center gap-2 text-zinc-500 text-xs font-bold uppercase tracking-widest mb-2">
-                                <Zap className="w-3 h-3 text-red-500" /> ChatGPT Prompt
+                        {/* Browser Mockup Header */}
+                        <div className="flex items-center gap-2 mb-6 border-b border-white/5 pb-4">
+                            <div className="w-3 h-3 rounded-full bg-red-500/50"></div>
+                            <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
+                            <div className="w-3 h-3 rounded-full bg-green-500/50"></div>
+                            <div className="mx-auto bg-black/50 px-4 py-1 rounded-md text-xs font-mono text-zinc-500 flex items-center gap-2 border border-white/5">
+                                <Lock className="w-3 h-3" /> app.brandtopost.com
                             </div>
-                            <p className="text-zinc-400 text-sm font-medium italic">
-                                "Write a LinkedIn post about our new B2B product. Make it sound professional and synergized."
-                            </p>
                         </div>
 
-                        {/* "Good" Output (The Reward) */}
-                        <div className="relative z-10">
+                        {/* Top: DNA Analysis (The Tease) */}
+                        <div className="bg-black/40 rounded-2xl p-5 border border-white/5 mb-6">
                             <div className="flex items-center gap-3 mb-4">
-                                <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="TROR" className="w-10 h-10 rounded-full border border-[#18F07A] bg-black shadow-[0_0_15px_rgba(24,240,122,0.3)]" />
+                                <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="TROR" className="w-10 h-10 rounded-full border border-[#7C3AED] bg-black" />
                                 <div>
-                                    <span className="text-[#18F07A] font-bold uppercase tracking-widest text-[10px] block">TROR Extracted DNA</span>
-                                    <span className="text-white font-display font-bold text-sm">Authentic LinkedIn Post</span>
+                                    <h4 className="text-white font-display font-bold text-sm">TROR Analysis</h4>
+                                    <span className="text-[#18F07A] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> DNA Extracted</span>
                                 </div>
                             </div>
-                            <div className="bg-[#0A0A0F] border border-zinc-800 rounded-xl p-5 text-zinc-300 font-medium text-sm leading-relaxed shadow-inner">
-                                <p className="mb-3">Stop buying more software to fix broken team communication.</p>
-                                <p className="mb-3">Adding Slack on top of Teams on top of Asana doesn't create alignment. It creates notification fatigue.</p>
-                                <p>We tracked 500 B2B teams. The most productive ones didn't have more tools. They had stricter writing protocols. 👇</p>
+
+                            <div className="flex flex-col gap-4 sm:flex-row sm:gap-8">
+                                <div>
+                                    <label className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1 block">Extracted Tone</label>
+                                    <div className="bg-[#7C3AED]/10 border border-[#7C3AED]/30 rounded-lg p-2 text-[#a78bfa] text-sm font-medium">
+                                        Witty, Direct, Authority
+                                    </div>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1 block">Banned Jargon</label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        <span className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-2 py-1 rounded line-through">Synergy</span>
+                                        <span className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-2 py-1 rounded line-through">Delve</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Fake UI elements */}
-                        <div className="flex items-center gap-4 mt-5 text-zinc-600">
-                            <span className="flex items-center gap-1 text-xs font-bold"><MessageSquare className="w-4 h-4" /> 128</span>
-                            <span className="flex items-center gap-1 text-xs font-bold"><Activity className="w-4 h-4" /> 14.2k</span>
+                        {/* Bottom: The Blurred Output (The Trap) */}
+                        <div className="bg-black/40 rounded-2xl p-5 md:p-6 border border-white/5 relative overflow-hidden">
+                            
+                            <div className="flex items-center justify-between mb-6">
+                                <h4 className="text-white font-display font-bold text-lg">Generated Campaign</h4>
+                                <span className="bg-[#18F07A]/10 text-[#18F07A] text-xs font-bold px-3 py-1 rounded-full border border-[#18F07A]/30">30 Posts Ready</span>
+                            </div>
+
+                            <div className="bg-[#1C1C22] border border-zinc-800 rounded-xl p-6 shadow-inner relative z-10 overflow-hidden">
+                                
+                                {/* LOCKED OVERLAY (Curiosity Trigger) */}
+                                <div className="absolute inset-0 bg-[#1C1C22]/60 backdrop-blur-[3px] z-20 flex flex-col items-center justify-center border border-white/5">
+                                    <div className="w-12 h-12 bg-[#7C3AED]/20 rounded-full flex items-center justify-center mb-3 border border-[#7C3AED]/50">
+                                        <Lock className="w-5 h-5 text-[#a78bfa]" />
+                                    </div>
+                                    <span className="text-white font-display font-bold text-lg tracking-wide uppercase">Output Locked</span>
+                                    <span className="text-zinc-400 text-xs font-medium mt-1">Join waitlist to reveal the magic.</span>
+                                </div>
+
+                                {/* Blurred Content */}
+                                <div className="flex items-center gap-2 mb-4 opacity-30">
+                                    <div className="w-8 h-8 rounded bg-[#0A66C2] flex items-center justify-center">
+                                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                                    </div>
+                                    <span className="text-zinc-400 text-sm font-medium">LinkedIn Post</span>
+                                </div>
+                                <div className="space-y-3 opacity-30">
+                                    <div className="w-3/4 h-3 bg-zinc-700 rounded"></div>
+                                    <div className="w-full h-3 bg-zinc-700 rounded"></div>
+                                    <div className="w-5/6 h-3 bg-zinc-700 rounded"></div>
+                                    <div className="w-1/2 h-3 bg-zinc-700 rounded"></div>
+                                </div>
+                                <div className="w-full h-20 bg-zinc-800 rounded-lg border border-zinc-700 mt-5 opacity-30"></div>
+                            </div>
                         </div>
                     </TiltCard>
                 </div>
             </div>
         </div>
 
-        {/* --- HOW IT WORKS --- */}
+        {/* --- HOW IT WORKS (The Unfair Advantage) --- */}
         <div className={`w-full max-w-6xl mx-auto mt-10 md:mt-20 transition-opacity duration-500 ${formState !== 'capture' ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
             <div className="text-center mb-12">
-                <h3 className="text-3xl md:text-4xl font-display font-extrabold text-white uppercase tracking-wide">The TROR Workflow</h3>
-                <p className="text-zinc-400 mt-2 font-medium text-lg">From a single URL to a month of high-traction content.</p>
+                <h3 className="text-3xl md:text-4xl font-display font-extrabold text-white uppercase tracking-wide">The Unfair Advantage</h3>
+                <p className="text-zinc-400 mt-2 font-medium text-lg">We handle the heavy lifting. You take the credit.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -435,24 +474,24 @@ export default function App() {
                     <div className="w-12 h-12 bg-[#7C3AED]/10 text-[#7C3AED] rounded-2xl flex items-center justify-center mb-6 border border-[#7C3AED]/30 group-hover:scale-110 transition-transform">
                         <span className="font-display font-bold text-2xl">01</span>
                     </div>
-                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">Extract The Signal</h4>
-                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Paste a URL, or drop a quick description/doc if you're pre-revenue. TROR analyzes the tone and builds a custom Brand DNA profile in seconds.</p>
+                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">The Black Box</h4>
+                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Give us whatever you have—a rough brief, past posts, or just an idea. We extract the exact psychology and tone needed to make them stand out.</p>
                 </TiltCard>
 
                 <TiltCard className="bg-[#1C1C22] border border-zinc-800 rounded-3xl p-6 md:p-8 relative overflow-hidden group hover:border-[#2583EB]/50 transition-colors">
                     <div className="w-12 h-12 bg-[#2583EB]/10 text-[#2583EB] rounded-2xl flex items-center justify-center mb-6 border border-[#2583EB]/30 group-hover:scale-110 transition-transform">
                         <span className="font-display font-bold text-2xl">02</span>
                     </div>
-                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">Generate Momentum</h4>
-                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Turn that DNA into a 30-day omnichannel campaign. LinkedIn hooks, Twitter threads, and newsletters that actually sound like your client wrote them.</p>
+                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">The Vault</h4>
+                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Our system automatically bans corporate cringe and generic AI buzzwords. It outputs omnichannel campaigns that perfectly match the brand's unique voice.</p>
                 </TiltCard>
 
                 <TiltCard className="bg-[#1C1C22] border border-zinc-800 rounded-3xl p-6 md:p-8 relative overflow-hidden group hover:border-[#18F07A]/50 transition-colors">
                     <div className="w-12 h-12 bg-[#18F07A]/10 text-[#18F07A] rounded-2xl flex items-center justify-center mb-6 border border-[#18F07A]/30 group-hover:scale-110 transition-transform">
                         <span className="font-display font-bold text-2xl">03</span>
                     </div>
-                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">Gain Traction</h4>
-                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Review, edit, and schedule natively across all platforms from a single 1-Tab Arena. Stop juggling 10 different scheduling tools.</p>
+                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">The Edge</h4>
+                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Agencies using our beta have eliminated client revisions and cut content creation time by 80%. We're only letting 50 more in.</p>
                 </TiltCard>
             </div>
         </div>
