@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Target, Zap, CheckCircle2, ArrowRight, Layers, ScanLine, Activity, Sparkles, Lock, ArrowUpRight, ShieldCheck, ArrowUp, Send, MessageSquare } from 'lucide-react';
+import { Target, Zap, CheckCircle2, ArrowRight, Layers, ScanLine, Activity, Sparkles, Lock, ShieldCheck, ShieldAlert, ArrowUp, Send, AlertTriangle, Sliders, MessageSquare } from 'lucide-react';
 
 // --- Custom Hooks ---
-const use3DTilt = (options = { max: 10, scale: 1.02, speed: 400 }) => {
+const use3DTilt = (options = { max: 6, scale: 1.01, speed: 400 }) => {
   const ref = useRef(null);
   useEffect(() => {
     if (window.innerWidth < 768) return; 
@@ -66,8 +66,18 @@ export default function App() {
   });
 
   const [deviceType, setDeviceType] = useState('Desktop');
+  const [locationData, setLocationData] = useState(() => {
+    const saved = localStorage.getItem('b2p_location');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [interactions, setInteractions] = useState([]);
   
+  // --- INTERACTIVE SLOP SLIDER STATE ---
+  const [sliderPos, setSliderPos] = useState(25); // Percentage (0 - 100)
+  const [isCleaned, setIsCleaned] = useState(false);
+  const sliderTrackRef = useRef(null);
+  const isDragging = useRef(false);
+
   // --- SUPERHUMAN PLAYBOOK STATES ---
   const [formState, setFormState] = useState('capture'); // 'capture' | 'survey' | 'completed'
   const [waitlistNumber, setWaitlistNumber] = useState(0);
@@ -93,13 +103,15 @@ export default function App() {
   }, []);
 
   // Tracking Function
-  const trackEvent = useCallback((eventName, userEmail = "No Email", extraData = {}) => {
+  const trackEvent = useCallback((eventName, userEmail = "No Email", extraData = {}, locOverride = null) => {
     try {
+      const currentLoc = locOverride || locationData || JSON.parse(localStorage.getItem('b2p_location')) || 'Unknown';
       const formData = new FormData();
       formData.append('email', userEmail);
       formData.append('interactions', JSON.stringify({
         userId: userId,
         device: deviceType,
+        location: currentLoc,
         event: eventName,
         data: extraData,
         timestamp: new Date().toISOString()
@@ -108,15 +120,94 @@ export default function App() {
     } catch (err) {
       console.error("Tracking Error:", err);
     }
-  }, [userId, deviceType]);
+  }, [userId, deviceType, locationData]);
 
-  // Initial Page Visit
+  // Reliable Silent Location Fetch & Visit Tracking
   useEffect(() => {
-    if (!sessionStorage.getItem('b2p_visit_tracked')) {
-      trackEvent('page_visit');
-      sessionStorage.setItem('b2p_visit_tracked', 'true');
+    const initializeTracker = async () => {
+      let loc = locationData;
+
+      if (!loc) {
+        try {
+          let res = await fetch('https://ipapi.co/json/');
+          let data = await res.json();
+          
+          if (data && data.city) {
+            loc = { city: data.city, region: data.region, country: data.country_name };
+          } else {
+            res = await fetch('https://ipwho.is/');
+            data = await res.json();
+            if (data && data.city) {
+              loc = { city: data.city, region: data.region, country: data.country };
+            }
+          }
+
+          if (loc) {
+            setLocationData(loc);
+            localStorage.setItem('b2p_location', JSON.stringify(loc));
+          }
+        } catch (err) {
+          console.log('Location fetch blocked or failed silently.');
+        }
+      }
+
+      if (!sessionStorage.getItem('b2p_visit_tracked')) {
+        trackEvent('page_visit', 'No Email', {}, loc);
+        sessionStorage.setItem('b2p_visit_tracked', 'true');
+      }
+    };
+
+    initializeTracker();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- SLIDER INTERACTION LOGIC ---
+  const updateSlider = (clientX) => {
+    if (!sliderTrackRef.current) return;
+    const rect = sliderTrackRef.current.getBoundingClientRect();
+    const width = rect.width;
+    const offset = clientX - rect.left;
+    let percentage = (offset / width) * 100;
+    percentage = Math.max(0, Math.min(percentage, 100));
+    setSliderPos(Math.round(percentage));
+
+    if (percentage > 92 && !isCleaned) {
+      setIsCleaned(true);
+      trackEvent('cringe_cleaned_demo');
     }
-  }, [trackEvent]);
+  };
+
+  const handleMouseDown = (e) => {
+    isDragging.current = true;
+    updateSlider(e.clientX);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging.current) return;
+    updateSlider(e.clientX);
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleTouchStart = (e) => {
+    isDragging.current = true;
+    updateSlider(e.touches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging.current) return;
+    updateSlider(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    isDragging.current = false;
+  };
 
   // Handle Step 1: Email Submit
   const handleWaitlistSubmit = async (e) => {
@@ -124,15 +215,13 @@ export default function App() {
     if (!email) return;
     setIsSubmitting(true);
     
-    // Log initial capture
     trackEvent('waitlist_email_captured', email);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 800)); // Smooth UX delay
-      // Since 36 spots are taken, they get spot #37
-      setWaitlistNumber(37);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setWaitlistNumber(37); // Consistent 37th spot of 50
       setFormState('survey');
-      window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top for survey focus
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       setFormState('survey');
     } finally {
@@ -142,12 +231,9 @@ export default function App() {
 
   // Handle Step 2: Survey Submit
   const handleSurveySubmit = async () => {
-    // Basic validation
     if (!surveyData.agencyFocus || !surveyData.clientCount || !surveyData.biggestPain) return;
-    
     setIsSubmitting(true);
     
-    // Log survey completion
     trackEvent('survey_completed', email, surveyData);
     
     try {
@@ -162,7 +248,7 @@ export default function App() {
 
   const tiltRef = use3DTilt();
 
-  // Helper for Survey Radio Buttons
+  // Helper for Survey Options
   const SurveyOption = ({ field, value, label }) => (
     <button
       type="button"
@@ -195,8 +281,6 @@ export default function App() {
         .fade-in { animation: fadeIn 0.5s ease-out forwards; }
         .delay-100 { animation-delay: 100ms; }
         .delay-200 { animation-delay: 200ms; }
-        .delay-300 { animation-delay: 300ms; }
-        .delay-400 { animation-delay: 400ms; }
         
         @keyframes fadeInUp { 
             from { opacity: 0; transform: translateY(20px); } 
@@ -207,27 +291,31 @@ export default function App() {
             to { opacity: 1; } 
         }
 
-        /* Floating Element */
         @keyframes float {
             0% { transform: translateY(0px); }
-            50% { transform: translateY(-15px); }
+            50% { transform: translateY(-8px); }
             100% { transform: translateY(0px); }
         }
         .animate-float { animation: float 6s ease-in-out infinite; }
         
-        /* Glow Pulse */
         @keyframes glowPulse {
             0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4); }
             70% { box-shadow: 0 0 0 15px rgba(124, 58, 237, 0); }
             100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
         }
         .glow-btn { animation: glowPulse 2s infinite; }
+
+        @keyframes pulseSwipe {
+            0%, 100% { transform: translateX(0); opacity: 0.8; }
+            50% { transform: translateX(10px); opacity: 1; }
+        }
+        .animate-swipe-hint { animation: pulseSwipe 1.5s infinite ease-in-out; }
       `}</style>
 
-      {/* --- CENTRAL AURORA GLOW --- */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[100vw] h-[80vh] pointer-events-none z-0 flex justify-center items-start overflow-hidden">
-          <div className="absolute top-[-10%] w-[600px] h-[500px] bg-[#7C3AED]/30 rounded-full blur-[120px] mix-blend-screen"></div>
-          <div className="absolute top-[10%] w-[500px] h-[400px] bg-[#2583EB]/20 rounded-full blur-[100px] mix-blend-screen"></div>
+      {/* --- RADIAL AURORA GLOW (Centered Backdrop) --- */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[100vw] h-[85vh] pointer-events-none z-0 flex justify-center items-start overflow-hidden">
+          <div className="absolute top-[-15%] w-[700px] h-[500px] bg-[#7C3AED]/20 rounded-full blur-[140px] mix-blend-screen"></div>
+          <div className="absolute top-[10%] w-[500px] h-[400px] bg-[#2583EB]/10 rounded-full blur-[120px] mix-blend-screen"></div>
       </div>
       <div className="fixed inset-0 z-0 opacity-[0.03] pointer-events-none mix-blend-screen" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")' }}></div>
 
@@ -238,44 +326,46 @@ export default function App() {
             <span>Brand<span className="text-[#7C3AED]">To</span>Post</span>
         </div>
         <div className="text-xs md:text-sm font-sans font-bold px-4 py-2 border border-white/10 bg-white/5 backdrop-blur-md rounded-full flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-zinc-400" />
-            <span className="text-zinc-300">Beta v1.0</span>
+            <ShieldCheck className="w-4 h-4 text-[#18F07A]" />
+            <span className="text-zinc-300 font-semibold">Classified Beta</span>
         </div>
       </nav>
 
       {/* Main Content Area */}
-      <main className="relative z-10 flex-1 flex flex-col items-center w-full px-4 pt-4 md:pt-10 pb-20">
+      <main className="relative z-10 flex-1 flex flex-col items-center w-full px-4 pt-4 md:pt-12 pb-20">
         
-        {/* --- HIGH-CONVERTING HERO & SURVEY AREA --- */}
         <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center mb-24">
             
             {/* Left Side: Dynamic Flow (Capture -> Survey -> Completed) */}
             <div className="lg:col-span-6 flex flex-col items-center lg:items-start text-center lg:text-left z-20">
                 
-                {/* STATE 1: INITIAL CAPTURE */}
+                {/* STATE 1: INITIAL EMAIL CAPTURE */}
                 {formState === 'capture' && (
                   <div className="fade-in">
-                    <div className="inline-flex items-center gap-2 bg-[#18F07A]/10 text-[#18F07A] font-sans font-bold text-xs md:text-sm uppercase tracking-widest px-5 py-2 rounded-full mb-8 border border-[#18F07A]/30 shadow-[0_0_20px_rgba(24,240,122,0.15)] mx-auto lg:mx-0">
-                        <span className="w-2 h-2 rounded-full bg-[#18F07A] animate-pulse"></span>
-                        Top Secret Beta
+                    <div className="inline-flex items-center gap-2 bg-[#7C3AED]/15 text-[#a78bfa] font-sans font-bold text-xs md:text-sm uppercase tracking-widest px-5 py-2 rounded-full mb-8 border border-[#7C3AED]/30">
+                        <Sparkles className="w-4 h-4 text-[#a78bfa] animate-pulse" />
+                        Autonomous Marketing Agents
                     </div>
                     
-                    <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-[5.5rem] font-display font-extrabold tracking-tight mb-6 text-white leading-[1.05]">
-                        We cracked the code on <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] to-[#2583EB]">human AI copy.</span>
+                    {/* The Clean, Blueprint-driven Headline */}
+                    <h1 className="text-5xl sm:text-6xl md:text-7xl font-display font-extrabold tracking-tight mb-6 text-white leading-[1.05]">
+                        You are a founder, not a <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] to-[#2583EB]">full-time creator.</span>
                     </h1>
                     
+                    {/* Hitting the client retainer/revision pain point directly */}
                     <p className="text-zinc-400 text-lg md:text-xl font-medium mb-10 max-w-lg leading-relaxed mx-auto lg:mx-0">
-                        You're wasting hours trying to make AI sound like your clients, only to get robotic garbage they hate. We built a system that generates 30 days of authentic, high-traction campaigns that get approved on the first draft. How? That's our secret.
+                        Hand off your organic social pipeline to a team of autonomous marketing agents. No prompts to write, no robotic templates to configure. Just high-traction campaigns that sound completely human—built from your website, and put on autopilot.
                     </p>
 
+                    {/* Highly-visible Waitlist Trigger */}
                     <div className="w-full max-w-lg relative z-30 mb-8 mx-auto lg:mx-0">
-                        <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row bg-[#1C1C22]/50 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl shadow-2xl focus-within:border-[#7C3AED]/50 focus-within:bg-[#1C1C22]/80 transition-all">
+                        <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row bg-[#1C1C22]/50 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl shadow-2xl focus-within:border-[#7C3AED]/50 focus-within:bg-[#1C1C22]/85 transition-all">
                             <input 
                                 type="email" 
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Enter your email address..." 
+                                placeholder="Enter your work email..." 
                                 className="flex-1 bg-transparent border-none px-5 py-4 sm:py-0 text-white focus:outline-none transition-all text-base md:text-lg font-medium placeholder:text-zinc-600"
                                 disabled={isSubmitting}
                             />
@@ -284,11 +374,12 @@ export default function App() {
                                 disabled={isSubmitting}
                                 className="bg-gradient-to-r from-[#7C3AED] to-[#2583EB] text-white font-display font-bold text-base md:text-lg uppercase tracking-widest px-8 py-4 rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shrink-0 active:scale-[0.98] glow-btn disabled:opacity-50"
                             >
-                                {isSubmitting ? 'JOINING...' : 'JOIN WAITLIST'} <ArrowRight className="w-5 h-5" />
+                                {isSubmitting ? 'SECURING...' : 'GET ACCESS'} <ArrowRight className="w-5 h-5" />
                             </button>
                         </form>
                     </div>
 
+                    {/* Hyper-believable Scarcity */}
                     <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 opacity-90 mx-auto lg:mx-0 justify-center lg:justify-start">
                         <div className="flex -space-x-3">
                             <img className="w-10 h-10 rounded-full border-2 border-[#050508] bg-zinc-800" src="https://i.pravatar.cc/100?img=33" alt="User" />
@@ -306,7 +397,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* STATE 2: THE SURVEY (Fast-Track) */}
+                {/* STATE 2: THE SURVEY (The Superhuman Qualification Loop) */}
                 {formState === 'survey' && (
                   <div className="fade-in w-full max-w-lg mx-auto lg:mx-0 bg-[#1C1C22]/80 backdrop-blur-xl border border-[#7C3AED]/30 rounded-3xl p-6 md:p-10 shadow-[0_0_60px_rgba(124,58,237,0.15)] text-left">
                       
@@ -315,8 +406,8 @@ export default function App() {
                               #
                           </div>
                           <div>
-                              <p className="text-white font-display font-bold text-xl leading-tight">You just claimed spot #{waitlistNumber} out of 50.</p>
-                              <p className="text-[#a78bfa] text-sm mt-1">Want to skip the line? Tell us about your agency to request fast-track VIP access.</p>
+                              <p className="text-white font-display font-bold text-xl leading-tight font-extrabold">You claimed spot #{waitlistNumber} of 50.</p>
+                              <p className="text-[#a78bfa] text-sm mt-1">Want to bypass the waiting list? Tell us a bit about your agency to fast-track your priority account.</p>
                           </div>
                       </div>
 
@@ -325,16 +416,16 @@ export default function App() {
                           <div>
                               <label className="text-white font-display font-bold text-lg mb-3 block">1. What is your agency's primary focus?</label>
                               <div className="space-y-2">
-                                  <SurveyOption field="agencyFocus" value="B2B SaaS" label="B2B SaaS / Tech" />
+                                  <SurveyOption field="agencyFocus" value="B2B SaaS" label="B2B SaaS / Tech clients" />
                                   <SurveyOption field="agencyFocus" value="Personal Branding" label="Personal Branding / Founders" />
-                                  <SurveyOption field="agencyFocus" value="E-commerce" label="E-commerce / D2C" />
-                                  <SurveyOption field="agencyFocus" value="Other" label="Other / Generalist" />
+                                  <SurveyOption field="agencyFocus" value="E-commerce" label="E-commerce / Brand Campaigns" />
+                                  <SurveyOption field="agencyFocus" value="Other" label="Other / General Agency Copy" />
                               </div>
                           </div>
 
                           {/* Question 2 */}
                           <div>
-                              <label className="text-white font-display font-bold text-lg mb-3 block">2. How many clients do you currently manage?</label>
+                              <label className="text-white font-display font-bold text-lg mb-3 block">2. How many clients do you currently write for?</label>
                               <div className="space-y-2">
                                   <SurveyOption field="clientCount" value="1-5" label="1 - 5 clients" />
                                   <SurveyOption field="clientCount" value="6-15" label="6 - 15 clients" />
@@ -344,11 +435,11 @@ export default function App() {
 
                           {/* Question 3 */}
                           <div>
-                              <label className="text-white font-display font-bold text-lg mb-3 block">3. What is your biggest content bottleneck?</label>
+                              <label className="text-white font-display font-bold text-lg mb-3 block">3. What is your biggest content pain point?</label>
                               <div className="space-y-2">
-                                  <SurveyOption field="biggestPain" value="Writing" label="Writing quality / Sounding human" />
-                                  <SurveyOption field="biggestPain" value="Approvals" label="Client revisions & approvals" />
-                                  <SurveyOption field="biggestPain" value="Strategy" label="Coming up with campaign ideas" />
+                                  <SurveyOption field="biggestPain" value="Writing" label="AI sounding too robotic and generic" />
+                                  <SurveyOption field="biggestPain" value="Approvals" label="Too many revisions from picky clients" />
+                                  <SurveyOption field="biggestPain" value="Strategy" label="Spending hours writing prompts" />
                               </div>
                           </div>
 
@@ -364,7 +455,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* STATE 3: COMPLETED */}
+                {/* STATE 3: SURVEY COMPLETED */}
                 {formState === 'completed' && (
                   <div className="fade-in w-full max-w-lg mx-auto lg:mx-0 flex flex-col items-center lg:items-start text-center lg:text-left mt-10">
                       <div className="w-20 h-20 bg-[#18F07A]/20 border-2 border-[#18F07A] rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(24,240,122,0.3)]">
@@ -374,18 +465,20 @@ export default function App() {
                           Priority Access <span className="text-[#18F07A]">Requested.</span>
                       </h1>
                       <p className="text-zinc-400 text-lg md:text-xl font-medium max-w-md leading-relaxed">
-                          Your application has been received. If your agency is a fit for the Beta, our team will email you shortly with an onboarding link.
+                          Your profile has been prioritized. If your agency is selected for the private beta, our team will reach out directly with your onboarding invitation.
                       </p>
                   </div>
                 )}
             </div>
 
-            {/* Right Side: The Visual Anticipation (Reward Preview - Now a Curiosity Trap) */}
-            <div className={`lg:col-span-6 w-full flex justify-center lg:justify-end slide-up relative z-10 hidden md:flex ${formState !== 'capture' ? 'opacity-50 blur-sm pointer-events-none transition-all duration-700' : 'transition-all duration-700'}`}>
-                <div className="animate-float w-full max-w-[500px]">
-                    <TiltCard className="w-full bg-[#111116] border border-white/10 rounded-3xl p-4 md:p-8 shadow-[0_30px_80px_rgba(0,0,0,0.8)] relative overflow-hidden will-change-transform transform-style-3d">
+            {/* Right Side: The Ultra-Interactive "Slop Eraser" Slider */}
+            <div className={`lg:col-span-6 w-full flex justify-center lg:justify-end slide-up relative z-10 hidden md:flex ${formState !== 'capture' ? 'opacity-30 blur-sm pointer-events-none transition-all duration-700' : 'transition-all duration-700'}`}>
+                <div className="animate-float w-full max-w-[530px]">
+                    <TiltCard className="w-full bg-[#111116] border border-white/10 rounded-3xl p-5 md:p-8 shadow-[0_30px_80px_rgba(0,0,0,0.8)] relative overflow-hidden will-change-transform transform-style-3d">
                         
-                        {/* Browser Mockup Header */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-[#7C3AED]/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                        {/* Top Browser Bar Header */}
                         <div className="flex items-center gap-2 mb-6 border-b border-white/5 pb-4">
                             <div className="w-3 h-3 rounded-full bg-red-500/50"></div>
                             <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
@@ -395,111 +488,149 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Top: DNA Analysis (The Tease) */}
-                        <div className="bg-black/40 rounded-2xl p-5 border border-white/5 mb-6">
-                            <div className="flex items-center gap-3 mb-4">
-                                <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="TROR" className="w-10 h-10 rounded-full border border-[#7C3AED] bg-black" />
-                                <div>
-                                    <h4 className="text-white font-display font-bold text-sm">TROR Analysis</h4>
-                                    <span className="text-[#18F07A] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> DNA Extracted</span>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col gap-4 sm:flex-row sm:gap-8">
-                                <div>
-                                    <label className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1 block">Extracted Tone</label>
-                                    <div className="bg-[#7C3AED]/10 border border-[#7C3AED]/30 rounded-lg p-2 text-[#a78bfa] text-sm font-medium">
-                                        Witty, Direct, Authority
-                                    </div>
-                                </div>
-                                <div className="flex-1">
-                                    <label className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1 block">Banned Jargon</label>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        <span className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-2 py-1 rounded line-through">Synergy</span>
-                                        <span className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-2 py-1 rounded line-through">Delve</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Bottom: The Blurred Output (The Trap) */}
-                        <div className="bg-black/40 rounded-2xl p-5 md:p-6 border border-white/5 relative overflow-hidden">
+                        {/* SLOP ERASER CANVAS CONTAINER */}
+                        <div className="relative h-[280px] w-full bg-black/40 rounded-2xl border border-zinc-800/80 overflow-hidden select-none">
                             
-                            <div className="flex items-center justify-between mb-6">
-                                <h4 className="text-white font-display font-bold text-lg">Generated Campaign</h4>
-                                <span className="bg-[#18F07A]/10 text-[#18F07A] text-xs font-bold px-3 py-1 rounded-full border border-[#18F07A]/30">30 Posts Ready</span>
+                            {/* Layer 1 (Underneath): CLEAN HUMANIZED TROR COPY (revealed when slid) */}
+                            <div className="absolute inset-0 p-5 flex flex-col justify-between">
+                                <div className="flex items-center gap-2 text-[#18F07A] text-xs font-bold uppercase tracking-widest">
+                                    <Sparkles className="w-4 h-4 text-[#18F07A]" /> Humanredraft (TROR Engine)
+                                </div>
+                                <div className="text-white font-sans text-[15px] leading-relaxed font-semibold mt-4">
+                                    <p className="mb-2 text-[#18F07A]">Stop buying more software to fix broken team communication.</p>
+                                    <p className="text-zinc-200">Adding Slack on top of Teams doesn't build alignment. It creates notification fatigue. The most productive teams we tracked didn't have more tools. They had stricter writing protocols.</p>
+                                </div>
+                                <div className="border-t border-[#18F07A]/10 pt-3 flex justify-between text-[11px] text-zinc-500 font-medium">
+                                    <span>APPROVED INSTANTLY</span>
+                                    <span>0 AI TRIGGER WORDS</span>
+                                </div>
                             </div>
 
-                            <div className="bg-[#1C1C22] border border-zinc-800 rounded-xl p-6 shadow-inner relative z-10 overflow-hidden">
-                                
-                                {/* LOCKED OVERLAY (Curiosity Trigger) */}
-                                <div className="absolute inset-0 bg-[#1C1C22]/60 backdrop-blur-[3px] z-20 flex flex-col items-center justify-center border border-white/5">
-                                    <div className="w-12 h-12 bg-[#7C3AED]/20 rounded-full flex items-center justify-center mb-3 border border-[#7C3AED]/50">
-                                        <Lock className="w-5 h-5 text-[#a78bfa]" />
+                            {/* Layer 2 (Slid/Clipped): ROBOTIC LLM SLOP CARD */}
+                            <div 
+                                className="absolute inset-0 bg-[#161116] p-5 flex flex-col justify-between border-r border-[#FF4444]/40 overflow-hidden"
+                                style={{ width: `${sliderPos}%` }}
+                            >
+                                <div className="w-[450px] flex flex-col justify-between h-full">
+                                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold uppercase tracking-widest">
+                                        <ShieldAlert className="w-4 h-4 text-red-500 animate-pulse" /> AI Jargon Alert (Typical GPT)
                                     </div>
-                                    <span className="text-white font-display font-bold text-lg tracking-wide uppercase">Output Locked</span>
-                                    <span className="text-zinc-400 text-xs font-medium mt-1">Join waitlist to reveal the magic.</span>
+                                    <div className="text-zinc-500 font-sans text-[15px] leading-relaxed mt-4 italic">
+                                        "In today's fast-paced digital{" "}
+                                        <span className="bg-red-500/10 text-red-400 border border-red-500/30 px-1 rounded line-through">tapestry</span>, 
+                                        it is imperative to{" "}
+                                        <span className="bg-red-500/10 text-red-400 border border-red-500/30 px-1 rounded line-through">delve</span>{" "}
+                                        into key workflows to leverage paradigm-shifting{" "}
+                                        <span className="bg-red-500/10 text-red-400 border border-red-500/30 px-1 rounded line-through">synergy</span>..."
+                                    </div>
+                                    <div className="border-t border-red-500/10 pt-3 flex justify-between text-[11px] text-red-400/50 font-medium">
+                                        <span>REJECTED BY CLIENT</span>
+                                        <span>8 AI TRIGGER WORDS FOUND</span>
+                                    </div>
                                 </div>
+                            </div>
 
-                                {/* Blurred Content */}
-                                <div className="flex items-center gap-2 mb-4 opacity-30">
-                                    <div className="w-8 h-8 rounded bg-[#0A66C2] flex items-center justify-center">
-                                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                                    </div>
-                                    <span className="text-zinc-400 text-sm font-medium">LinkedIn Post</span>
+                            {/* The Interactive Slider Line (Erase Beam) */}
+                            <div 
+                                className="absolute top-0 bottom-0 w-[2px] bg-[#7C3AED] shadow-[0_0_15px_#7C3AED] pointer-events-none"
+                                style={{ left: `${sliderPos}%` }}
+                            >
+                                <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-[#7C3AED] border-2 border-white flex items-center justify-center shadow-lg pointer-events-auto cursor-ew-resize">
+                                    <Sliders className="w-4 h-4 text-white" />
                                 </div>
-                                <div className="space-y-3 opacity-30">
-                                    <div className="w-3/4 h-3 bg-zinc-700 rounded"></div>
-                                    <div className="w-full h-3 bg-zinc-700 rounded"></div>
-                                    <div className="w-5/6 h-3 bg-zinc-700 rounded"></div>
-                                    <div className="w-1/2 h-3 bg-zinc-700 rounded"></div>
-                                </div>
-                                <div className="w-full h-20 bg-zinc-800 rounded-lg border border-zinc-700 mt-5 opacity-30"></div>
+                            </div>
+
+                        </div>
+
+                        {/* Slider Controller Bar */}
+                        <div className="mt-6">
+                            <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">
+                                <span>Slop ({100 - sliderPos}%)</span>
+                                <span className={isCleaned ? 'text-[#18F07A]' : 'text-zinc-400'}>{isCleaned ? 'Fully Humanized! 🚀' : 'Drag to humanize'}</span>
+                            </div>
+                            <div 
+                                ref={sliderTrackRef}
+                                onMouseDown={handleMouseDown}
+                                onTouchStart={handleTouchStart}
+                                onTouchMove={handleTouchMove}
+                                onTouchEnd={handleTouchEnd}
+                                className="h-4 bg-zinc-900 border border-zinc-800 rounded-full relative cursor-ew-resize overflow-hidden flex items-center"
+                            >
+                                <div 
+                                    className="h-full bg-gradient-to-r from-red-500 via-[#7C3AED] to-[#18F07A]" 
+                                    style={{ width: `${sliderPos}%` }}
+                                ></div>
+                                <div 
+                                    className="absolute w-4 h-4 rounded-full bg-white shadow-md border border-zinc-300 pointer-events-none"
+                                    style={{ left: `calc(${sliderPos}% - 8px)` }}
+                                ></div>
                             </div>
                         </div>
+
+                        {/* Floating Interaction Hint */}
+                        {!isCleaned && (
+                            <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-500 animate-swipe-hint">
+                                <ArrowRight className="w-4 h-4" /> <span>Swipe the purple handle to humanize</span>
+                            </div>
+                        )}
+
+                        {/* Cringe Warning Box */}
+                        <div className="mt-6 bg-black/30 rounded-xl p-4 border border-zinc-800 flex items-start gap-4">
+                            <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                                <AlertTriangle className="w-4 h-4 text-red-400" />
+                            </div>
+                            <p className="text-zinc-500 text-xs leading-relaxed font-medium">
+                                Marketers spent hours rewriting standard LLM drafts in 2025. TROR's custom system bypasses vocabulary patterns completely to preserve agency margins.
+                            </p>
+                        </div>
+
                     </TiltCard>
                 </div>
             </div>
         </div>
 
-        {/* --- HOW IT WORKS (The Unfair Advantage) --- */}
-        <div className={`w-full max-w-6xl mx-auto mt-10 md:mt-20 transition-opacity duration-500 ${formState !== 'capture' ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
+        {/* --- THE BLUEPRINT OUTLINE --- */}
+        <div className={`w-full max-w-6xl mx-auto mt-10 md:mt-16 transition-opacity duration-500 ${formState !== 'capture' ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
             <div className="text-center mb-12">
-                <h3 className="text-3xl md:text-4xl font-display font-extrabold text-white uppercase tracking-wide">The Unfair Advantage</h3>
-                <p className="text-zinc-400 mt-2 font-medium text-lg">We handle the heavy lifting. You take the credit.</p>
+                <h3 className="text-2xl md:text-3xl font-display font-extrabold text-white uppercase tracking-wider">The Blueprint</h3>
+                <p className="text-zinc-400 mt-2 font-medium text-base md:text-lg">How premium agencies are quietly maintaining their edge.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* Blueprint Row 1 */}
                 <TiltCard className="bg-[#1C1C22] border border-zinc-800 rounded-3xl p-6 md:p-8 relative overflow-hidden group hover:border-[#7C3AED]/50 transition-colors">
-                    <div className="w-12 h-12 bg-[#7C3AED]/10 text-[#7C3AED] rounded-2xl flex items-center justify-center mb-6 border border-[#7C3AED]/30 group-hover:scale-110 transition-transform">
-                        <span className="font-display font-bold text-2xl">01</span>
+                    <div className="w-11 h-11 bg-[#7C3AED]/10 text-[#7C3AED] rounded-xl flex items-center justify-center mb-6 border border-[#7C3AED]/30">
+                        <span className="font-display font-bold text-xl">01</span>
                     </div>
-                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">The Black Box</h4>
-                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Give us whatever you have—a rough brief, past posts, or just an idea. We extract the exact psychology and tone needed to make them stand out.</p>
+                    <h4 className="text-lg md:text-xl font-display font-bold text-white mb-3 uppercase tracking-wider">🧬 Brand DNA & Psychographics</h4>
+                    <p className="text-zinc-400 font-medium text-sm leading-relaxed">No more prompts. Our system automatically establishes your customer's "Heaven" & "Hell" psychographic states, resolving painful objections in marketing copy before any draft is even written.</p>
                 </TiltCard>
 
+                {/* Blueprint Row 2 */}
                 <TiltCard className="bg-[#1C1C22] border border-zinc-800 rounded-3xl p-6 md:p-8 relative overflow-hidden group hover:border-[#2583EB]/50 transition-colors">
-                    <div className="w-12 h-12 bg-[#2583EB]/10 text-[#2583EB] rounded-2xl flex items-center justify-center mb-6 border border-[#2583EB]/30 group-hover:scale-110 transition-transform">
-                        <span className="font-display font-bold text-2xl">02</span>
+                    <div className="w-11 h-11 bg-[#2583EB]/10 text-[#2583EB] rounded-xl flex items-center justify-center mb-6 border border-[#2583EB]/30">
+                        <span className="font-display font-bold text-xl">02</span>
                     </div>
-                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">The Vault</h4>
-                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Our system automatically bans corporate cringe and generic AI buzzwords. It outputs omnichannel campaigns that perfectly match the brand's unique voice.</p>
+                    <h4 className="text-lg md:text-xl font-display font-bold text-white mb-3 uppercase tracking-wider">🤖 Tror, The Autonomous CMO</h4>
+                    <p className="text-zinc-400 font-medium text-sm leading-relaxed">Your digital CMO coordinating specialized autonomous backend agents—The Strategist, The Copywriter, The Designer, and The Publisher—to drive multi-platform campaigns.</p>
                 </TiltCard>
 
+                {/* Blueprint Row 3 */}
                 <TiltCard className="bg-[#1C1C22] border border-zinc-800 rounded-3xl p-6 md:p-8 relative overflow-hidden group hover:border-[#18F07A]/50 transition-colors">
-                    <div className="w-12 h-12 bg-[#18F07A]/10 text-[#18F07A] rounded-2xl flex items-center justify-center mb-6 border border-[#18F07A]/30 group-hover:scale-110 transition-transform">
-                        <span className="font-display font-bold text-2xl">03</span>
+                    <div className="w-11 h-11 bg-[#18F07A]/10 text-[#18F07A] rounded-xl flex items-center justify-center mb-6 border border-[#18F07A]/30">
+                        <span className="font-display font-bold text-xl">03</span>
                     </div>
-                    <h4 className="text-xl md:text-2xl font-display font-bold text-white mb-3 uppercase tracking-widest">The Edge</h4>
-                    <p className="text-zinc-400 font-medium text-sm md:text-base leading-relaxed">Agencies using our beta have eliminated client revisions and cut content creation time by 80%. We're only letting 50 more in.</p>
+                    <h4 className="text-lg md:text-xl font-display font-bold text-white mb-3 uppercase tracking-wider">📅 1-Tab Social Queue</h4>
+                    <p className="text-zinc-400 font-medium text-sm leading-relaxed">Instantly review, edit, and schedule natively across all platforms (LinkedIn, X, Instagram, Facebook, Reddit) from a single interactive queue. Stop juggling different tools.</p>
                 </TiltCard>
             </div>
         </div>
 
       </main>
 
-      {/* Sticky Bottom Form for Mobile (Ensures action is ALWAYS accessible) */}
-      <div className={`fixed bottom-0 left-0 w-full z-50 bg-[#0A0A0F]/90 backdrop-blur-xl border-t border-zinc-800 p-4 md:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)] transition-transform duration-500 ${formState === 'completed' ? 'translate-y-full' : 'translate-y-0'}`}>
+      {/* Sticky Bottom Form for Mobile (Frictionless navigation) */}
+      <div className={`fixed bottom-0 left-0 w-full z-50 bg-[#0A0A0F]/95 backdrop-blur-xl border-t border-zinc-800 p-4 md:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)] transition-transform duration-500 ${formState === 'completed' ? 'translate-y-full' : 'translate-y-0'}`}>
           {formState === 'capture' && (
               <form onSubmit={handleWaitlistSubmit} className="flex gap-2 max-w-md mx-auto">
                   <input 
@@ -523,9 +654,9 @@ export default function App() {
           {formState === 'survey' && (
               <button 
                   onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="w-full bg-[#18F07A] text-black font-display font-bold text-sm uppercase tracking-widest px-6 py-3 rounded-lg flex justify-center items-center gap-2"
+                  className="w-full bg-[#18F07A] text-black font-display font-bold text-sm uppercase tracking-widest px-6 py-3 rounded-lg flex justify-center items-center gap-2 animate-pulse"
               >
-                  <ArrowUp className="w-4 h-4" /> FINISH SURVEY TO FAST-TRACK
+                  <ArrowUp className="w-4 h-4" /> COMPLETE SURVEY TO SKIP
               </button>
           )}
       </div>
