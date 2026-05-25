@@ -9,7 +9,7 @@ import { GoogleGenAI } from '@google/genai';
 import * as adminNamespace from 'firebase-admin';
 const admin: typeof adminNamespace = (adminNamespace as any).default || adminNamespace;
 
-// --- Firebase Admin Initialization  ---
+// --- Firebase Admin Initialization   ---
 let db: adminNamespace.firestore.Firestore | null = null;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
