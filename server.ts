@@ -8,7 +8,7 @@ import nodemailer from 'nodemailer';
 import { GoogleGenAI } from '@google/genai';
 import * as admin from 'firebase-admin';
 
-// --- Firebase Admin Initialization ---
+// --- Firebase Admin Initialization  ---
 let db: admin.firestore.Firestore | null = null;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -259,21 +259,21 @@ async function startServer() {
   app.post('/api/ai/generate', requireAuth, async (req, res) => {
     try {
       const { model, contents, config } = req.body;
-      
+
       // Use the API key from environment variables, fallback to the hardcoded one provided by user
       const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCYK86PmlReHZSQ2dTNeKRhYL6IG8Jc6IM";
-      
+
       if (!apiKey) {
         return res.status(500).json({ error: 'Server API key not configured. Please set GEMINI_API_KEY in settings.' });
       }
-      
+
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model,
         contents,
         config
       });
-      
+
       res.json({
         text: response.text,
         usageMetadata: response.usageMetadata,
@@ -301,14 +301,14 @@ async function startServer() {
     try {
       const { enabled, timeUtc, productId } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const updates: any = {};
       if (enabled !== undefined) updates.enabled = enabled;
       if (timeUtc !== undefined) updates.timeUtc = timeUtc;
-      
+
       await setScheduleConfig(productId, updates);
       const newConfig = await getScheduleConfig(productId);
-      
+
       res.json({ success: true, config: newConfig });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -319,14 +319,14 @@ async function startServer() {
     try {
       const { text, campaignId, platform, productId, day, date } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const id = Math.random().toString(36).substring(7);
       await addToQueue({ id, text, campaignId, platform, productId, day, date });
-      
+
       if (req.cookies[`linkedin_token_${productId}`]) {
         await setToken(productId, 'linkedin', req.cookies[`linkedin_token_${productId}`]);
       }
-      
+
       const queue = await getPostQueue(productId);
       res.json({ success: true, queue });
     } catch (e: any) {
@@ -349,14 +349,14 @@ async function startServer() {
     try {
       const { campaignId, platform, productId, day } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const queue = await getPostQueue(productId);
       for (const q of queue) {
         if (q.campaignId === campaignId && q.platform === platform && (!day || q.day === day)) {
           await removeFromQueue(productId, q.id);
         }
       }
-      
+
       const newQueue = await getPostQueue(productId);
       res.json({ success: true, queue: newQueue });
     } catch (e: any) {
@@ -371,7 +371,7 @@ async function startServer() {
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/linkedin/callback`;
-    
+
     const stateObj = { r: Math.random().toString(36).substring(7), productId };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
@@ -382,7 +382,7 @@ async function startServer() {
       state: stateStr,
       scope: 'openid profile w_member_social email',
     });
-    
+
     res.json({ url: `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}` });
   });
 
@@ -414,7 +414,7 @@ async function startServer() {
           redirect_uri: redirectUri,
         })
       });
-      
+
       const tokenData = await tokenRes.json();
 
       if (tokenData.access_token) {
@@ -467,11 +467,11 @@ async function startServer() {
       const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (!userRes.ok) {
         throw new Error('Failed to fetch user info from LinkedIn');
       }
-      
+
       const userData = await userRes.json();
       const authorUrn = `urn:li:person:${userData.sub}`;
 
@@ -517,7 +517,7 @@ async function startServer() {
         // Prepare image data
         let imageBuffer: Buffer | ArrayBuffer;
         let contentType = 'image/jpeg';
-        
+
         if (imageUrl.startsWith('data:')) {
           const matches = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
           if (matches && matches.length === 3) {
@@ -596,7 +596,7 @@ async function startServer() {
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/facebook/callback`;
-    
+
     const stateObj = { r: Math.random().toString(36).substring(7), productId };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
@@ -606,7 +606,7 @@ async function startServer() {
       state: stateStr,
       scope: 'public_profile,pages_manage_posts,pages_read_engagement',
     });
-    
+
     res.json({ url: `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}` });
   });
 
@@ -622,7 +622,7 @@ async function startServer() {
         try {
           const stateObj = JSON.parse(Buffer.from(state as string, 'base64').toString('utf-8'));
           if (stateObj.productId) productId = stateObj.productId;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const tokenRes = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?client_id=${process.env.FACEBOOK_CLIENT_ID}&redirect_uri=${redirectUri}&client_secret=${process.env.FACEBOOK_CLIENT_SECRET}&code=${code}`);
@@ -668,7 +668,7 @@ async function startServer() {
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/instagram/callback`;
-    
+
     const stateObj = { r: Math.random().toString(36).substring(7), productId };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
@@ -679,7 +679,7 @@ async function startServer() {
       response_type: 'code',
       state: stateStr,
     });
-    
+
     res.json({ url: `https://api.instagram.com/oauth/authorize?${params.toString()}` });
   });
 
@@ -695,7 +695,7 @@ async function startServer() {
         try {
           const stateObj = JSON.parse(Buffer.from(state as string, 'base64').toString('utf-8'));
           if (stateObj.productId) productId = stateObj.productId;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
@@ -751,7 +751,7 @@ async function startServer() {
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/reddit/callback`;
-    
+
     const stateObj = { r: Math.random().toString(36).substring(7), productId };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
@@ -763,7 +763,7 @@ async function startServer() {
       duration: 'permanent',
       scope: 'identity submit',
     });
-    
+
     res.json({ url: `https://www.reddit.com/api/v1/authorize?${params.toString()}` });
   });
 
@@ -779,13 +779,13 @@ async function startServer() {
         try {
           const stateObj = JSON.parse(Buffer.from(state as string, 'base64').toString('utf-8'));
           if (stateObj.productId) productId = stateObj.productId;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const authHeader = 'Basic ' + Buffer.from(`${process.env.REDDIT_CLIENT_ID}:${process.env.REDDIT_CLIENT_SECRET}`).toString('base64');
       const tokenRes = await fetch('https://www.reddit.com/api/v1/access_token', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Authorization': authHeader
         },
@@ -839,8 +839,8 @@ async function startServer() {
     }
 
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      return res.status(400).json({ 
-        error: 'SMTP credentials not configured. Please add SMTP_USER and SMTP_PASS in the app settings to enable email delivery.' 
+      return res.status(400).json({
+        error: 'SMTP credentials not configured. Please add SMTP_USER and SMTP_PASS in the app settings to enable email delivery.'
       });
     }
 
@@ -894,13 +894,13 @@ async function startServer() {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
       });
-      
+
       if (!fetchRes.ok) {
         throw new Error(`Failed to fetch URL: ${fetchRes.statusText}`);
       }
 
       const html = await fetchRes.text();
-      
+
       // We'll use a dynamic import for cheerio to avoid issues if it's not fully loaded
       const cheerio = await import('cheerio');
       const $ = cheerio.load(html);
@@ -911,7 +911,7 @@ async function startServer() {
 
       // Extract inline styles and linked stylesheets (just the URLs or raw content)
       let cssContent = '';
-      
+
       // Get inline styles from head
       $('head style').each((_, el) => {
         cssContent += $(el).html() + '\n';
