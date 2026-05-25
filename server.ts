@@ -6,18 +6,34 @@ import fs from 'fs';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { GoogleGenAI } from '@google/genai';
-import * as admin from 'firebase-admin';
+import * as adminNamespace from 'firebase-admin';
+const admin: typeof adminNamespace = (adminNamespace as any).default || adminNamespace;
 
 // --- Firebase Admin Initialization  ---
-let db: admin.firestore.Firestore | null = null;
+let db: adminNamespace.firestore.Firestore | null = null;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    db = admin.firestore();
-    console.log('[Firebase Admin] Initialized successfully with Service Account. Using Firestore for state.');
+    let serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
+    try {
+      // Clean up common escaping issues introduced by hosting environments (like Hostinger/cPanel)
+      const startIndex = serviceAccountStr.indexOf('{');
+      const endIndex = serviceAccountStr.lastIndexOf('}');
+      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        serviceAccountStr = serviceAccountStr.slice(startIndex, endIndex + 1);
+      }
+      serviceAccountStr = serviceAccountStr.replace(/\\"/g, '"');
+      serviceAccountStr = serviceAccountStr.replace(/\\\\n/g, '\\n');
+
+      const serviceAccount = JSON.parse(serviceAccountStr);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      db = admin.firestore();
+      console.log('[Firebase Admin] Initialized successfully with Service Account. Using Firestore for state.');
+    } catch (parseError) {
+      console.error('[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT. Raw value preview:', process.env.FIREBASE_SERVICE_ACCOUNT.substring(0, 100));
+      throw parseError;
+    }
   } else {
     console.warn('[Firebase Admin] FIREBASE_SERVICE_ACCOUNT not found. Initializing with Project ID for Auth only. Falling back to in-memory state for data.');
     admin.initializeApp({ projectId: 'map-api-459818' });
