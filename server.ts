@@ -967,14 +967,16 @@ async function startServer() {
   });
 
   const distPath = path.join(process.cwd(), 'dist');
+  const shouldServeStatic = process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "start";
 
-  // Serve the built client in production only.
-  if (process.env.NODE_ENV === "production") {
+  if (shouldServeStatic) {
+    console.log('[Server] Serving production build from dist.');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {
+    console.log('[Server] Running Vite middleware for development.');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
