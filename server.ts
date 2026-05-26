@@ -7,14 +7,30 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import { GoogleGenAI } from '@google/genai';
 import * as adminNamespace from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 const admin: typeof adminNamespace = (adminNamespace as any).default || adminNamespace;
 
 // --- Firebase Admin Initialization   ---
 let db: adminNamespace.firestore.Firestore | null = null;
 try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    let serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
+  let serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
+
+  // Fallback: Check if there is a local firebase-service-account.json file in the root
+  const defaultFilePath = path.resolve('firebase-service-account.json');
+  if (!serviceAccountStr && fs.existsSync(defaultFilePath)) {
+    serviceAccountStr = defaultFilePath;
+  }
+
+  if (serviceAccountStr) {
     try {
+      // If the value points to a file, read the file contents
+      if (!serviceAccountStr.trim().startsWith('{')) {
+        const resolvedPath = path.resolve(serviceAccountStr.trim());
+        if (fs.existsSync(resolvedPath)) {
+          serviceAccountStr = fs.readFileSync(resolvedPath, 'utf8');
+        }
+      }
+
       // Clean up common escaping issues introduced by hosting environments (like Hostinger/cPanel)
       const startIndex = serviceAccountStr.indexOf('{');
       const endIndex = serviceAccountStr.lastIndexOf('}');
@@ -28,13 +44,28 @@ try {
       if (serviceAccount.private_key) {
         serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
       }
-      admin.initializeApp({
+      const app = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
       });
-      db = admin.firestore();
-      console.log('[Firebase Admin] Initialized successfully with Service Account. Using Firestore for state.');
+
+      // Load database ID from firebase.json if available
+      let databaseId = '(default)';
+      try {
+        const firebaseJsonPath = path.resolve('firebase.json');
+        if (fs.existsSync(firebaseJsonPath)) {
+          const firebaseJson = JSON.parse(fs.readFileSync(firebaseJsonPath, 'utf8'));
+          if (firebaseJson.firestore && firebaseJson.firestore.database) {
+            databaseId = firebaseJson.firestore.database;
+          }
+        }
+      } catch (e) {
+        console.warn('[Firebase Admin] Could not read custom database ID from firebase.json, defaulting to (default). Error:', e);
+      }
+
+      db = getFirestore(app, databaseId);
+      console.log(`[Firebase Admin] Initialized successfully with Service Account. Using Firestore database "${databaseId}" for state.`);
     } catch (parseError) {
-      console.error('[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT. Raw value preview:', process.env.FIREBASE_SERVICE_ACCOUNT.substring(0, 100));
+      console.error('[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT. Raw value preview:', serviceAccountStr ? serviceAccountStr.substring(0, 100) : 'undefined');
       throw parseError;
     }
   } else {

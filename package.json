@@ -56,7 +56,6 @@
     "@tootallnate/once": "^3.0.1",
     "serialize-javascript": "^7.0.5",
     "retry-request": "^8.0.2",
-    "teeny-request": "^10.1.2",
-    "google-gax": "^5.0.6"
+    "teeny-request": "^10.1.2"
   }
 }
