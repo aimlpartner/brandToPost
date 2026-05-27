@@ -27,18 +27,22 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-try {
-  const compiledServer = path.join(__dirname, 'dist-server', 'server.js');
+const compiledServer = path.join(__dirname, 'dist-server', 'server.js');
 
-  if (fs.existsSync(compiledServer)) {
-    await import('./dist-server/server.js');
-  } else {
-    await import('tsx/esm');
-    await import('./server.ts');
-  }
-} catch (e) {
-  logError(e);
-  throw e;
+if (fs.existsSync(compiledServer)) {
+  import('./dist-server/server.js').catch((e) => {
+    logError(e);
+    process.exit(1);
+  });
+} else {
+  import('tsx/esm')
+    .then(() => {
+      return import('./server.ts');
+    })
+    .catch((e) => {
+      logError(e);
+      process.exit(1);
+    });
 }
 
 
