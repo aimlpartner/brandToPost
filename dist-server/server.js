@@ -283,8 +283,9 @@ setInterval(async () => {
 }, 30000);
 async function startServer() {
     const app = express();
-    const PORT = Number(process.env.PORT) || 3000;
+    const rawPort = process.env.PORT || '3000';
     const HOST = process.env.HOST || '0.0.0.0';
+    const isUnixSocket = typeof rawPort === 'string' && isNaN(Number(rawPort));
     app.use(express.json({ limit: '50mb' }));
     app.use(cookieParser());
     // --- Auth Middleware ---
@@ -972,8 +973,16 @@ async function startServer() {
         });
         app.use(vite.middlewares);
     }
-    app.listen(PORT, HOST, () => {
-        console.log(`Server running on http://${HOST}:${PORT}`);
-    });
+    if (isUnixSocket) {
+        app.listen(rawPort, () => {
+            console.log(`[Server] Running on Passenger Unix socket: ${rawPort}`);
+        });
+    }
+    else {
+        const PORT = Number(rawPort);
+        app.listen(PORT, HOST, () => {
+            console.log(`[Server] Running on TCP port http://${HOST}:${PORT}`);
+        });
+    }
 }
 startServer();
