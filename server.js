@@ -1,9 +1,12 @@
-const isProduction = process.env.NODE_ENV === 'production' || process.env.npm_lifecycle_event === 'start';
+import fs from 'fs';
 
-if (isProduction) {
-  await import('./dist-server/server.js');
+const compiledServer = './dist-server/server.js';
+
+if (fs.existsSync(compiledServer)) {
+  await import(compiledServer);
 } else {
   await import('tsx/esm');
   await import('./server.ts');
 }
+
 
