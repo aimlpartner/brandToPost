@@ -593,7 +593,7 @@ async function startServer() {
           headers: {
             'Content-Type': contentType
           },
-          body: imageBuffer
+          body: imageBuffer as any
         });
 
         if (!uploadRes.ok) {

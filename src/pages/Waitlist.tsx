@@ -44,7 +44,7 @@ export default function App() {
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
-      const options = { year: 'numeric', month: 'short', day: '2-digit' };
+      const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: '2-digit' };
       const dateStr = now.toLocaleDateString('en-US', options).toUpperCase();
       const timeStr = now.toTimeString().split(' ')[0];
       setCurrentTime(`${dateStr}, ${timeStr}`);
