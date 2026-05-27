@@ -154,123 +154,127 @@ let lastPostedDates: Record<string, string> = {};
 
 // --- Cron Job for Scheduled Posting ---
 setInterval(async () => {
-  const now = new Date();
-  const hours = now.getUTCHours().toString().padStart(2, '0');
-  const minutes = now.getUTCMinutes().toString().padStart(2, '0');
-  const currentTimeUtc = `${hours}:${minutes}`;
-  const currentDateUtc = now.toISOString().split('T')[0];
+  try {
+    const now = new Date();
+    const hours = now.getUTCHours().toString().padStart(2, '0');
+    const minutes = now.getUTCMinutes().toString().padStart(2, '0');
+    const currentTimeUtc = `${hours}:${minutes}`;
+    const currentDateUtc = now.toISOString().split('T')[0];
 
-  let productsToProcess: string[] = [];
-
-  if (db) {
-    const snapshot = await db.collection('server_schedules').where('enabled', '==', true).get();
-    for (const doc of snapshot.docs) {
-      const config = doc.data();
-      if (config.timeUtc === currentTimeUtc && config.lastPostedDate !== currentDateUtc) {
-        productsToProcess.push(doc.id);
-      }
-    }
-  } else {
-    if (postQueue.length === 0) return;
-    for (const [productId, config] of Object.entries(scheduleConfigs)) {
-      if (config.enabled && config.timeUtc === currentTimeUtc && lastPostedDates[productId] !== currentDateUtc) {
-        productsToProcess.push(productId);
-      }
-    }
-  }
-
-  for (const productId of productsToProcess) {
-    let post: any = null;
-    if (db) {
-      const snapshot = await db.collection(`server_queues/${productId}/posts`).orderBy('createdAt', 'asc').limit(1).get();
-      if (!snapshot.empty) {
-        post = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-      }
-    } else {
-      post = postQueue.find(p => p.productId === productId);
-    }
-
-    if (!post) continue;
+    let productsToProcess: string[] = [];
 
     if (db) {
-      await db.collection('server_schedules').doc(productId).update({ lastPostedDate: currentDateUtc });
-      await db.collection(`server_queues/${productId}/posts`).doc(post.id).delete();
-    } else {
-      lastPostedDates[productId] = currentDateUtc;
-      postQueue = postQueue.filter(p => p.id !== post.id);
-    }
-
-    const token = await getToken(productId, post.platform);
-    if (!token) {
-      console.error(`[Scheduler] No token found for product ${productId}, skipping post ${post.id}`);
-      if (db) {
-        await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
-        await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
-      } else {
-        postQueue.unshift(post);
-        lastPostedDates[productId] = "";
-      }
-      continue;
-    }
-
-    try {
-      console.log(`[Scheduler] Attempting to publish post ${post.id} to ${post.platform}...`);
-      if (post.platform === 'linkedin') {
-        const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!userRes.ok) throw new Error('Failed to fetch user info');
-        const userData = await userRes.json();
-        const authorUrn = `urn:li:person:${userData.sub}`;
-
-        const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'X-Restli-Protocol-Version': '2.0.0'
-          },
-          body: JSON.stringify({
-            author: authorUrn,
-            lifecycleState: 'PUBLISHED',
-            specificContent: {
-              'com.linkedin.ugc.ShareContent': {
-                shareCommentary: { text: post.text },
-                shareMediaCategory: 'NONE'
-              }
-            },
-            visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-          })
-        });
-
-        if (!postRes.ok) {
-          const errorText = await postRes.text();
-          console.error('[Scheduler] Failed to publish scheduled post:', errorText);
-          if (errorText.includes('DUPLICATE_POST')) {
-            console.log(`[Scheduler] Post ${post.id} is a duplicate, removing from queue.`);
-          } else {
-            if (db) {
-              await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
-              await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
-            } else {
-              postQueue.unshift(post);
-              lastPostedDates[productId] = "";
-            }
-          }
-        } else {
-          console.log('[Scheduler] Successfully published scheduled post:', post.id);
+      const snapshot = await db.collection('server_schedules').where('enabled', '==', true).get();
+      for (const doc of snapshot.docs) {
+        const config = doc.data();
+        if (config.timeUtc === currentTimeUtc && config.lastPostedDate !== currentDateUtc) {
+          productsToProcess.push(doc.id);
         }
       }
-    } catch (err) {
-      console.error('[Scheduler] Error in scheduled post:', err);
-      if (db) {
-        await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
-        await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
-      } else {
-        postQueue.unshift(post);
-        lastPostedDates[productId] = "";
+    } else {
+      if (postQueue.length === 0) return;
+      for (const [productId, config] of Object.entries(scheduleConfigs)) {
+        if (config.enabled && config.timeUtc === currentTimeUtc && lastPostedDates[productId] !== currentDateUtc) {
+          productsToProcess.push(productId);
+        }
       }
     }
+
+    for (const productId of productsToProcess) {
+      let post: any = null;
+      if (db) {
+        const snapshot = await db.collection(`server_queues/${productId}/posts`).orderBy('createdAt', 'asc').limit(1).get();
+        if (!snapshot.empty) {
+          post = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+        }
+      } else {
+        post = postQueue.find(p => p.productId === productId);
+      }
+
+      if (!post) continue;
+
+      if (db) {
+        await db.collection('server_schedules').doc(productId).update({ lastPostedDate: currentDateUtc });
+        await db.collection(`server_queues/${productId}/posts`).doc(post.id).delete();
+      } else {
+        lastPostedDates[productId] = currentDateUtc;
+        postQueue = postQueue.filter(p => p.id !== post.id);
+      }
+
+      const token = await getToken(productId, post.platform);
+      if (!token) {
+        console.error(`[Scheduler] No token found for product ${productId}, skipping post ${post.id}`);
+        if (db) {
+          await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+          await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+        } else {
+          postQueue.unshift(post);
+          lastPostedDates[productId] = "";
+        }
+        continue;
+      }
+
+      try {
+        console.log(`[Scheduler] Attempting to publish post ${post.id} to ${post.platform}...`);
+        if (post.platform === 'linkedin') {
+          const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (!userRes.ok) throw new Error('Failed to fetch user info');
+          const userData = await userRes.json();
+          const authorUrn = `urn:li:person:${userData.sub}`;
+
+          const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'X-Restli-Protocol-Version': '2.0.0'
+            },
+            body: JSON.stringify({
+              author: authorUrn,
+              lifecycleState: 'PUBLISHED',
+              specificContent: {
+                'com.linkedin.ugc.ShareContent': {
+                  shareCommentary: { text: post.text },
+                  shareMediaCategory: 'NONE'
+                }
+              },
+              visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+            })
+          });
+
+          if (!postRes.ok) {
+            const errorText = await postRes.text();
+            console.error('[Scheduler] Failed to publish scheduled post:', errorText);
+            if (errorText.includes('DUPLICATE_POST')) {
+              console.log(`[Scheduler] Post ${post.id} is a duplicate, removing from queue.`);
+            } else {
+              if (db) {
+                await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+                await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+              } else {
+                postQueue.unshift(post);
+                lastPostedDates[productId] = "";
+              }
+            }
+          } else {
+            console.log('[Scheduler] Successfully published scheduled post:', post.id);
+          }
+        }
+      } catch (err) {
+        console.error('[Scheduler] Error in scheduled post:', err);
+        if (db) {
+          await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+          await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+        } else {
+          postQueue.unshift(post);
+          lastPostedDates[productId] = "";
+        }
+      }
+    }
+  } catch (globalCronErr) {
+    console.error('[Scheduler Cron] Critical error in scheduler interval:', globalCronErr);
   }
 }, 30000);
 
