@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mail, Twitter, Instagram, ArrowRight, Check } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Mail, Linkedin, Instagram, ArrowRight, Check } from 'lucide-react';
 
 // --- Google Sheets Sync Gateway ---
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmMybk6WP283pvxNDwv1Bgfb_au5VQxoRrQwZZbh6Kf_rsPZBiQx2rVMSSV650lXPHiw/exec";
@@ -23,7 +24,10 @@ export default function App() {
 
   // Waitlist Form State
   const [email, setEmail] = useState('');
-  const [formState, setFormState] = useState('capture'); // 'capture' | 'completed'
+  const [businessName, setBusinessName] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [website, setWebsite] = useState('');
+  const [formState, setFormState] = useState('capture'); // 'capture' | 'followup' | 'completed'
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Live ticking clock state
@@ -113,7 +117,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Form Submit Handler
+  // Step 1: Email Capture Submit Handler
   const handleWaitlistSubmit = async (e) => {
     e.preventDefault();
     if (!email) return;
@@ -122,7 +126,44 @@ export default function App() {
     trackEvent('waitlist_email_captured', email);
 
     try {
+      await new Promise(resolve => setTimeout(resolve, 600)); // Smooth cinematic delay
+      setFormState('followup');
+    } catch (err) {
+      setFormState('followup');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Step 2: Follow Up Submit Handler
+  const handleFollowUpSubmit = async (e) => {
+    e.preventDefault();
+    if (!businessName) return;
+    setIsSubmitting(true);
+
+    trackEvent('waitlist_followup_completed', email, {
+      business: businessName,
+      industry: industry || 'Not Specified',
+      website: website || 'Not Specified'
+    });
+
+    try {
       await new Promise(resolve => setTimeout(resolve, 800)); // Smooth cinematic delay
+      setFormState('completed');
+    } catch (err) {
+      setFormState('completed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Step 2: Skip Follow Up Handler
+  const handleSkipFollowUp = async () => {
+    setIsSubmitting(true);
+    trackEvent('waitlist_followup_skipped', email);
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 400));
       setFormState('completed');
     } catch (err) {
       setFormState('completed');
@@ -168,26 +209,24 @@ export default function App() {
 
         /* High-tension cinematic background video layout */
         .brand-mascot-bg {
-          position: absolute;
+          position: fixed;
           top: 0;
-          right: 0;
-          width: 90%;
-          max-width: 800px;
+          left: 0;
+          width: 100%;
           height: 100%;
           object-fit: cover;
-          object-position: right top;
-          opacity: 0.35;
+          object-position: center;
+          opacity: 0.28;
           z-index: 0;
           pointer-events: none;
-          filter: grayscale(0.15) contrast(1.2) brightness(0.38) sepia(0.05);
+          filter: grayscale(0.2) contrast(1.15) brightness(0.35) sepia(0.04);
           mix-blend-mode: screen;
         }
 
         @media (max-width: 768px) {
           .brand-mascot-bg {
-            width: 100%;
-            opacity: 0.25;
-            object-position: 70% center;
+            opacity: 0.2;
+            object-position: center;
           }
         }
 
@@ -219,14 +258,20 @@ export default function App() {
 
         {/* Navigation / Header */}
         <header className="w-full max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center text-white font-display font-medium text-xs tracking-[0.3em] uppercase italic gap-2.5">
+          <Link
+            to="/research"
+            onClick={() => trackEvent('research_link_clicked', email || 'No Email')}
+            className="flex items-center text-white hover:text-[#18F07A] transition-colors font-display font-medium text-xs tracking-[0.3em] uppercase italic gap-2.5 focus:outline-none"
+            title="OPEN BRANDTOPOST RESEARCH EVALUATION"
+          >
             <img
               src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
               alt="BrandToPost Logo"
               className="w-5 h-5 object-contain"
             />
-            <span>BRANDTOPOST <span className="text-zinc-600">//</span> DISPATCH</span>
-          </div>
+            <span>BRANDTOPOST <span className="text-zinc-600">//</span> RESEARCH</span>
+          </Link>
+          
           <div className="text-[9px] font-sans font-medium px-3 py-1 border border-zinc-800 bg-black/40 text-zinc-500 rounded flex items-center gap-2 uppercase tracking-widest">
             <span className="w-1 h-1 rounded-full bg-[#18F07A] animate-pulse"></span>
             PILOT NODE
@@ -237,10 +282,10 @@ export default function App() {
         <main className="w-full max-w-7xl mx-auto flex flex-col justify-end items-start h-full pb-16 pt-24">
           <div className="w-full max-w-lg flex flex-col gap-8">
 
-            {formState === 'capture' ? (
-              <div className="fade-in flex flex-col gap-6">
+            {formState === 'capture' && (
+              <div className="fade-in flex flex-col gap-6 w-full">
 
-                {/* Clean Outfit & Inter Typography Headline with updated simple announcement */}
+                {/* Clean Outfit & Inter Typography Headline */}
                 <div className="flex flex-col gap-3">
                   <h1 className="text-2xl sm:text-3xl md:text-4xl font-display font-medium text-white tracking-[-0.02em] leading-[1.15] uppercase">
                     THE AGE OF BUSINESS CONTEXT<br />
@@ -276,8 +321,95 @@ export default function App() {
                 </div>
 
               </div>
-            ) : (
-              <div className="fade-in flex flex-col gap-4 text-left">
+            )}
+
+            {formState === 'followup' && (
+              <div className="fade-in flex flex-col gap-5 w-full">
+                <div className="flex flex-col gap-2">
+                  <div className="text-[9px] font-sans font-semibold px-2 py-0.5 border border-zinc-800 bg-zinc-900/60 text-zinc-400 rounded flex items-center gap-1.5 uppercase tracking-widest w-fit">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#7C3AED] animate-pulse"></span>
+                    STEP 02 // PERSONALIZATION
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-display font-medium text-white uppercase tracking-[-0.02em] leading-tight">
+                    TAILOR YOUR PILOT NODE
+                  </h2>
+                  <p className="text-zinc-500 text-[11px] leading-relaxed font-sans font-light">
+                    Help us customize the context engine for your specific brand layout.
+                  </p>
+                </div>
+
+                <form onSubmit={handleFollowUpSubmit} className="flex flex-col gap-3.5 w-full font-sans">
+                  {/* Business Name */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-medium">BUSINESS NAME</label>
+                    <input
+                      type="text"
+                      required
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="e.g. ACME INC"
+                      className="brutalist-input w-full bg-black/60 backdrop-blur-md border border-zinc-800 px-4 py-3 text-white placeholder-zinc-700 focus:outline-none transition-all duration-150 uppercase text-xs tracking-wider font-light"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+
+                  {/* Industry selection pills */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-medium">INDUSTRY</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {['E-Commerce', 'B2B SaaS', 'Local Retail', 'Tech / AI', 'Creative Agency', 'Other'].map((ind) => (
+                        <button
+                          key={ind}
+                          type="button"
+                          onClick={() => setIndustry(ind)}
+                          className={`py-2.5 text-[9px] tracking-wider uppercase font-medium border transition-all duration-150 ${
+                            industry === ind 
+                              ? 'bg-white text-black border-white' 
+                              : 'bg-black/40 text-zinc-500 border-zinc-850 hover:border-zinc-700 hover:text-zinc-300'
+                          }`}
+                        >
+                          {ind}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Website */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-medium">WEBSITE (OPTIONAL)</label>
+                    <input
+                      type="text"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="e.g. WWW.BRAND.COM"
+                      className="brutalist-input w-full bg-black/60 backdrop-blur-md border border-zinc-800 px-4 py-3 text-white placeholder-zinc-700 focus:outline-none transition-all duration-150 uppercase text-xs tracking-wider font-light"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2 mt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !businessName}
+                      className="w-full bg-white hover:bg-zinc-200 text-black font-semibold text-xs tracking-[0.2em] py-3.5 transition-all uppercase flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? 'INITIALIZING...' : 'COMPLETE INITIALIZATION'} <ArrowRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSkipFollowUp}
+                      disabled={isSubmitting}
+                      className="w-full bg-transparent hover:text-white text-zinc-600 font-medium text-[9px] tracking-[0.2em] py-1 transition-all uppercase text-center hover:underline"
+                    >
+                      SKIP AND FINISH
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {formState === 'completed' && (
+              <div className="fade-in flex flex-col gap-4 text-left w-full">
                 <div className="w-10 h-10 border border-[#18F07A]/40 bg-[#18F07A]/5 flex items-center justify-center text-[#18F07A] mb-2">
                   <Check className="w-4 h-4" />
                 </div>
@@ -297,13 +429,35 @@ export default function App() {
         <footer className="w-full max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-zinc-900/60 font-sans font-medium">
           <div className="text-[10px] text-zinc-600 uppercase tracking-widest flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-800 animate-pulse"></span>
-            <span>{currentTime || 'MAY 24 2026, 14:43:00'}</span>
+            <span>{currentTime || 'MAY 28 2026, 12:43:00'}</span>
           </div>
 
           <div className="flex gap-6">
-            <a href="mailto:team@brandtopost.com" className="text-zinc-600 hover:text-white transition-colors"><Mail className="w-4 h-4" /></a>
-            <a href="https://x.com" target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-white transition-colors"><Twitter className="w-4 h-4" /></a>
-            <a href="https://instagram.com" target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-white transition-colors"><Instagram className="w-4 h-4" /></a>
+            <a 
+              href="mailto:support@brandtopost.com" 
+              className="text-zinc-600 hover:text-white transition-colors"
+              title="EMAIL US"
+            >
+              <Mail className="w-4 h-4" />
+            </a>
+            <a 
+              href="https://www.linkedin.com/company/brandtopost/" 
+              target="_blank" 
+              rel="noreferrer" 
+              className="text-zinc-600 hover:text-white transition-colors"
+              title="LINKEDIN"
+            >
+              <Linkedin className="w-4 h-4" />
+            </a>
+            <a 
+              href="https://www.instagram.com/brandtopost/" 
+              target="_blank" 
+              rel="noreferrer" 
+              className="text-zinc-600 hover:text-white transition-colors"
+              title="INSTAGRAM"
+            >
+              <Instagram className="w-4 h-4" />
+            </a>
           </div>
         </footer>
 
