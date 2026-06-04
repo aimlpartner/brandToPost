@@ -21,6 +21,7 @@ const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login
 const SharedCampaign = lazy(() => import("./pages/SharedCampaign").then((m) => ({ default: m.SharedCampaign })));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const Waitlist = lazy(() => import("./pages/Waitlist"));
+const Research = lazy(() => import("./pages/Research"));
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
               <Route path="/" element={<Waitlist />} />
               <Route path="/login" element={<Login />} />
               <Route path="/waitlist" element={<Waitlist />} />
+              <Route path="/research" element={<Research />} />
               <Route path="/shared/:campaignId" element={<SharedCampaign />} />
               <Route element={<ProtectedRoute />}>
                 <Route

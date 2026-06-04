@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=18.0.0"
   },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
+    "build": "vite build && tsc server.ts --target es2022 --module esnext --moduleResolution node --esModuleInterop --skipLibCheck --noEmit false --outDir ./dist-server",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
@@ -56,7 +56,6 @@
     "@tootallnate/once": "^3.0.1",
     "serialize-javascript": "^7.0.5",
     "retry-request": "^8.0.2",
-    "teeny-request": "^10.1.2",
-    "google-gax": "^5.0.6"
+    "teeny-request": "^10.1.2"
   }
 }

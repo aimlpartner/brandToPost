@@ -6,18 +6,68 @@ import fs from 'fs';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { GoogleGenAI } from '@google/genai';
-import * as admin from 'firebase-admin';
+import * as adminNamespace from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+const admin: typeof adminNamespace = (adminNamespace as any).default || adminNamespace;
 
-// --- Firebase Admin Initialization ---
-let db: admin.firestore.Firestore | null = null;
+// --- Firebase Admin Initialization   ---
+let db: adminNamespace.firestore.Firestore | null = null;
 try {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    db = admin.firestore();
-    console.log('[Firebase Admin] Initialized successfully with Service Account. Using Firestore for state.');
+  let serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
+
+  // Fallback: Check if there is a local firebase-service-account.json file in the root
+  const defaultFilePath = path.resolve('firebase-service-account.json');
+  if (!serviceAccountStr && fs.existsSync(defaultFilePath)) {
+    serviceAccountStr = defaultFilePath;
+  }
+
+  if (serviceAccountStr) {
+    try {
+      // If the value points to a file, read the file contents
+      if (!serviceAccountStr.trim().startsWith('{')) {
+        const resolvedPath = path.resolve(serviceAccountStr.trim());
+        if (fs.existsSync(resolvedPath)) {
+          serviceAccountStr = fs.readFileSync(resolvedPath, 'utf8');
+        }
+      }
+
+      // Clean up common escaping issues introduced by hosting environments (like Hostinger/cPanel)
+      const startIndex = serviceAccountStr.indexOf('{');
+      const endIndex = serviceAccountStr.lastIndexOf('}');
+      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        serviceAccountStr = serviceAccountStr.slice(startIndex, endIndex + 1);
+      }
+      serviceAccountStr = serviceAccountStr.replace(/\\"/g, '"');
+      serviceAccountStr = serviceAccountStr.replace(/\\\\n/g, '\\n');
+
+      const serviceAccount = JSON.parse(serviceAccountStr);
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      }
+      const app = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+
+      // Load database ID from firebase.json if available
+      let databaseId = '(default)';
+      try {
+        const firebaseJsonPath = path.resolve('firebase.json');
+        if (fs.existsSync(firebaseJsonPath)) {
+          const firebaseJson = JSON.parse(fs.readFileSync(firebaseJsonPath, 'utf8'));
+          if (firebaseJson.firestore && firebaseJson.firestore.database) {
+            databaseId = firebaseJson.firestore.database;
+          }
+        }
+      } catch (e) {
+        console.warn('[Firebase Admin] Could not read custom database ID from firebase.json, defaulting to (default). Error:', e);
+      }
+
+      db = getFirestore(app, databaseId);
+      console.log(`[Firebase Admin] Initialized successfully with Service Account. Using Firestore database "${databaseId}" for state.`);
+    } catch (parseError) {
+      console.error('[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT. Raw value preview:', serviceAccountStr ? serviceAccountStr.substring(0, 100) : 'undefined');
+      throw parseError;
+    }
   } else {
     console.warn('[Firebase Admin] FIREBASE_SERVICE_ACCOUNT not found. Initializing with Project ID for Auth only. Falling back to in-memory state for data.');
     admin.initializeApp({ projectId: 'map-api-459818' });
@@ -104,130 +154,135 @@ let lastPostedDates: Record<string, string> = {};
 
 // --- Cron Job for Scheduled Posting ---
 setInterval(async () => {
-  const now = new Date();
-  const hours = now.getUTCHours().toString().padStart(2, '0');
-  const minutes = now.getUTCMinutes().toString().padStart(2, '0');
-  const currentTimeUtc = `${hours}:${minutes}`;
-  const currentDateUtc = now.toISOString().split('T')[0];
+  try {
+    const now = new Date();
+    const hours = now.getUTCHours().toString().padStart(2, '0');
+    const minutes = now.getUTCMinutes().toString().padStart(2, '0');
+    const currentTimeUtc = `${hours}:${minutes}`;
+    const currentDateUtc = now.toISOString().split('T')[0];
 
-  let productsToProcess: string[] = [];
-
-  if (db) {
-    const snapshot = await db.collection('server_schedules').where('enabled', '==', true).get();
-    for (const doc of snapshot.docs) {
-      const config = doc.data();
-      if (config.timeUtc === currentTimeUtc && config.lastPostedDate !== currentDateUtc) {
-        productsToProcess.push(doc.id);
-      }
-    }
-  } else {
-    if (postQueue.length === 0) return;
-    for (const [productId, config] of Object.entries(scheduleConfigs)) {
-      if (config.enabled && config.timeUtc === currentTimeUtc && lastPostedDates[productId] !== currentDateUtc) {
-        productsToProcess.push(productId);
-      }
-    }
-  }
-
-  for (const productId of productsToProcess) {
-    let post: any = null;
-    if (db) {
-      const snapshot = await db.collection(`server_queues/${productId}/posts`).orderBy('createdAt', 'asc').limit(1).get();
-      if (!snapshot.empty) {
-        post = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-      }
-    } else {
-      post = postQueue.find(p => p.productId === productId);
-    }
-
-    if (!post) continue;
+    let productsToProcess: string[] = [];
 
     if (db) {
-      await db.collection('server_schedules').doc(productId).update({ lastPostedDate: currentDateUtc });
-      await db.collection(`server_queues/${productId}/posts`).doc(post.id).delete();
-    } else {
-      lastPostedDates[productId] = currentDateUtc;
-      postQueue = postQueue.filter(p => p.id !== post.id);
-    }
-
-    const token = await getToken(productId, post.platform);
-    if (!token) {
-      console.error(`[Scheduler] No token found for product ${productId}, skipping post ${post.id}`);
-      if (db) {
-        await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
-        await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
-      } else {
-        postQueue.unshift(post);
-        lastPostedDates[productId] = "";
-      }
-      continue;
-    }
-
-    try {
-      console.log(`[Scheduler] Attempting to publish post ${post.id} to ${post.platform}...`);
-      if (post.platform === 'linkedin') {
-        const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!userRes.ok) throw new Error('Failed to fetch user info');
-        const userData = await userRes.json();
-        const authorUrn = `urn:li:person:${userData.sub}`;
-
-        const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'X-Restli-Protocol-Version': '2.0.0'
-          },
-          body: JSON.stringify({
-            author: authorUrn,
-            lifecycleState: 'PUBLISHED',
-            specificContent: {
-              'com.linkedin.ugc.ShareContent': {
-                shareCommentary: { text: post.text },
-                shareMediaCategory: 'NONE'
-              }
-            },
-            visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-          })
-        });
-
-        if (!postRes.ok) {
-          const errorText = await postRes.text();
-          console.error('[Scheduler] Failed to publish scheduled post:', errorText);
-          if (errorText.includes('DUPLICATE_POST')) {
-            console.log(`[Scheduler] Post ${post.id} is a duplicate, removing from queue.`);
-          } else {
-            if (db) {
-              await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
-              await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
-            } else {
-              postQueue.unshift(post);
-              lastPostedDates[productId] = "";
-            }
-          }
-        } else {
-          console.log('[Scheduler] Successfully published scheduled post:', post.id);
+      const snapshot = await db.collection('server_schedules').where('enabled', '==', true).get();
+      for (const doc of snapshot.docs) {
+        const config = doc.data();
+        if (config.timeUtc === currentTimeUtc && config.lastPostedDate !== currentDateUtc) {
+          productsToProcess.push(doc.id);
         }
       }
-    } catch (err) {
-      console.error('[Scheduler] Error in scheduled post:', err);
-      if (db) {
-        await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
-        await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
-      } else {
-        postQueue.unshift(post);
-        lastPostedDates[productId] = "";
+    } else {
+      if (postQueue.length === 0) return;
+      for (const [productId, config] of Object.entries(scheduleConfigs)) {
+        if (config.enabled && config.timeUtc === currentTimeUtc && lastPostedDates[productId] !== currentDateUtc) {
+          productsToProcess.push(productId);
+        }
       }
     }
+
+    for (const productId of productsToProcess) {
+      let post: any = null;
+      if (db) {
+        const snapshot = await db.collection(`server_queues/${productId}/posts`).orderBy('createdAt', 'asc').limit(1).get();
+        if (!snapshot.empty) {
+          post = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+        }
+      } else {
+        post = postQueue.find(p => p.productId === productId);
+      }
+
+      if (!post) continue;
+
+      if (db) {
+        await db.collection('server_schedules').doc(productId).update({ lastPostedDate: currentDateUtc });
+        await db.collection(`server_queues/${productId}/posts`).doc(post.id).delete();
+      } else {
+        lastPostedDates[productId] = currentDateUtc;
+        postQueue = postQueue.filter(p => p.id !== post.id);
+      }
+
+      const token = await getToken(productId, post.platform);
+      if (!token) {
+        console.error(`[Scheduler] No token found for product ${productId}, skipping post ${post.id}`);
+        if (db) {
+          await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+          await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+        } else {
+          postQueue.unshift(post);
+          lastPostedDates[productId] = "";
+        }
+        continue;
+      }
+
+      try {
+        console.log(`[Scheduler] Attempting to publish post ${post.id} to ${post.platform}...`);
+        if (post.platform === 'linkedin') {
+          const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (!userRes.ok) throw new Error('Failed to fetch user info');
+          const userData = await userRes.json();
+          const authorUrn = `urn:li:person:${userData.sub}`;
+
+          const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'X-Restli-Protocol-Version': '2.0.0'
+            },
+            body: JSON.stringify({
+              author: authorUrn,
+              lifecycleState: 'PUBLISHED',
+              specificContent: {
+                'com.linkedin.ugc.ShareContent': {
+                  shareCommentary: { text: post.text },
+                  shareMediaCategory: 'NONE'
+                }
+              },
+              visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+            })
+          });
+
+          if (!postRes.ok) {
+            const errorText = await postRes.text();
+            console.error('[Scheduler] Failed to publish scheduled post:', errorText);
+            if (errorText.includes('DUPLICATE_POST')) {
+              console.log(`[Scheduler] Post ${post.id} is a duplicate, removing from queue.`);
+            } else {
+              if (db) {
+                await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+                await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+              } else {
+                postQueue.unshift(post);
+                lastPostedDates[productId] = "";
+              }
+            }
+          } else {
+            console.log('[Scheduler] Successfully published scheduled post:', post.id);
+          }
+        }
+      } catch (err) {
+        console.error('[Scheduler] Error in scheduled post:', err);
+        if (db) {
+          await db.collection(`server_queues/${productId}/posts`).doc(post.id).set(post);
+          await db.collection('server_schedules').doc(productId).update({ lastPostedDate: "" });
+        } else {
+          postQueue.unshift(post);
+          lastPostedDates[productId] = "";
+        }
+      }
+    }
+  } catch (globalCronErr) {
+    console.error('[Scheduler Cron] Critical error in scheduler interval:', globalCronErr);
   }
 }, 30000);
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const rawPort = process.env.PORT || '3000';
   const HOST = process.env.HOST || '0.0.0.0';
+  const isUnixSocket = typeof rawPort === 'string' && isNaN(Number(rawPort));
 
   app.use(express.json({ limit: '50mb' }));
   app.use(cookieParser());
@@ -259,21 +314,21 @@ async function startServer() {
   app.post('/api/ai/generate', requireAuth, async (req, res) => {
     try {
       const { model, contents, config } = req.body;
-      
+
       // Use the API key from environment variables, fallback to the hardcoded one provided by user
       const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCYK86PmlReHZSQ2dTNeKRhYL6IG8Jc6IM";
-      
+
       if (!apiKey) {
         return res.status(500).json({ error: 'Server API key not configured. Please set GEMINI_API_KEY in settings.' });
       }
-      
+
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model,
         contents,
         config
       });
-      
+
       res.json({
         text: response.text,
         usageMetadata: response.usageMetadata,
@@ -301,14 +356,14 @@ async function startServer() {
     try {
       const { enabled, timeUtc, productId } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const updates: any = {};
       if (enabled !== undefined) updates.enabled = enabled;
       if (timeUtc !== undefined) updates.timeUtc = timeUtc;
-      
+
       await setScheduleConfig(productId, updates);
       const newConfig = await getScheduleConfig(productId);
-      
+
       res.json({ success: true, config: newConfig });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -319,14 +374,14 @@ async function startServer() {
     try {
       const { text, campaignId, platform, productId, day, date } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const id = Math.random().toString(36).substring(7);
       await addToQueue({ id, text, campaignId, platform, productId, day, date });
-      
+
       if (req.cookies[`linkedin_token_${productId}`]) {
         await setToken(productId, 'linkedin', req.cookies[`linkedin_token_${productId}`]);
       }
-      
+
       const queue = await getPostQueue(productId);
       res.json({ success: true, queue });
     } catch (e: any) {
@@ -349,14 +404,14 @@ async function startServer() {
     try {
       const { campaignId, platform, productId, day } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const queue = await getPostQueue(productId);
       for (const q of queue) {
         if (q.campaignId === campaignId && q.platform === platform && (!day || q.day === day)) {
           await removeFromQueue(productId, q.id);
         }
       }
-      
+
       const newQueue = await getPostQueue(productId);
       res.json({ success: true, queue: newQueue });
     } catch (e: any) {
@@ -371,7 +426,7 @@ async function startServer() {
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/linkedin/callback`;
-    
+
     const stateObj = { r: Math.random().toString(36).substring(7), productId };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
@@ -382,7 +437,7 @@ async function startServer() {
       state: stateStr,
       scope: 'openid profile w_member_social email',
     });
-    
+
     res.json({ url: `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}` });
   });
 
@@ -414,7 +469,7 @@ async function startServer() {
           redirect_uri: redirectUri,
         })
       });
-      
+
       const tokenData = await tokenRes.json();
 
       if (tokenData.access_token) {
@@ -467,11 +522,11 @@ async function startServer() {
       const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (!userRes.ok) {
         throw new Error('Failed to fetch user info from LinkedIn');
       }
-      
+
       const userData = await userRes.json();
       const authorUrn = `urn:li:person:${userData.sub}`;
 
@@ -517,7 +572,7 @@ async function startServer() {
         // Prepare image data
         let imageBuffer: Buffer | ArrayBuffer;
         let contentType = 'image/jpeg';
-        
+
         if (imageUrl.startsWith('data:')) {
           const matches = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
           if (matches && matches.length === 3) {
@@ -539,7 +594,7 @@ async function startServer() {
           headers: {
             'Content-Type': contentType
           },
-          body: imageBuffer
+          body: imageBuffer as any
         });
 
         if (!uploadRes.ok) {
@@ -596,7 +651,7 @@ async function startServer() {
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/facebook/callback`;
-    
+
     const stateObj = { r: Math.random().toString(36).substring(7), productId };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
@@ -606,7 +661,7 @@ async function startServer() {
       state: stateStr,
       scope: 'public_profile,pages_manage_posts,pages_read_engagement',
     });
-    
+
     res.json({ url: `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}` });
   });
 
@@ -622,7 +677,7 @@ async function startServer() {
         try {
           const stateObj = JSON.parse(Buffer.from(state as string, 'base64').toString('utf-8'));
           if (stateObj.productId) productId = stateObj.productId;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const tokenRes = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?client_id=${process.env.FACEBOOK_CLIENT_ID}&redirect_uri=${redirectUri}&client_secret=${process.env.FACEBOOK_CLIENT_SECRET}&code=${code}`);
@@ -668,7 +723,7 @@ async function startServer() {
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/instagram/callback`;
-    
+
     const stateObj = { r: Math.random().toString(36).substring(7), productId };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
@@ -679,7 +734,7 @@ async function startServer() {
       response_type: 'code',
       state: stateStr,
     });
-    
+
     res.json({ url: `https://api.instagram.com/oauth/authorize?${params.toString()}` });
   });
 
@@ -695,7 +750,7 @@ async function startServer() {
         try {
           const stateObj = JSON.parse(Buffer.from(state as string, 'base64').toString('utf-8'));
           if (stateObj.productId) productId = stateObj.productId;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
@@ -751,7 +806,7 @@ async function startServer() {
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/reddit/callback`;
-    
+
     const stateObj = { r: Math.random().toString(36).substring(7), productId };
     const stateStr = Buffer.from(JSON.stringify(stateObj)).toString('base64');
 
@@ -763,7 +818,7 @@ async function startServer() {
       duration: 'permanent',
       scope: 'identity submit',
     });
-    
+
     res.json({ url: `https://www.reddit.com/api/v1/authorize?${params.toString()}` });
   });
 
@@ -779,13 +834,13 @@ async function startServer() {
         try {
           const stateObj = JSON.parse(Buffer.from(state as string, 'base64').toString('utf-8'));
           if (stateObj.productId) productId = stateObj.productId;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const authHeader = 'Basic ' + Buffer.from(`${process.env.REDDIT_CLIENT_ID}:${process.env.REDDIT_CLIENT_SECRET}`).toString('base64');
       const tokenRes = await fetch('https://www.reddit.com/api/v1/access_token', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Authorization': authHeader
         },
@@ -839,8 +894,8 @@ async function startServer() {
     }
 
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      return res.status(400).json({ 
-        error: 'SMTP credentials not configured. Please add SMTP_USER and SMTP_PASS in the app settings to enable email delivery.' 
+      return res.status(400).json({
+        error: 'SMTP credentials not configured. Please add SMTP_USER and SMTP_PASS in the app settings to enable email delivery.'
       });
     }
 
@@ -894,13 +949,13 @@ async function startServer() {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
       });
-      
+
       if (!fetchRes.ok) {
         throw new Error(`Failed to fetch URL: ${fetchRes.statusText}`);
       }
 
       const html = await fetchRes.text();
-      
+
       // We'll use a dynamic import for cheerio to avoid issues if it's not fully loaded
       const cheerio = await import('cheerio');
       const $ = cheerio.load(html);
@@ -911,7 +966,7 @@ async function startServer() {
 
       // Extract inline styles and linked stylesheets (just the URLs or raw content)
       let cssContent = '';
-      
+
       // Get inline styles from head
       $('head style').each((_, el) => {
         cssContent += $(el).html() + '\n';
@@ -951,14 +1006,16 @@ async function startServer() {
   });
 
   const distPath = path.join(process.cwd(), 'dist');
+  const shouldServeStatic = process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "start";
 
-  // Serve the built client in production only.
-  if (process.env.NODE_ENV === "production") {
+  if (shouldServeStatic) {
+    console.log('[Server] Serving production build from dist.');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {
+    console.log('[Server] Running Vite middleware for development.');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -966,9 +1023,16 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, HOST, () => {
-    console.log(`Server running on http://${HOST}:${PORT}`);
-  });
+  if (isUnixSocket) {
+    app.listen(rawPort, () => {
+      console.log(`[Server] Running on Passenger Unix socket: ${rawPort}`);
+    });
+  } else {
+    const PORT = Number(rawPort);
+    app.listen(PORT, HOST, () => {
+      console.log(`[Server] Running on TCP port http://${HOST}:${PORT}`);
+    });
+  }
 }
 
 startServer();
