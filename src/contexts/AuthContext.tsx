@@ -1,27 +1,75 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { User, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { db, auth, googleProvider, facebookProvider, appleProvider } from '../firebase';
+import { doc, onSnapshot, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { logSilentError } from '../lib/firestore-error';
+
+interface AuthProfile {
+  name: string;
+  role: string;
+  onboarded: boolean;
+}
 
 interface AuthContextType {
   user: User | null;
+  userProfile: AuthProfile | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithFacebook: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
+  completeOnboarding: (profileData: { name: string; role: string }, firstProductData: any) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<AuthProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
+    let unsubscribeProfile: (() => void) | null = null;
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setLoading(true);
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+      if (currentUser) {
+        setUser(currentUser);
+        // Listen to Firestore user profile document
+        unsubscribeProfile = onSnapshot(doc(db, 'users', currentUser.uid), async (docSnap) => {
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data() as AuthProfile);
+            setLoading(false);
+          } else {
+            setUserProfile({ name: '', role: '', onboarded: false });
+            setLoading(false);
+          }
+        }, (err) => {
+          logSilentError(err, { context: "loadUserProfile", userId: currentUser.uid });
+          setUserProfile({ name: '', role: '', onboarded: false });
+          setLoading(false);
+        });
+      } else {
+        setUser(null);
+        setUserProfile(null);
+        if (unsubscribeProfile) {
+          unsubscribeProfile();
+          unsubscribeProfile = null;
+        }
+        setLoading(false);
+      }
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   const signInWithGoogle = async () => {
@@ -29,6 +77,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
       logSilentError(error as Error, { context: "signInWithGoogle" });
+      throw error;
+    }
+  };
+
+  const signInWithFacebook = async () => {
+    try {
+      await signInWithPopup(auth, facebookProvider);
+    } catch (error) {
+      logSilentError(error as Error, { context: "signInWithFacebook" });
+      throw error;
+    }
+  };
+
+  const signInWithApple = async () => {
+    try {
+      await signInWithPopup(auth, appleProvider);
+    } catch (error) {
+      logSilentError(error as Error, { context: "signInWithApple" });
+      throw error;
+    }
+  };
+
+  const signInWithEmail = async (email: string, pass: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (error) {
+      logSilentError(error as Error, { context: "signInWithEmail" });
+      throw error;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, pass: string) => {
+    try {
+      await createUserWithEmailAndPassword(auth, email, pass);
+    } catch (error) {
+      logSilentError(error as Error, { context: "signUpWithEmail" });
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      logSilentError(error as Error, { context: "resetPassword" });
       throw error;
     }
   };
@@ -48,8 +141,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const completeOnboarding = async (profileData: { name: string; role: string }, firstProductData: any) => {
+    if (!user) throw new Error("No authenticated user found.");
+    try {
+      // 1. Create first product doc
+      const productRef = doc(db, 'products', firstProductData.id);
+      await setDoc(productRef, {
+        ...firstProductData,
+        userId: user.uid
+      });
+
+      // 2. Create user profile doc
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        ...profileData,
+        onboarded: true,
+        createdAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logSilentError(error as Error, { context: "completeOnboarding", userId: user.uid });
+      throw error;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, signInWithGoogle, signInWithFacebook, signInWithApple, signInWithEmail, signUpWithEmail, resetPassword, logout, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   );

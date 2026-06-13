@@ -15,10 +15,11 @@ export const generateCampaignPDF = async (campaign: WeeklyCampaign, product: Pro
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
 
   // Logo
+  const activeLogo = product.logoDarkUrl || product.logoUrl || product.logoLightUrl;
   let logoBottomY = pageHeight / 3;
-  if (product.logoUrl) {
+  if (activeLogo) {
     try {
-      const imgProps = doc.getImageProperties(product.logoUrl);
+      const imgProps = doc.getImageProperties(activeLogo);
       const maxDim = 80; // Large logo for cover
       const ratio = Math.min(maxDim / imgProps.width, maxDim / imgProps.height);
       const targetWidth = imgProps.width * ratio;
@@ -28,8 +29,8 @@ export const generateCampaignPDF = async (campaign: WeeklyCampaign, product: Pro
       const logoY = (pageHeight / 3) - (targetHeight / 2);
       
       // Determine format based on data URL
-      const format = product.logoUrl.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
-      doc.addImage(product.logoUrl, format, logoX, logoY, targetWidth, targetHeight);
+      const format = activeLogo.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
+      doc.addImage(activeLogo, format, logoX, logoY, targetWidth, targetHeight);
       logoBottomY = logoY + targetHeight;
     } catch (e) {
       logSilentError(e as Error, { context: "addLogoToCover" });
@@ -67,18 +68,18 @@ export const generateCampaignPDF = async (campaign: WeeklyCampaign, product: Pro
   
   // Helper to add footer (logo) to content pages
   const addFooter = () => {
-    if (product.logoUrl) {
+    if (activeLogo) {
       try {
-        const imgProps = doc.getImageProperties(product.logoUrl);
+        const imgProps = doc.getImageProperties(activeLogo);
         const maxDim = 15; // Small logo for footer
         const ratio = Math.min(maxDim / imgProps.width, maxDim / imgProps.height);
         const targetWidth = imgProps.width * ratio;
         const targetHeight = imgProps.height * ratio;
         
         // Determine format based on data URL
-        const format = product.logoUrl.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
+        const format = activeLogo.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
         doc.addImage(
-          product.logoUrl, 
+          activeLogo, 
           format, 
           pageWidth - margin - targetWidth, 
           pageHeight - margin - targetHeight, 

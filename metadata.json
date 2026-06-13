@@ -1,5 +1,6 @@
 {
   "name": "BrandToPost",
   "description": "AI-powered social campaign engine that turns your Brand Position into weekly, platform-specific campaigns.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

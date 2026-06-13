@@ -73,16 +73,19 @@ export function logSilentError(error: Error | string, context: Record<string, an
   console.error('Silent Error: ', errorMessage, context);
   
   if (auth.currentUser) {
-    addDoc(collection(db, 'error_logs'), {
+    const errorData: any = {
       error: errorMessage,
-      stack,
-      context,
+      context: JSON.parse(JSON.stringify(context, (k, v) => v === undefined ? null : v)),
       userId: auth.currentUser.uid,
-      email: auth.currentUser.email,
+      email: auth.currentUser.email || null,
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
       url: window.location.href,
       type: 'silent_error'
-    }).catch(e => console.error("Failed to log silent error to db", e));
+    };
+    if (stack) {
+      errorData.stack = stack;
+    }
+    addDoc(collection(db, 'error_logs'), errorData).catch(e => console.error("Failed to log silent error to db", e));
   }
 }

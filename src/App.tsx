@@ -3,58 +3,83 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { LandingPage } from "./pages/LandingPage";
+import { Dashboard } from "./pages/Dashboard";
+import { ProductDNA } from "./pages/ProductDNA";
+import { Campaigns } from "./pages/Campaigns";
+import { Scripts } from "./pages/Scripts";
+import { Creatives } from "./pages/Creatives";
+import { Settings } from "./pages/Settings";
+import { Schedule } from "./pages/Schedule";
+import { Login } from "./pages/Login";
+import { Onboarding } from "./pages/Onboarding";
+import { SharedCampaign } from "./pages/SharedCampaign";
+import { WhatsAppSystem } from "./pages/WhatsAppSystem";
+import { WhatsAppLogin } from "./pages/WhatsAppLogin";
+import { WhatsAppDashboard } from "./pages/WhatsAppDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ProductProvider } from "./contexts/ProductContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-
-const Dashboard = lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
-const ProductDNA = lazy(() => import("./pages/ProductDNA").then((m) => ({ default: m.ProductDNA })));
-const Campaigns = lazy(() => import("./pages/Campaigns").then((m) => ({ default: m.Campaigns })));
-const Creatives = lazy(() => import("./pages/Creatives").then((m) => ({ default: m.Creatives })));
-const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
-const Schedule = lazy(() => import("./pages/Schedule").then((m) => ({ default: m.Schedule })));
-const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
-const SharedCampaign = lazy(() => import("./pages/SharedCampaign").then((m) => ({ default: m.SharedCampaign })));
-const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
-const Waitlist = lazy(() => import("./pages/Waitlist"));
-const Research = lazy(() => import("./pages/Research"));
 
 export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
         <BrowserRouter>
-          <Suspense fallback={<div className="p-4 text-sm text-[#6b7280]">Loading...</div>}>
-            <Routes>
-              <Route path="/" element={<Waitlist />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/waitlist" element={<Waitlist />} />
-              <Route path="/research" element={<Research />} />
-              <Route path="/shared/:campaignId" element={<SharedCampaign />} />
-              <Route element={<ProtectedRoute />}>
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProductProvider>
-                      <Layout />
-                    </ProductProvider>
-                  }
-                >
-                  <Route index element={<Dashboard />} />
-                  <Route path="dna" element={<ProductDNA />} />
-                  <Route path="creatives" element={<Creatives />} />
-                  <Route path="campaigns" element={<Campaigns />} />
-                  <Route path="schedule" element={<Schedule />} />
-                  <Route path="settings" element={<Settings />} />
-                  <Route path="admin" element={<AdminDashboard />} />
-                </Route>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/whatsapp/login" element={<WhatsAppLogin />} />
+            <Route
+              path="/whatsapp-system"
+              element={
+                <ProductProvider>
+                  <WhatsAppDashboard />
+                </ProductProvider>
+              }
+            />
+            <Route
+              path="/whatsapp/dashboard"
+              element={
+                <ProductProvider>
+                  <WhatsAppDashboard />
+                </ProductProvider>
+              }
+            />
+            <Route path="/shared/:campaignId" element={<SharedCampaign />} />
+            <Route element={<ProtectedRoute />}>
+              <Route
+                path="/onboarding"
+                element={
+                  <ProductProvider>
+                    <Onboarding />
+                  </ProductProvider>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProductProvider>
+                    <Layout />
+                  </ProductProvider>
+                }
+              >
+                <Route index element={<Dashboard />} />
+                <Route path="dna" element={<ProductDNA />} />
+                <Route path="creatives" element={<Creatives />} />
+                <Route path="campaigns" element={<Campaigns />} />
+                <Route path="scripts" element={<Scripts />} />
+                <Route path="schedule" element={<Schedule />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="profile" element={<div className="p-8 text-white">Profile Page Coming Soon</div>} />
+                <Route path="admin" element={<AdminDashboard />} />
               </Route>
-            </Routes>
-          </Suspense>
+            </Route>
+          </Routes>
         </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>
