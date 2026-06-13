@@ -1,0 +1,153 @@
+========================================================================
+           BRANDTOPOST: THE "HYPERFRAMES" CALIBER VIDEO SCRIPT
+========================================================================
+Target Length: 90 Seconds
+Vibe: High-paced, sleek, mildly provocative (like the Trellis ad), luxurious tech, Glassmorphism.
+Color Palette to apply in Hyperframes:
+- Base Backgrounds: #0A0A0F and #1C1C22
+- Primary Accents: #7C3AED (Purple) and #2583EB (Blue)
+- Text Colors: #F7F7F8 (White/Light) and #A1A1AA (Muted Gray)
+- UI Elements: Translucent glass blocks with thin #7C3AED borders and glowing dropshadows.
+Fonts to apply in Hyperframes: 
+- Outfit (For massive, punchy Headlines)
+- Inter (For small body/UI text)
+
+========================================================================
+SCENE 1: THE BRUTAL TRUTH (0:00 - 0:12)
+Background: #0A0A0F (Solid dark core)
+
+[0:00] Text appears dead center (Outfit font, 150px, White): 
+"Okay."
+(Icons of Photoshop, Illustrator, Figma, Canva, Drive drop down quickly and scatter around the text).
+
+[0:02] Text shifts: 
+"Be honest." 
+(The scattered icons gently float up and down to create a feeling of chaos)
+
+[0:04] Camera zooms into the text, passing through it into a new screen.
+Text typing out fast (Outfit font, 80px):
+"How much time do you spend"
+
+[0:06] Words drop in sequentially, fast, colored in #FF7778 (Brand Pink/Error):
+"writing briefs"
+"waiting for revisions"
+"resizing images"
+"managing agency Slack channels"
+"every. single. week."
+
+[0:09] 
+Screen clears.
+A giant number counts up rapidly: 10... 30... 50 HOURS. (Number is #2583EB Blue)
+Underneath it, in muted gray (#A1A1AA): 
+"And how much of it actually converts?"
+
+========================================================================
+SCENE 2: STOP AND PIVOT (0:12 - 0:20)
+Background: Deep radiant gradient shifting from #0A0A0F to a subtle #1C1C22.
+
+[0:12]
+Text appears in center: "Yeah."
+
+[0:14] 
+Text changes (Inter font, 64px, Gray): "Not because you're a bad marketer."
+Text changes: "But because manual scaling is literally impossible."
+Text changes: "Things slip. Brands dilute. And you barely notice."
+
+[0:18] 
+Suddenly, all the floating software icons turn gray and shrink into the background.
+The word "STOP." slams into the center of the screen. (Outfit, 250px, pure White). 
+Screen shakes slightly (impact animation).
+
+========================================================================
+SCENE 3: THE INTRODUCTION (0:20 - 0:32)
+Background: The screen flashes to a pristine Glassmorphism Grid. Dark base (#1C1C22), with glowing purple (#7C3AED) grid lines fading into the distance.
+
+[0:20] 
+The BrandToPost mascot/logo flies in: A massive, glowing glass-block 'B' with a #7C3AED to #2583EB gradient backing. 
+Text below it (Outfit, 120px): "BrandToPost"
+
+[0:23] 
+Text below changes: "The Enterprise AI Studio that actually gets sh*t done."
+
+[0:26] 
+(Animations showing UI blocks popping up around the logo).
+Text (Inter, 48px): "It runs your entire creative pipeline with you."
+"On your terms."
+
+[0:29] 
+A circular carousel of integration icons spins around the logo: Google Drive, Instagram, LinkedIn, Reddit, X.
+Text: "Plugged into everything. All in one unified platform."
+
+========================================================================
+SCENE 4: THE WORKFLOW - PRODUCT DNA TO DEPLOYMENT (0:32 - 0:65)
+
+[0:32] SCENE TRANSITION: Text wipes left: "How it works:"
+
+[0:34] UI MOCKUP ANIMATION 1: PRODUCT DNA
+A beautiful glass UI card slides in titled "Phase 1: Product DNA".
+Text pops up inside the card mimicking data entry: 
+> Target ICP: CMOs in Tech
+> The Enemy: Wasted Ad Spend
+> Visual Style: Minimal, Tech Luxury, Hex: #7C3AED
+Voiceover text (Screen center): "The agent doesn't just guess. It maps your exact psychographics, target ICPs, and brand colors."
+
+[0:40] UI MOCKUP ANIMATION 2: RESEARCH & CAMPAIGN GEN
+Card flips. It now says "Phase 2: Matrix Generation".
+We see a progress bar instantly fill.
+Suddenly, a 7-day calendar view expands on screen.
+Visuals: Little "cards" populate Monday through Sunday. 
+Text pops on screen pointing to the cards: "7 Days of Posts." "5 Different Platforms." "Zero Prompts Written."
+
+[0:48] UI MOCKUP ANIMATION 3: CREATIVE STUDIO (THE WOW MOMENT)
+Text: "Need a hero creative?"
+Animation: 
+1. A raw photo of a shoe with a messy background drops in.
+2. A laser beam scans it (Green #18F07A). The background vanishes.
+3. Bam. It's placed on a sleek marble podium.
+4. Bam. Lighting is matched perfectly.
+5. Bam. Data-infographic text overlays in the Brand's exact font (Outfit).
+
+[0:56] UI MOCKUP ANIMATION 4: FEEDBACK & SCHEDULING
+We see a user icon leave a comment on the image: "Make it punchier."
+The UI immediately re-generates the copy card. A green checkmark appears: "Auto-Refined."
+The card slides straight into a "Published to LinkedIn" pipeline.
+
+========================================================================
+SCENE 5: THE CLIMAX (0:65 - 0:80)
+Background: Rapidly shifting tech glass UI panes. 
+
+[0:65]
+Screen centers. 
+Words smash onto the screen one by one, scaling up fast, perfectly on beat:
+"Product DNA." (smash)
+"Market Research." (smash)
+"7-Day Matrices." (smash)
+"Background Removal." (smash)
+"Platform Tailoring." (smash)
+"Shared Feedback." (smash)
+"Auto Posting." (smash)
+
+[0:75] 
+The words collapse into a single glowing orb of Purple (#7C3AED) and Blue (#2583EB).
+
+========================================================================
+SCENE 6: THE OUTRO (0:80 - 0:90)
+Background: Clean, elegant #0A0A0F.
+
+[0:80]
+Text slowly fades in (Outfit, 80px, White):
+"Same brand."
+"Same business."
+
+[0:84]
+Text turns #18F07A (Green): "Finally scaling."
+
+[0:86] 
+The BrandToPost "B" Logo settles gracefully into the center of the screen.
+Underneath, a sleek Glass Button appears: 
+"Try BrandToPost Today →"
+Subtext (muted gray): "Start building better campaigns."
+
+[0:90] Fade to black.
+========================================================================
+END OF SCRIPT

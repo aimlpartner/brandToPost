@@ -1,12 +1,155 @@
 import { Type } from "@google/genai";
+
+const fetchImageAsBase64 = async (url: string): Promise<string> => {
+  if (url.startsWith('data:')) return url;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context not available'));
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
+    };
+    img.onerror = () => reject(new Error('Failed to fetch image as base64'));
+    img.src = url;
+  });
+};
+
+export interface LayoutConfig {
+    textPosition: "top" | "middle" | "bottom";
+    textAlign: "left" | "center" | "right";
+    logoPosition: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top-center" | "bottom-center" | "center" | "middle-left" | "middle-right";
+    fontFamily?: string;
+    titleSize?: number;
+    subtitleSize?: number;
+    titleColor?: string;
+    subtitleColor?: string;
+}
+
+import { renderVisualToJpegOffscreen } from '../lib/offscreenRenderer';
+
+export const flattenVisualData = async (imageUrl: string, customHtml: string | undefined, activeLogo: string | null, layout?: LayoutConfig): Promise<string> => {
+  return renderVisualToJpegOffscreen(
+    'custom-overlay',
+    { customHtml, layout },
+
+    imageUrl,
+    null,
+    "Brand",
+    activeLogo
+  );
+};
+
+export async function generateFieldSuggestions(
+  dna: any | null,
+  field: "industry" | "subcategory" | "theme",
+  currentData: { industry?: string; subcategory?: string; theme?: string; },
+  userId?: string
+): Promise<string[]> {
+  try {
+    let prompt = `Use the following brand context and instructions to suggest 3 ideas for a campaign generation form field.
+Return ONLY a JSON array of 3 strings. Example: ["Idea 1", "Idea 2", "Idea 3"]
+`;
+    
+    if (dna) {
+      prompt += `Brand Name: ${dna.name}
+Positioning: ${dna.positioning || "Not specified"}
+Audience: ${dna.audience || "Not specified"}
+${dna.contentPillars && dna.contentPillars.length > 0 ? `Content Pillars: ${dna.contentPillars.join(", ")}` : ""}
+${dna.targetIcps && dna.targetIcps.length > 0 ? `Target ICPs: ${dna.targetIcps.map((icp: any) => icp.name).join(", ")}` : ""}
+`;
+    }
+
+    if (field === "industry") {
+      prompt += `Give 3 broad target industries or highly relevant macro-level focus areas this brand could market to, driven directly by their Positioning and Target ICPs. Keep them punchy and distinct.`;
+    } else if (field === "subcategory") {
+      prompt += `Target Industry: ${currentData.industry || "Not specified"}
+Give 3 specific sub-categories, extremely targeted niches, or ultra-specific pain-point driven markets within this industry that this brand could target. Make these highly actionable for a marketing campaign.`;
+    } else if (field === "theme") {
+      prompt += `Target Industry: ${currentData.industry || "Not specified"}
+Sub-category/Niche: ${currentData.subcategory || "Not specified"}
+Give 3 distinct, compelling, and creative weekly campaign themes (e.g. "The Anti-Burnout Formula", "Debunking Industry Myths", "Zero-to-One Growth Secrets") for this business based on the industry and niche.`;
+    }
+
+    const response = await generateContentProxy("gemini-2.5-flash", prompt, {
+      temperature: 0.7,
+      responseMimeType: "application/json"
+    });
+
+    if (response.usageMetadata && userId) {
+      logTokenUsage(userId, "generateFieldSuggestions", "gemini-2.5-flash", response.usageMetadata).catch(console.error);
+    }
+
+    const text = response.text || "";
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed.slice(0, 3);
+    } catch(e) {}
+    return [];
+  } catch (err) {
+    console.error("Error generating field suggestions:", err);
+    return [];
+  }
+}
 import { ProductDNA, WeeklyCampaign, Creative } from "../types";
 import { db, auth } from "../firebase";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
+import { loggerService } from "./loggerService";
 import { logSilentError } from "../lib/firestore-error";
+
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> {
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      if ((response.status >= 500 || response.status === 429) && retries > 0) {
+        console.warn(`Fetch returned status ${response.status}. Retrying in ${delay}ms... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchWithRetry(url, options, retries - 1, delay * 2);
+      }
+    }
+    return response;
+  } catch (error) {
+    if (retries > 0) {
+      console.warn(`Fetch threw error: ${error}. Retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(url, options, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
+function extractJSON(text: string): string {
+  const firstOpenBracket = text.indexOf('[');
+  const firstOpenBrace = text.indexOf('{');
+  
+  let startIdx = -1;
+  let endIdx = -1;
+  
+  if (firstOpenBracket !== -1 && (firstOpenBrace === -1 || firstOpenBracket < firstOpenBrace)) {
+    // Array JSON
+    startIdx = firstOpenBracket;
+    endIdx = text.lastIndexOf(']');
+  } else if (firstOpenBrace !== -1) {
+    // Object JSON
+    startIdx = firstOpenBrace;
+    endIdx = text.lastIndexOf('}');
+  }
+  
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    return text.substring(startIdx, endIdx + 1);
+  }
+  return text;
+}
 
 async function generateContentProxy(model: string, contents: any, config?: any) {
   const token = await auth.currentUser?.getIdToken();
-  const response = await fetch('/api/ai/generate', {
+  const response = await fetchWithRetry('/api/ai/generate', {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
@@ -80,12 +223,37 @@ Platform-by-platform distribution strategy:
 - Reddit: Authority-building, trust. Helpful, humble, no-hype.
 `;
 
-export async function researchProductDNA(website: string, currentDna?: Partial<ProductDNA>, document?: { data: string, mimeType: string } | null, userId?: string): Promise<Partial<ProductDNA>> {
+export async function researchProductDNA(
+  website: string, 
+  currentDna?: Partial<ProductDNA>, 
+  document?: { data: string, mimeType: string } | null, 
+  userId?: string, 
+  screenshot?: { data: string, mimeType: string },
+  microlinkMetadata?: any
+): Promise<Partial<ProductDNA>> {
   const hasWebsite = website && website.trim() !== "";
   const hasDescription = currentDna?.description && currentDna.description.trim() !== "";
   const hasDocument = !!document;
   
   let sourceContext = "";
+  let scrapedMediaImages: string[] = [];
+  let scrapedLogoUrl = "";
+  
+  if (microlinkMetadata) {
+     sourceContext += `\n--- ENHANCED METADATA (Microlink) ---\n`;
+     if (microlinkMetadata.title) sourceContext += `Site Title: ${microlinkMetadata.title}\n`;
+     if (microlinkMetadata.description) sourceContext += `Site Description: ${microlinkMetadata.description}\n`;
+     // Injecting extracted colors and logo directly
+     const logoUrl = microlinkMetadata.logo?.url;
+     if (logoUrl) sourceContext += `Found Logo URL: ${logoUrl} (Please use this exactly for logoLightUrl and logoDarkUrl if appropriate)\n`;
+     
+     // Extracted Dominant Colors (palette)
+     const palette = microlinkMetadata.logo?.palette || microlinkMetadata.image?.palette || [];
+     if (palette && palette.length > 0) {
+        sourceContext += `Extracted Brand Palette (Dominant Colors): ${palette.join(', ')}. Use these to inform your primary and secondary color choices.\n`;
+     }
+     sourceContext += `------------------------------------\n`;
+  }
   
   if (hasWebsite) {
     sourceContext += `Please use Google Search to research the following company website: ${website}\n`;
@@ -93,18 +261,25 @@ export async function researchProductDNA(website: string, currentDna?: Partial<P
     // Attempt to scrape the website for better context, especially for typography
     try {
       const token = await auth.currentUser?.getIdToken();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second total timeout for scraping endpoint
+      
       const scrapeRes = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ url: website })
+        body: JSON.stringify({ url: website }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       
       if (scrapeRes.ok) {
         const scrapeData = await scrapeRes.json();
         if (scrapeData.success) {
+          if (scrapeData.mediaImages) scrapedMediaImages = scrapeData.mediaImages;
+          if (scrapeData.logoUrl) scrapedLogoUrl = scrapeData.logoUrl;
           sourceContext += `\n--- SCRAPED WEBSITE DATA ---\n`;
           sourceContext += `Text Content Snippet: ${scrapeData.textContent}\n`;
           if (scrapeData.cssContent) {
@@ -132,12 +307,14 @@ export async function researchProductDNA(website: string, currentDna?: Partial<P
     throw new Error("A website, description, or document must be provided to research Brand Position.");
   }
 
-  const prompt = `
+    // ... same prompt context
+    const prompt = `
     You are an expert B2B SaaS marketer and researcher.
     
     ${sourceContext}
-    ${hasWebsite ? 'CRITICAL: You must actively browse the web to fetch the absolute latest data, recent news, and real-time updates about this company to ensure your research is fresh.\nCRITICAL FOR VISUAL DATA: To get the exact fonts, you MUST inspect the website\'s CSS or source code for "font-family" declarations. Do not guess the fonts. Look for the actual primary (headings) and secondary (body) fonts used.' : ''}
-    
+    ${hasWebsite ? 'CRITICAL: You must actively browse the web to fetch the absolute latest data, recent news, and real-time updates about this company to ensure your research is fresh.' : ''}
+    ${screenshot ? 'CRITICAL FOR VISUAL DATA: I have attached a high-resolution screenshot of the landing page. You MUST use this image to perfectly extract the exact Primary and Secondary Fonts used in the design, and perfectly sample the Primary and Secondary Brand Colors in 6-digit Hex format. If they use premium/Adobe fonts (e.g. Proxima Nova, Aktiv Grotesk, Circular, Inter, Futura), identify those explicitly by name.' : ''}
+
     Based on the provided information, determine the following Brand Position attributes. If the user provided partial information, use it as a hint but improve upon it based on your analysis.
     
     Current known info:
@@ -151,12 +328,23 @@ export async function researchProductDNA(website: string, currentDna?: Partial<P
     - audience: A detailed description of the target audience (roles, pain points, industries).
     - tone: The brand's voice and tone (e.g., "Professional, authoritative, yet approachable").
     - stage: The company's estimated stage (e.g., "MVP", "Early Growth", "Scaling", "Enterprise").
-    - visualStyle: The brand's visual identity, mood board, and aesthetic (e.g., "Minimalist, high-contrast, tech-focused with neon green accents").
-    - visualData: A structured object containing specific visual details:
-      - colors: An array of 3-5 hex color codes representing the brand's palette.
-      - fonts: An object with 'primary' and 'secondary' font names.
-      - typographyHierarchy: A brief description of how typography is used (e.g., "Bold sans-serif headers with readable serif body text").
-      - imageStyle: A description of the photography or illustration style (e.g., "Flat vector illustrations with vibrant colors").
+    - visualStyle: The brand's visual identity, mood board, and aesthetic.
+    - visualData: Structured object containing specific visual details.
+    
+    CRITICAL: You must also deeply analyze their psychographics and strategy to output the following fields:
+    - enemy: The Status Quo / The Enemy. What old way of doing things is this product trying to kill? (e.g., Slack's enemy was email. Airbnb's enemy was sterile hotels.)
+    - earnedSecret: What is the one thing this founder/company knows about the industry that nobody else realizes?
+    - originStory: Why was this built? What is the founding frustration or pain?
+    - hellState: The exact pain, frustration, or fear the user is experiencing right now.
+    - heavenState: The emotional payoff after using the product.
+    - objections: Top 3 Buying Objections. Why do people say no? (Format as a single paragraph or comma-separated list).
+    - uniqueMechanism: How does the product actually deliver the result differently than competitors?
+    - proofPoints: Hard numbers, metrics, or case study snippets.
+    - vocabularyAlways: Words we ALWAYS use (e.g., "Revenue-driven", "Asynchronous", "Craft").
+    - vocabularyNever: Words we NEVER use (e.g., "Synergy", "Hack", "Ninja").
+    - contentPillars: 3-5 core strategic content pillars that will form the backbone of their social media presence.
+    - targetIcps: 2-3 specific Ideal Customer Profiles with their absolute biggest, most bleeding-neck pain points.
+    - recommendedThemes: 5-7 highly specific, actionable Campaign Themes/Ideas tailored to this product that the user can immediately use for their next marketing campaigns. They should be engaging hooks or angles (e.g. "The hidden cost of [Status Quo]").
   `;
 
   const contents: any[] = [{ text: prompt }];
@@ -165,6 +353,14 @@ export async function researchProductDNA(website: string, currentDna?: Partial<P
       inlineData: {
         data: document.data,
         mimeType: document.mimeType
+      }
+    });
+  }
+  if (screenshot) {
+    contents.push({
+      inlineData: {
+        data: screenshot.data,
+        mimeType: screenshot.mimeType
       }
     });
   }
@@ -183,6 +379,41 @@ export async function researchProductDNA(website: string, currentDna?: Partial<P
           tone: { type: Type.STRING },
           stage: { type: Type.STRING },
           visualStyle: { type: Type.STRING },
+          enemy: { type: Type.STRING },
+          earnedSecret: { type: Type.STRING },
+          originStory: { type: Type.STRING },
+          hellState: { type: Type.STRING },
+          heavenState: { type: Type.STRING },
+          objections: { type: Type.STRING },
+          uniqueMechanism: { type: Type.STRING },
+          proofPoints: { type: Type.STRING },
+          vocabularyAlways: { type: Type.STRING },
+          vocabularyNever: { type: Type.STRING },
+          contentPillars: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "3-5 high-level content pillars the brand should post about (e.g., 'Founder Learnings', 'Productivity Hacks', 'Customer Stories')"
+          },
+          targetIcps: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING, description: "Name of the ICP, e.g., 'Agency Owners'" },
+                painPoints: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              },
+              required: ["name", "painPoints"]
+            },
+            description: "2-3 Ideal Customer Profiles with their absolute biggest pain points"
+          },
+          recommendedThemes: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "5-7 very specific, highly actionable Campaign Themes that the user can immediately select to generate a campaign (e.g., 'Busting the biggest myth in our industry', 'The true cost of the Status Quo', 'Origin Story: Why we built this'). These will be shown as buttons."
+          },
           visualData: {
             type: Type.OBJECT,
             properties: {
@@ -204,7 +435,7 @@ export async function researchProductDNA(website: string, currentDna?: Partial<P
             required: ["colors", "fonts", "typographyHierarchy", "imageStyle"]
           }
         },
-        required: ["positioning", "audience", "tone", "stage", "visualStyle", "visualData"]
+        required: ["positioning", "audience", "tone", "stage", "visualStyle", "visualData", "contentPillars", "targetIcps", "recommendedThemes"]
       }
     }
   );
@@ -219,12 +450,32 @@ export async function researchProductDNA(website: string, currentDna?: Partial<P
   }
 
   try {
-    return JSON.parse(text);
+    let parsedResult = JSON.parse(text);
+    const bestBrandLogo = microlinkMetadata?.logo?.url || scrapedLogoUrl || "";
+    if (bestBrandLogo) {
+      if (!parsedResult.logoUrl) parsedResult.logoUrl = bestBrandLogo;
+      if (!parsedResult.logoDarkUrl) parsedResult.logoDarkUrl = bestBrandLogo;
+      if (!parsedResult.logoLightUrl) parsedResult.logoLightUrl = bestBrandLogo;
+    }
+    if (scrapedMediaImages.length > 0) {
+      parsedResult.extractedMediaImages = scrapedMediaImages;
+    }
+    return parsedResult;
   } catch (e) {
     logSilentError("Failed to parse JSON response", { context: "researchProductDNA", text });
     const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (match && match[1]) {
-      return JSON.parse(match[1]);
+      let parsedResult = JSON.parse(match[1]);
+      const bestBrandLogo = microlinkMetadata?.logo?.url || scrapedLogoUrl || "";
+      if (bestBrandLogo) {
+        if (!parsedResult.logoUrl) parsedResult.logoUrl = bestBrandLogo;
+        if (!parsedResult.logoDarkUrl) parsedResult.logoDarkUrl = bestBrandLogo;
+        if (!parsedResult.logoLightUrl) parsedResult.logoLightUrl = bestBrandLogo;
+      }
+      if (scrapedMediaImages.length > 0) {
+        parsedResult.extractedMediaImages = scrapedMediaImages;
+      }
+      return parsedResult;
     }
     throw new Error("Failed to parse JSON response");
   }
@@ -292,38 +543,70 @@ export async function researchFocus(focus: string, channels: string[] = [], subC
     Return a JSON array of strings, where each string is a detailed key insight.
   `;
 
-  const response = await generateContentProxy(
-    "gemini-3.1-pro-preview",
-    prompt,
-    {
-      tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: { type: Type.STRING }
+  const strategies = [
+    { model: "gemini-3.1-pro-preview", search: true },
+    { model: "gemini-3.5-flash", search: true },
+    { model: "gemini-3.5-flash", search: false }
+  ];
+
+  let lastError: any = null;
+
+  for (const strategy of strategies) {
+    try {
+      console.log(`[researchFocus] Attempting strategy: model=${strategy.model}, search=${strategy.search}`);
+      const config: any = {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
+      };
+
+      if (strategy.search) {
+        config.tools = [{ googleSearch: {} }];
       }
+
+      const response = await generateContentProxy(strategy.model, prompt, config);
+
+      if (response.usageMetadata && userId) {
+        await logTokenUsage(userId, "researchFocus", strategy.model, response.usageMetadata);
+      }
+
+      const text = response.text;
+      if (!text) {
+        throw new Error("Empty response text");
+      }
+
+      const trimmed = text.trim();
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        const extracted = extractJSON(trimmed);
+        try {
+          return JSON.parse(extracted);
+        } catch {
+          const match = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (match && match[1]) {
+            return JSON.parse(match[1].trim());
+          }
+        }
+      }
+      throw new Error("JSON parsing failed for text content");
+    } catch (err: any) {
+      console.warn(`[researchFocus] Strategy (model=${strategy.model}, search=${strategy.search}) failed:`, err);
+      lastError = err;
     }
-  );
-
-  if (response.usageMetadata) {
-    await logTokenUsage(userId, "researchFocus", "gemini-3.1-pro-preview", response.usageMetadata);
   }
 
-  const text = response.text;
-  if (!text) {
-    throw new Error("Failed to research focus");
-  }
+  console.error("[researchFocus] All AI strategies failed. Falling back to local template insights.");
+  logSilentError(lastError || new Error("All researchFocus strategies failed"), { context: "researchFocus_all_failed", focus });
 
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    logSilentError("Failed to parse JSON response", { context: "researchFocus", text });
-    const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (match && match[1]) {
-      return JSON.parse(match[1]);
-    }
-    throw new Error("Failed to parse JSON response");
-  }
+  return [
+    `Analyzing current emerging trends and audience topics for "${focus}"`,
+    `Addressing the key audience pain points and primary desires in the "${focus}" sector`,
+    `Leveraging unique competitor insights and addressing clear market gaps`,
+    `Focusing on high-converting value propositions for the "${focus}" target group`
+  ];
 }
 
 const campaignSchema = {
@@ -357,6 +640,16 @@ const campaignSchema = {
           contentType: { type: Type.STRING, description: "e.g., Hook, Use Case, Real Story/Example, Founder Voice, etc." },
           imagePrompt: { type: Type.STRING, description: "Prompt for AI image generation for this day" },
           overlayText: { type: Type.STRING, description: "Short punchy hook text to overlay on custom creatives" },
+          visualType: { type: Type.STRING, description: "MUST ALWAYS BE: 'custom-overlay'", enum: ["custom-overlay"] },
+          visualData: {
+            type: Type.OBJECT,
+            properties: {
+              headline: { type: Type.STRING, description: "Short, punchy primary text" },
+              cinematicPrompt: { type: Type.STRING, description: "Image prompt for the background image. Should include artistic directions like off-center, negative space, lighting, mood. Do NOT include text instructions." },
+              customHtml: { type: Type.STRING, description: "A highly creative, BESPOKE HTML layout using INLINE STYLES. The canvas is 1080x1080px. CRITICAL: To prevent text overlap, you MUST use Flexbox (display: flex; flex-direction: column; gap: 20px) for layout instead of absolute positioning individual text nodes. NEVER overlap text. Use safe line-heights (1.2+). ALWAYS ensure text is readable. Examples: <div style=\"position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 60px; background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: white;\"><h1 style=\"font-size: 80px; font-weight: 900; line-height: 1.2; margin: 0;\">Title</h1><p style=\"font-size: 32px; margin: 20px 0 0 0;\">Subtitle</p></div>." }
+            },
+            required: ["cinematicPrompt", "customHtml"]
+          },
           platformVersions: {
             type: Type.ARRAY,
             items: {
@@ -370,7 +663,7 @@ const campaignSchema = {
             }
           }
         },
-        required: ["day", "contentType", "platformVersions"]
+        required: ["day", "contentType", "platformVersions", "visualType", "visualData"]
       }
     },
     repurposingNotes: { type: Type.STRING, description: "How to reuse this week's assets next week" },
@@ -381,7 +674,7 @@ const campaignSchema = {
   required: ["theme", "targetAudience", "coreMessage", "hook", "cta", "contentFormat", "dailyPosts", "repurposingNotes", "confidenceScore", "pillar", "researchSummary"]
 };
 
-export async function generateCampaign(dna: ProductDNA, focus: string, insights: string[], generateImages: boolean = false, feedback?: string, previousDraft?: Omit<WeeklyCampaign, 'id' | 'createdAt'>, channels: string[] = ['LinkedIn', 'X', 'Instagram', 'Facebook', 'Reddit'], campaignTheme?: string, subCategory?: string, userId?: string): Promise<Omit<WeeklyCampaign, 'id' | 'createdAt'>> {
+export async function generateCampaign(dna: ProductDNA, focus: string, insights: string[], generateImages: boolean = false, feedback?: string, previousDraft?: Omit<WeeklyCampaign, 'id' | 'createdAt'>, channels: string[] = ['LinkedIn', 'X', 'Instagram', 'Facebook', 'Reddit'], campaignTheme?: string, subCategory?: string, userId?: string, aspectRatio?: string, onProgress?: (step: number, total: number, msg: string) => void): Promise<Omit<WeeklyCampaign, 'id' | 'createdAt'>> {
   // Fetch creatives if generateImages is false
   let creatives: Creative[] = [];
   if (!generateImages && dna.id && userId) {
@@ -405,6 +698,9 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
   }
   const useCreatives = !generateImages && creatives.length > 0;
   let creativeIndex = 0;
+
+  const totalSteps = (generateImages || useCreatives) ? 3 : 2;
+  if (onProgress) { onProgress(1, totalSteps, "Analyzing brand DNA and mapping week-long campaign..."); }
 
   const prompt = `
     You are an expert B2B SaaS marketer.
@@ -432,6 +728,20 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
     - Typography Hierarchy: ${dna.visualData.typographyHierarchy}
     - Image Style: ${dna.visualData.imageStyle}
     ` : ''}
+    
+    Advanced DNA (Psychology, Narrative, & Strategy):
+    ${dna.enemy ? `- The Enemy / Status Quo: ${dna.enemy}` : ''}
+    ${dna.earnedSecret ? `- The Earned Secret: ${dna.earnedSecret}` : ''}
+    ${dna.originStory ? `- Origin Story: ${dna.originStory}` : ''}
+    ${dna.hellState ? `- 'Hell' State (Before): ${dna.hellState}` : ''}
+    ${dna.heavenState ? `- 'Heaven' State (After): ${dna.heavenState}` : ''}
+    ${dna.objections ? `- Top Buying Objections: ${dna.objections}` : ''}
+    ${dna.uniqueMechanism ? `- Unique Mechanism: ${dna.uniqueMechanism}` : ''}
+    ${dna.proofPoints ? `- Proof Points: ${dna.proofPoints}` : ''}
+    ${dna.vocabularyAlways ? `- Vocabulary to ALWAYS use: ${dna.vocabularyAlways}` : ''}
+    ${dna.vocabularyNever ? `- Vocabulary to NEVER use: ${dna.vocabularyNever}` : ''}
+    ${dna.contentPillars && dna.contentPillars.length > 0 ? `- Content Pillars: ${dna.contentPillars.join(' | ')}` : ''}
+    ${dna.targetIcps && dna.targetIcps.length > 0 ? `- Target ICPs & Pain Points:\n      ${dna.targetIcps.map(icp => `${icp.name} (Pains: ${icp.painPoints.join(', ')})`).join('\n      ')}` : ''}
 
     ${feedback ? `
     CRITICAL INSTRUCTION: The user rejected the previous draft and provided the following feedback for improvement:
@@ -464,45 +774,72 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
       - Reddit: Use Markdown (bolding, bullet points, italics). STRICTLY NO emojis and NO hashtags.
       - General: Break all paragraphs into short lines, ensure clear line breaks between sections, convert inline strategies into properly separated numbered points, do NOT include citations like [1.2]. Return clean, well-structured, highly readable content.
     - For each daily post, provide platform-specific versions for the following channels ONLY: ${channels.join(', ')}. Each must have copy and format.
-    ${generateImages ? `- For EACH DAY (not for each platform), provide a single 'imagePrompt' at the daily post level. CRITICAL: You must design a "Text-Overlay Engagement Graphic" using this exact 3-layer approach:
-      Layer 1 (Background): A high-quality, thematic background relevant to the post, OR a clean gradient/solid color directly matching the Brand Position Visual Style/Mood Board: "${dna.visualStyle || 'Standard professional'}" ${dna.visualData ? `and utilizing these specific brand colors: ${dna.visualData.colors.join(', ')}` : ''}. The background MUST be explicitly described as darkened, color-tinted, or slightly blurred to ensure white text is perfectly legible.
-      Layer 2 (Typography): A short, punchy hook or discussion prompt (max 10 words) from the post. Describe it as bold, high-contrast white text ${dna.visualData ? `using the brand's primary font style (${dna.visualData.fonts.primary})` : 'sans-serif'}, centered on the screen, using strong font hierarchy (e.g., one key word fully capitalized to draw the eye). Explicitly state the exact text to be rendered in quotes.
-      Layer 3 (Branding): Do NOT include a logo in the prompt (we will overlay it programmatically). Just ensure the bottom center of the image has clean space.` : ""}
-    ${useCreatives ? `- For EACH DAY, provide an 'overlayText' field (max 10 words). This will be overlaid onto the brand's custom creatives. It should be a short, punchy hook or discussion prompt from the post.` : ""}
+    ${generateImages ? `- For EACH DAY (not for each platform), YOU MUST output 'visualType' (MUST be 'custom-overlay'). YOU MUST ALSO output a 'visualData' object with 'cinematicPrompt' and 'customHtml'. For 'customHtml', you are generating bespoke, magazine-quality text layouts over images using STRICTLY INLINE STYLES. The canvas is 1080x1080px. CRITICAL RULES TO PREVENT TEXT OVERLAP: 1. NEVER use absolute/fixed positioning for multiple individual text elements. 2. Instead, use a single absolute container and arrange content inside it using Flexbox (display: flex; flex-direction: column; gap: 24px;). 3. Use safe line-heights (minimum 1.2). 4. Use backdrop-filter or gradients so text is readable against the background image. Each day should look visually distinct.` : ""}
+    ${useCreatives ? `- For EACH DAY, provide an 'overlayText' field (max 10 words). This will be overlaid onto the brand's custom creatives.` : ""}
     - Repurposing notes (how to reuse this week's assets next week).
     - A confidence score (0-100) based on relevance.
     - The primary content pillar used (e.g., "Problem-spotting & empathy").
     - A research summary (1-2 paragraphs summarizing what you found about the company and audience trends).
   `;
 
-  const response = await generateContentProxy(
-    "gemini-3.1-pro-preview",
-    prompt,
-    {
-      responseMimeType: "application/json",
-      responseSchema: campaignSchema
-    }
-  );
+  const modelsToTry = ["gemini-3.1-pro-preview", "gemini-3.5-flash"];
+  let campaignResponseText = "";
+  let successModel = "gemini-3.1-pro-preview";
+  let lastCampaignError: any = null;
 
-  if (response.usageMetadata) {
-    await logTokenUsage(userId, "generateCampaign", "gemini-3.1-pro-preview", response.usageMetadata);
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`[generateCampaign] Attempting generation with model: ${modelName}`);
+      const response = await generateContentProxy(
+        modelName,
+        prompt,
+        {
+          responseMimeType: "application/json",
+          responseSchema: campaignSchema
+        }
+      );
+      
+      if (response.usageMetadata && userId) {
+        await logTokenUsage(userId, "generateCampaign", modelName, response.usageMetadata);
+      }
+      
+      if (response.text) {
+        campaignResponseText = response.text;
+        successModel = modelName;
+        break;
+      }
+    } catch (err: any) {
+      console.warn(`[generateCampaign] Model ${modelName} failed:`, err);
+      lastCampaignError = err;
+    }
   }
 
-  const text = response.text;
-  if (!text) {
-    throw new Error("Failed to generate campaign");
+  if (!campaignResponseText) {
+    throw lastCampaignError || new Error("Failed to generate campaign with any available model");
   }
 
   let campaign;
+  const trimmedCampaignText = campaignResponseText.trim();
   try {
-    campaign = JSON.parse(text);
+    campaign = JSON.parse(trimmedCampaignText);
   } catch (e) {
-    logSilentError("Failed to parse JSON response", { context: "generateCampaign", text });
-    const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (match && match[1]) {
-      campaign = JSON.parse(match[1]);
-    } else {
-      throw new Error("Failed to parse JSON response");
+    console.warn("[generateCampaign] Standard JSON parse failed, initiating robust parsing...");
+    const extracted = extractJSON(trimmedCampaignText);
+    try {
+      campaign = JSON.parse(extracted);
+    } catch {
+      const match = trimmedCampaignText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        try {
+          campaign = JSON.parse(match[1].trim());
+        } catch (innerE) {
+          logSilentError("Failed to parse JSON response on secondary match", { context: "generateCampaign", text: campaignResponseText });
+          throw new Error("Failed to parse JSON response");
+        }
+      } else {
+        logSilentError("Failed to parse JSON response, no matches found", { context: "generateCampaign", text: campaignResponseText });
+        throw new Error("Failed to parse JSON response");
+      }
     }
   }
 
@@ -514,6 +851,8 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
   }
 
   // Phase 2: Format the copy using a cheaper model (gemini-2.5-flash)
+  const totalSteps2 = (generateImages || useCreatives) ? 3 : 2;
+  if (onProgress) { onProgress(2, totalSteps2, "Formatting and structuring copy length..."); }
   try {
     const formatPrompt = `
       You are a strict text formatter. Your ONLY job is to format the 'copy' fields in the provided JSON campaign data.
@@ -556,13 +895,16 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
   }
 
   if (generateImages || useCreatives) {
+    if (onProgress) { onProgress(3, 3, "Tror's designer is creating custom visuals and layouts..."); }
     const imageTasks: (() => Promise<void>)[] = [];
     
     // Helper to compress image to JPEG
     const compressImage = async (base64Str: string, quality = 0.85): Promise<string> => {
       return new Promise((resolve) => {
         const img = new Image();
-        img.crossOrigin = "anonymous";
+        if (!base64Str.startsWith('data:')) {
+          img.crossOrigin = "anonymous";
+        }
         img.onload = () => {
           const canvas = document.createElement('canvas');
           canvas.width = img.width;
@@ -577,6 +919,10 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
           
           resolve(canvas.toDataURL('image/jpeg', quality));
         };
+        img.onerror = () => {
+          console.error("compressImage failed to load img src");
+          resolve(base64Str); // Fallback to original
+        };
         img.src = base64Str;
       });
     };
@@ -587,7 +933,9 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
       try {
         cachedLogoBase64 = await new Promise<string | null>((resolve) => {
           const img = new Image();
-          img.crossOrigin = "anonymous";
+          if (!dna.logoUrl!.startsWith('data:')) {
+            img.crossOrigin = "anonymous";
+          }
           img.onload = () => {
             const canvas = document.createElement('canvas');
             canvas.width = img.width;
@@ -606,7 +954,7 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
     }
 
     // Helper to overlay logo
-    const overlayLogo = async (base64Image: string, logoBase64: string): Promise<string> => {
+    const overlayLogo = async (base64Image: string, logoBase64: string, layoutText?: string): Promise<string> => {
       return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = "anonymous";
@@ -622,14 +970,53 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
           const logo = new Image();
           logo.crossOrigin = "anonymous";
           logo.onload = () => {
-            // Calculate logo size (e.g., 12% of image width for a subtle look)
-            const logoWidth = canvas.width * 0.12;
-            const logoHeight = (logo.height / logo.width) * logoWidth;
+            // Calculate logo size (e.g., 10% of image width for a premium subtle look)
+            let logoWidth = canvas.width * 0.08;
+            let logoHeight = (logo.height / logo.width) * logoWidth;
             
-            // Position: bottom center with padding
+            // Universal logo size guardrails
+            const MAX_LOGO_WIDTH = 120;
+            const MAX_LOGO_HEIGHT = 60;
+            
+            if (logoWidth > MAX_LOGO_WIDTH) {
+              logoWidth = MAX_LOGO_WIDTH;
+              logoHeight = (logo.height / logo.width) * logoWidth;
+            }
+            if (logoHeight > MAX_LOGO_HEIGHT) {
+              logoHeight = MAX_LOGO_HEIGHT;
+              logoWidth = (logo.width / logo.height) * logoHeight;
+            }
+            
+            // Default Position: bottom center with padding
             const padding = canvas.width * 0.05;
-            const x = (canvas.width - logoWidth) / 2;
-            const y = canvas.height - logoHeight - padding;
+            let x = (canvas.width - logoWidth) / 2;
+            let y = canvas.height - logoHeight - padding;
+            
+            if (layoutText) {
+              const layout = (layoutText.length + layoutText.charCodeAt(0)) % 4;
+              switch (layout) {
+                case 0:
+                  // Text Center Showcase -> Logo Bottom Center
+                  x = (canvas.width - logoWidth) / 2;
+                  y = canvas.height - logoHeight - padding;
+                  break;
+                case 1:
+                  // Text Bottom Left Stack -> Logo Top Right (to balance)
+                  x = canvas.width - logoWidth - padding;
+                  y = padding;
+                  break;
+                case 2:
+                  // Text Center Editorial (Glass Box in middle) -> Logo Bottom Right
+                  x = canvas.width - logoWidth - padding;
+                  y = canvas.height - logoHeight - padding;
+                  break;
+                case 3:
+                  // Text Top Left Elegant -> Logo Bottom Right (classic diagonal balance)
+                  x = canvas.width - logoWidth - padding;
+                  y = canvas.height - logoHeight - padding;
+                  break;
+              }
+            }
             
             // Ensure transparency is respected for the logo itself
             ctx.globalCompositeOperation = 'source-over';
@@ -646,102 +1033,293 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
 
     // Helper to overlay text on a custom creative
     const overlayTextOnCreative = async (creativeUrl: string, text: string): Promise<string> => {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
       return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = "anonymous";
         img.onload = () => {
+          const scale = 2; // Supersample for crispness
           const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
           const ctx = canvas.getContext('2d');
           if (!ctx) return resolve(creativeUrl);
           
-          // Draw original image
-          ctx.drawImage(img, 0, 0);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           
-          // Draw darkening overlay for text readability
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          const primaryColor = (dna.visualData?.colors && dna.visualData.colors.length > 0) ? dna.visualData.colors[0] : '#7C3AED';
+          const fontName = dna.visualData?.fonts?.primary || 'Inter';
           
-          // Draw text
+          // Pseudo-random layout based on text length to feel "designed" not stamped
+          const layout = (text.length + text.charCodeAt(0)) % 4; 
+          
+          const baseFontSize = Math.max(48, Math.floor(canvas.width * 0.055));
           ctx.fillStyle = '#FFFFFF';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
           
-          // Calculate font size based on image width
-          const fontSize = Math.max(32, Math.floor(canvas.width * 0.06));
-          ctx.font = `bold ${fontSize}px "${dna.visualData?.fonts?.primary || 'Inter'}", sans-serif`;
-          
-          // Word wrap logic and UPPERCASE
-          const upperText = text.toUpperCase();
-          const words = upperText.split(' ');
-          let line = '';
-          const lines = [];
-          const maxWidth = canvas.width * 0.8;
-          
-          for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            const metrics = ctx.measureText(testLine);
-            const testWidth = metrics.width;
-            if (testWidth > maxWidth && n > 0) {
-              lines.push(line);
-              line = words[n] + ' ';
-            } else {
-              line = testLine;
+          const getLines = (context: CanvasRenderingContext2D, textStr: string, maxWidthStr: number) => {
+            const words = textStr.split(' ');
+            let line = '';
+            const lines: string[] = [];
+            for (let n = 0; n < words.length; n++) {
+              const testLine = line + words[n] + ' ';
+              if (context.measureText(testLine).width > maxWidthStr && n > 0) {
+                lines.push(line.trim());
+                line = words[n] + ' ';
+              } else {
+                line = testLine;
+              }
+            }
+            lines.push(line.trim());
+            return lines;
+          };
+
+          const maxWidth = canvas.width * 0.85;
+          const padding = canvas.width * 0.08;
+
+          switch(layout) {
+            case 0: {
+              // Center Heavy Drop Shadow
+              ctx.fillStyle = 'rgba(0,0,0,0.25)';
+              ctx.fillRect(0, 0, canvas.width, canvas.height); 
+              
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+              ctx.shadowBlur = 40;
+              ctx.shadowOffsetY = 15;
+              
+              ctx.font = `900 ${baseFontSize * 1.3}px "${fontName}", sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              
+              const lines = getLines(ctx, text.toUpperCase(), maxWidth);
+              const lineHeight = baseFontSize * 1.5;
+              const startY = (canvas.height - (lines.length * lineHeight)) / 2;
+              
+              ctx.fillStyle = '#FFFFFF';
+              lines.forEach((line, index) => {
+                ctx.fillText(line, canvas.width / 2, startY + (index * lineHeight) + (lineHeight / 2));
+              });
+              break;
+            }
+            case 1: {
+              // Bottom Left Modern Stack
+              const grad = ctx.createLinearGradient(0, canvas.height - (canvas.height * 0.5), 0, canvas.height);
+              grad.addColorStop(0, 'rgba(0,0,0,0)');
+              grad.addColorStop(1, 'rgba(0,0,0,0.9)');
+              ctx.fillStyle = grad;
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              
+              ctx.font = `800 ${baseFontSize * 1.1}px "${fontName}", sans-serif`;
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'bottom';
+              
+              const lines = getLines(ctx, text, maxWidth);
+              const lineHeight = baseFontSize * 1.35;
+              const startY = canvas.height - padding - (lines.length * lineHeight);
+              
+              ctx.fillStyle = primaryColor;
+              ctx.fillRect(padding - 20, startY, 12, lines.length * lineHeight);
+              
+              ctx.fillStyle = '#FFFFFF';
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+              ctx.shadowBlur = 15;
+              lines.forEach((line, index) => {
+                ctx.fillText(line, padding, startY + (index * lineHeight) + lineHeight);
+              });
+              break;
+            }
+            case 2: {
+              // Center Editorial Glass Box
+              ctx.font = `bold ${baseFontSize * 1.05}px "${fontName}", sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              
+              const lines = getLines(ctx, text, maxWidth * 0.8);
+              const lineHeight = baseFontSize * 1.4;
+              const textHeight = lines.length * lineHeight;
+              const boxHeight = textHeight + (baseFontSize * 2.5);
+              
+              let maxLineWidth = 0;
+              lines.forEach(l => {
+                  const w = ctx.measureText(l).width;
+                  if (w > maxLineWidth) maxLineWidth = w;
+              });
+              const boxWidth = maxLineWidth + (baseFontSize * 3);
+              const startTop = (canvas.height - boxHeight) / 2;
+              
+              ctx.fillStyle = 'rgba(15, 15, 20, 0.85)';
+              ctx.shadowColor = 'rgba(0,0,0,0.4)';
+              ctx.shadowBlur = 50;
+              ctx.fillRect((canvas.width - boxWidth)/2, startTop, boxWidth, boxHeight);
+              
+              ctx.shadowColor = 'transparent';
+              ctx.strokeStyle = primaryColor;
+              ctx.lineWidth = 6;
+              ctx.strokeRect((canvas.width - boxWidth)/2 + 20, startTop + 20, boxWidth - 40, boxHeight - 40);
+              
+              ctx.fillStyle = '#FFFFFF';
+              const textStartY = (canvas.height - textHeight) / 2;
+              lines.forEach((line, index) => {
+                ctx.fillText(line, canvas.width / 2, textStartY + (index * lineHeight) + (lineHeight / 2));
+              });
+              break;
+            }
+            case 3: {
+              // Top Left Minimalist
+              const grad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.4);
+              grad.addColorStop(0, 'rgba(0,0,0,0.85)');
+              grad.addColorStop(1, 'rgba(0,0,0,0)');
+              ctx.fillStyle = grad;
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+              ctx.font = `italic 800 ${baseFontSize * 1.2}px "${fontName}", sans-serif`;
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'top';
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+              ctx.shadowBlur = 20;
+              
+              const lines = getLines(ctx, text, maxWidth);
+              const lineHeight = baseFontSize * 1.45;
+              
+              ctx.fillStyle = '#FFFFFF';
+              lines.forEach((line, index) => {
+                ctx.fillText(line, padding, padding + (index * lineHeight));
+              });
+              
+              ctx.shadowColor = 'transparent';
+              ctx.fillStyle = primaryColor;
+              ctx.fillRect(padding, padding + (lines.length * lineHeight) + 24, 150, 10);
+              break;
             }
           }
-          lines.push(line);
           
-          // Draw lines
-          const lineHeight = fontSize * 1.2;
-          const startY = (canvas.height - (lines.length * lineHeight)) / 2;
-          
-          lines.forEach((line, index) => {
-            ctx.fillText(line.trim(), canvas.width / 2, startY + (index * lineHeight) + (lineHeight / 2));
-          });
-          
-          // Output at max quality
-          resolve(canvas.toDataURL('image/jpeg', 1.0));
+          resolve(canvas.toDataURL('image/jpeg', 0.95));
         };
         img.onerror = () => resolve(creativeUrl);
-        // Add proxy to bypass CORS if needed, or assume the URL allows CORS
         img.src = creativeUrl;
       });
     };
 
+    // Helper to analyze the creative and find the best layout
+    const analyzeCreativeLayout = async (base64Str: string, text: string): Promise<LayoutConfig> => {
+       try {
+           const prompt = `You are a world-class graphic designer layout engine.
+Analyze this background image and the text: "${text}".
+Find the best placement for the text and a small logo so they DO NOT cover the main subjects (e.g. faces, products) and are legible.
+
+CRITICAL RULES:
+1. Ensure textPosition and logoPosition DO NOT overlap. (e.g. If text is "top", do not put logo "top-left" or "top-right" unless necessary).
+2. Choose a text alignment ("left", "center", "right") that balances the composition.
+
+Output JSON exactly:
+{"textPosition": "top" | "middle" | "bottom", "textAlign": "left" | "center" | "right", "logoPosition": "top-left" | "top-right" | "bottom-left" | "bottom-right"}`;
+           const base64Data = base64Str.startsWith('data:') ? base64Str.split(',')[1] : base64Str;
+           const mimeType = base64Str.startsWith('data:') ? base64Str.split(';')[0].split(':')[1] : 'image/jpeg';
+           
+           const response = await generateContentProxy("gemini-2.5-flash", [
+               prompt,
+               { inlineData: { data: base64Data, mimeType } }
+           ], {
+               responseMimeType: "application/json",
+               responseSchema: {
+                   type: Type.OBJECT,
+                   properties: {
+                       textPosition: { type: Type.STRING, enum: ["top", "middle", "bottom"] },
+                       textAlign: { type: Type.STRING, enum: ["left", "center", "right"] },
+                       logoPosition: { type: Type.STRING, enum: ["top-left", "top-right", "bottom-left", "bottom-right"] }
+                   },
+                   required: ["textPosition", "textAlign", "logoPosition"]
+               }
+           });
+           
+           if (response && response.text) {
+               try {
+                   const parsed = JSON.parse(response.text);
+                   return parsed as LayoutConfig;
+               } catch (e) {
+                   console.error("Failed to parse layout JSON", e);
+               }
+           }
+       } catch(e) {
+           console.error("Layout analysis failed", e);
+       }
+       return { textPosition: "bottom", textAlign: "left", logoPosition: "bottom-right" };
+    };
+
     const processCustomCreative = async (overlayText: string, targetObj: any, label: string) => {
       try {
+        loggerService.addLog("image", "info", `[Custom Backdrop Overlay: ${label}] Processing template layers...`, `Message: "${overlayText}"`);
         // Pick creative sequentially from shuffled array to avoid repeats
         const creative = creatives[creativeIndex % creatives.length];
         creativeIndex++;
         
-        let finalImage = creative.url;
-        
-        // Convert to base64 by drawing to canvas first (to avoid CORS issues later if possible, but we need CORS to draw it anyway)
-        // We do this inside overlayTextOnCreative
-        finalImage = await overlayTextOnCreative(creative.url, overlayText);
-        
-        if (cachedLogoBase64) {
-          finalImage = await overlayLogo(finalImage, cachedLogoBase64);
+        let base64Creative = creative.url;
+        let useFallback = false;
+        try {
+          if (base64Creative.startsWith('http')) {
+            loggerService.addLog("image", "info", `[Custom Backdrop Overlay: ${label}] Converting remote URL to local base64 proxy...`, base64Creative);
+            base64Creative = await fetchImageAsBase64(base64Creative);
+          }
+        } catch (e: any) {
+             console.warn("Failed to convert creative to base64, falling back to original URL", e);
+             loggerService.addLog("image", "warn", `[Custom Backdrop Overlay: ${label}] URL conversion failed, using fallback mode.`, String(e));
+             useFallback = true;
         }
+
+        if (useFallback) {
+             targetObj.imageUrl = creative.url;
+             return;
+        }
+
+        // Use a highly robust, pre-defined HTML overlay to avoid LLM hallucination and ensure perfect text rendering
+        const customHtml = `
+          <div style="position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 60px; background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0) 100%); color: white; font-family: system-ui, sans-serif;">
+            <h1 style="font-size: 64px; font-weight: 800; line-height: 1.25; margin: 0; text-shadow: 0 4px 12px rgba(0,0,0,0.6); max-width: 900px; padding-bottom: 24px;">${overlayText || ""}</h1>
+          </div>
+        `;
+
+        loggerService.addLog("overlay", "info", `[Offset Layer Analysis: ${label}] Initiating negative-space layout scanning via multimodal Flash...`);
+        const layoutConfig = await analyzeCreativeLayout(base64Creative, overlayText);
+        loggerService.addLog("overlay", "info", `[Offset Layer Analysis: ${label}] Grid layout parsed: Position is ${layoutConfig.textPosition}, Align is ${layoutConfig.textAlign}`);
         
-        // Use 1.0 quality for custom creatives to preserve crispness
-        finalImage = await compressImage(finalImage, 1.0);
+        loggerService.addLog("overlay", "info", `[Puppeteer Overlay: ${label}] Loading page simulation and baking text overlay...`);
+        let finalImage = await flattenVisualData(base64Creative, customHtml, cachedLogoBase64, layoutConfig);
+        
+        // Use 0.95 quality for custom creatives to preserve crispness
+        loggerService.addLog("image", "info", `[Optimizer: ${label}] Custom backdrop composition flattened. Compressing layer bits (0.95 web-safe)...`);
+        finalImage = await compressImage(finalImage, 0.95);
         targetObj.imageUrl = finalImage;
-      } catch (e) {
-        logSilentError(`Failed to process custom creative for ${label}`, { error: e, context: "processCustomCreative" });
+        targetObj.visualType = 'custom-overlay';
+        targetObj.visualData = {
+            baseImage: base64Creative,
+            customHtml: customHtml,
+            layout: layoutConfig
+        };
+        loggerService.addLog("image", "success", `[Custom Backdrop Overlay: ${label}] Visual generation successfully flattened and compressed!`);
+      } catch (e: any) {
+        loggerService.addLog("image", "error", `[Custom Backdrop Overlay: ${label}] Processing failed:`, String(e));
+        logSilentError(`Failed to process custom creative for ${label}`, { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined, context: "processCustomCreative" });
+        // Fallback to the original URL if generation fails entirely
+        if (!targetObj.imageUrl && creatives.length > 0) {
+            targetObj.imageUrl = creatives[(creativeIndex - 1) % creatives.length].url;
+        }
       }
     };
 
     // Helper to generate image
     const generateImage = async (prompt: string, targetObj: any, label: string) => {
       try {
+        loggerService.addLog("image", "info", `[AI Backdrop Generation: ${label}] Submitting graphic description prompt to Imagen AI...`, prompt);
         const imgRes = await generateContentProxy(
           'gemini-3.1-flash-image-preview',
           prompt,
           {
             imageConfig: {
-              imageSize: "1K"
+              imageSize: "1K",
+              aspectRatio: aspectRatio || "1:1"
             }
           }
         );
@@ -754,22 +1332,87 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
         });
 
         const parts = imgRes.candidates?.[0]?.content?.parts || [];
+        loggerService.addLog("image", "info", `[AI Backdrop Generation: ${label}] Imagen AI returned candidates segment. Parsing image parts...`);
+        
         for (const part of parts) {
           if (part.inlineData) {
             let finalImage = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-            if (cachedLogoBase64) {
+            loggerService.addLog("image", "success", `[AI Backdrop Generation: ${label}] Base image generated successfully (${part.inlineData.mimeType || 'image/png'}).`);
+            
+            if (targetObj.visualType && targetObj.visualType !== 'none') {
+              const baseImg = finalImage;
+              let layoutConfig: any = undefined;
+              
+              if (targetObj.visualType === 'custom-overlay' && targetObj.visualData?.customHtml) {
+                const htmlText = targetObj.visualData.customHtml.replace(/<[^>]*>?/gm, '');
+                loggerService.addLog("overlay", "info", `[Overlay Layout Scan: ${label}] Scanning negative space of generated image via multimodal Gemini...`);
+                layoutConfig = await analyzeCreativeLayout(finalImage, htmlText);
+                loggerService.addLog("overlay", "info", `[Overlay Layout Scan: ${label}] Layout mapped. Muted space at: ${layoutConfig.textPosition}, align: ${layoutConfig.textAlign}`);
+                targetObj.visualData = {
+                  ...targetObj.visualData,
+                  layout: layoutConfig
+                };
+              }
+
+              loggerService.addLog("overlay", "info", `[Puppeteer Render: ${label}] Launching headless Puppeteer instance for HTML overlay flattening...`, `Type: ${targetObj.visualType}`);
+              finalImage = await renderVisualToJpegOffscreen(
+                targetObj.visualType,
+                targetObj.visualData,
+                baseImg,
+                dna,
+                dna?.name || "Brand",
+                cachedLogoBase64 || null
+              );
+
+              targetObj.visualData = {
+                 ...targetObj.visualData,
+                 baseImage: baseImg
+              };
+            } else if (cachedLogoBase64) {
+              loggerService.addLog("overlay", "info", `[Logo overlay: ${label}] Applying brand logo onto the center bottom of graphic card...`);
               finalImage = await overlayLogo(finalImage, cachedLogoBase64);
             }
+            
             // Compress the final image to JPEG to drastically reduce file size (from ~3MB to ~400KB)
-            // This prevents Firestore "Write stream exhausted" errors while maintaining high visual quality
+            loggerService.addLog("image", "info", `[Optimizer: ${label}] Visual completed. Running custom JPEG compression pass to optimize storage and loading speed...`);
             finalImage = await compressImage(finalImage, 0.85);
             
             targetObj.imageUrl = finalImage;
+            loggerService.addLog("image", "success", `[AI Backdrop Generation: ${label}] Finished flattening & post-processing.`);
             break;
           }
         }
-      } catch (e) {
-        logSilentError(`Failed to generate image for ${label}`, { error: e, context: "generateCampaignImages" });
+        
+        // If image generation failed to produce candidates
+        if (!targetObj.imageUrl) {
+          loggerService.addLog("image", "error", `[AI Backdrop Generation: ${label}] No valid inline image chunks received from Gemini Imagen payload.`);
+          throw new Error("No candidates returned from image generation.");
+        }
+      } catch (e: any) {
+        loggerService.addLog("image", "error", `[AI Backdrop Generation: ${label}] Error encountered:`, String(e));
+        logSilentError(`Failed to generate image for ${label}`, { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined, context: "generateCampaignImages" });
+        // Fallback placeholder image so rendering doesn't crash to a black screen
+        targetObj.imageUrl = "https://placehold.co/1080x1080/000000/FFFFFF.png?text=Image+Generation+Timeout";
+        
+        // Process through VisualEngine just in case it is custom-overlay
+        if (targetObj.visualType && targetObj.visualType !== 'none') {
+           try {
+              loggerService.addLog("overlay", "warn", `[AI Backdrop Generation: ${label}] Rendering fallback layout on empty background canvas...`);
+              let finalImage = await renderVisualToJpegOffscreen(
+                targetObj.visualType,
+                targetObj.visualData,
+                targetObj.imageUrl,
+                dna,
+                dna?.name || "Brand",
+                cachedLogoBase64 || null
+              );
+              targetObj.imageUrl = finalImage;
+              loggerService.addLog("overlay", "success", `[AI Backdrop Generation: ${label}] Fallback card canvas rendered successfully.`);
+           } catch(renderingErr: any) {
+              loggerService.addLog("overlay", "error", `[AI Backdrop Generation: ${label}] Rendering fallback layout failed:`, String(renderingErr));
+              console.warn("Failed rendering fallback image");
+           }
+        }
       }
     };
 
@@ -782,42 +1425,313 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
       }
     });
 
-    // Generate images for daily posts
+        // Generate images for daily posts
     if (campaign.dailyPosts) {
       campaign.dailyPosts.forEach((dp: any) => {
-        if (generateImages && dp.imagePrompt) {
+        // Enforce a visualType if generateImages is true
+        if (generateImages && !dp.visualType) {
+           dp.visualType = "custom-overlay";
+        }
+        const lowerVisType = dp.visualType ? String(dp.visualType).toLowerCase() : "";
+        if (generateImages && ['creative-story', 'abstract-announcement', 'custom-overlay'].includes(lowerVisType)) {
           imageTasks.push(async () => {
-            await generateImage(dp.imagePrompt, dp, `daily post ${dp.day}`);
-            // Assign the same image to all platform versions for this day
+            // Use cinematicPrompt
+            const cinematicPrompt = dp.visualData?.cinematicPrompt || dp.imagePrompt || `Cinematic editorial photography representing ${focus}, high quality, vast negative space`;
+            await generateImage(cinematicPrompt, dp, `daily post ${dp.day}`);
             if (dp.imageUrl && dp.platformVersions) {
-              dp.platformVersions.forEach((pv: any) => {
-                pv.imageUrl = dp.imageUrl;
-              });
+              dp.platformVersions.forEach((pv: any) => { pv.imageUrl = dp.imageUrl; });
             }
           });
         } else if (useCreatives && dp.overlayText) {
           imageTasks.push(async () => {
             await processCustomCreative(dp.overlayText, dp, `daily post ${dp.day}`);
             if (dp.imageUrl && dp.platformVersions) {
-              dp.platformVersions.forEach((pv: any) => {
-                pv.imageUrl = dp.imageUrl;
-              });
+              dp.platformVersions.forEach((pv: any) => { pv.imageUrl = dp.imageUrl; });
             }
           });
         }
       });
     }
 
-    // Process in batches of 2 to avoid 429 Resource Exhausted
-    const batchSize = 2;
-    for (let i = 0; i < imageTasks.length; i += batchSize) {
-      const batch = imageTasks.slice(i, i + batchSize);
-      await Promise.all(batch.map(task => task()));
-      if (i + batchSize < imageTasks.length) {
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay between batches
+    // Renders should run concurrently (all visuals fire at once), Cloud Function handles concurrency limits.
+    const totalTasks = imageTasks.length;
+    let completedTasks = 0;
+    
+    if (onProgress && totalTasks > 0) {
+      onProgress(3, 4, `Rendering 0 of ${totalTasks} visuals...`);
+    }
+
+    for (let i = 0; i < imageTasks.length; i++) {
+        await imageTasks[i]();
+        completedTasks++;
+        if (onProgress) {
+            onProgress(3, 4, `Rendering ${completedTasks} of ${totalTasks} visuals...`);
+        }
+        
+      if (i < imageTasks.length - 1) {
+        await new Promise(r => setTimeout(r, 1500));
       }
     }
   }
 
   return campaign;
 }
+
+export async function generateOneDayStoryImage(params: {
+  businessName: string;
+  aboutBusiness: string;
+  phone: string;
+  address: string;
+  dnaUrl?: string;
+  userId?: string;
+  backgroundImage?: string;
+}): Promise<{ imageUrl: string; visualType: string; visualData: any }> {
+  loggerService.addLog("whatsapp", "info", `Initializing 1-Day Story Creative Generator background worker...`, 
+    `Business: "${params.businessName}"\nDetails: "${params.aboutBusiness}"\nPhone: "${params.phone}"\nAddress: "${params.address}"\nHas Attached Backdrop: ${!!params.backgroundImage}`
+  );
+  try {
+    let baseImageBase64 = params.backgroundImage || "";
+    let analyzedCustomHtml = "";
+    let analyzedLayout: any = {
+      textPosition: "bottom",
+      logoPosition: "top-right"
+    };
+    let editorStateResult: any = null;
+
+    if (!baseImageBase64) {
+      loggerService.addLog("image", "info", `Step 1: Planning backdrop scenery theme via Gemini Flash Creative Director...`);
+      // 1. Generate an optimized visual prompt using a high-fidelity prompt planner (gemini-2.5-flash)
+      const promptPlanner = `You are an elite creative director. Create a highly professional, detailed, and atmospheric descriptive photography prompt for an AI image generator.
+The business name is: "${params.businessName}"
+About the business/context: "${params.aboutBusiness}"
+Style guidelines: Cinematic editorial photography representing this business category.
+IMPORTANT: The prompt must instruct the generator to produce a stunning, clean background photo with dramatic, warm or cinematic lighting and VAST empty negative space (such as on the left, right, or top) designed specifically for overlaying crisp text.
+CRITICAL Rules:
+- DO NOT generate any text, labels, watermarks, signs, storefront names or letters in the image itself.
+- Ensure the scene is modern, premium, and evocative.
+Return ONLY the description prompt text, with no wrappers, no conversational text, and no markdown. Just the direct prompt.`;
+
+      const promptResponse = await generateContentProxy("gemini-2.5-flash", promptPlanner);
+      const imagePrompt = promptResponse.text?.trim() || `Cinematic editorial photography representing ${params.businessName}, high quality, vast negative space for text overlay`;
+      loggerService.addLog("image", "info", `Step 1 complete: Backdrop prompt planned beautifully:`, imagePrompt);
+
+      // 2. Drive the generation engine to create the high-res 1K base image
+      loggerService.addLog("image", "info", `Step 2: Submitting planned backdrop prompt to Imagen AI text-to-photo generator...`);
+      const imgRes = await generateContentProxy(
+        'gemini-3.1-flash-image-preview',
+        imagePrompt,
+        {
+          imageConfig: {
+            imageSize: "1K",
+            aspectRatio: "1:1"
+          }
+        }
+      );
+
+      // Track usage (1 image generated)
+      if (params.userId) {
+        await logTokenUsage(params.userId, "generateOneDayStoryImage", "gemini-3.1-flash-image-preview", {
+          promptTokenCount: 0,
+          candidatesTokenCount: 0,
+          totalTokenCount: 1
+        }).catch(console.error);
+      }
+
+      const parts = imgRes.candidates?.[0]?.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData) {
+          baseImageBase64 = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+          loggerService.addLog("image", "success", `Step 2 complete: High-res background image successfully generated.`);
+          break;
+        }
+      }
+    } else {
+      // Direct text/graphic layout placement: Skip multimodal backdrop content analysis as requested
+      loggerService.addLog("image", "info", `Step 1 (Custom Backdrop): Skipping multimodal content analysis for maximum safety & speed.`);
+      analyzedLayout = {
+        textPosition: "bottom",
+        logoPosition: "top-right"
+      };
+      editorStateResult = {
+        baseBg: baseImageBase64,
+        scrimHeight: 75,
+        scrimOpacity: 0.85,
+        scrimColor: "#000000",
+        title: params.businessName,
+        subtitle: params.aboutBusiness,
+        titleSize: 64,
+        fontFamily: "'Inter', system-ui, sans-serif"
+      };
+    }
+
+    if (!baseImageBase64) {
+      loggerService.addLog("image", "error", "Step 2: Failed to obtain or render base canvas profile.");
+      throw new Error("Failed to generate or load background creative image.");
+    }
+
+    // 3. Compose a clean HTML story layout that overlays details beautifully in premium styling (if we don't have analyzedHtml)
+    const customHtml = analyzedCustomHtml || `
+      <div style="position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 60px; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0) 100%), linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 30%); color: white; font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box; width: 1080px; height: 1080px;">
+        
+        <!-- Top header badge bar -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+          <div style="background: rgba(16, 185, 129, 0.2); backdrop-filter: blur(12px); border: 1px solid rgba(16, 185, 129, 0.4); padding: 10px 24px; border-radius: 50px; font-size: 16px; font-weight: 700; color: #10B981; text-transform: uppercase; letter-spacing: 0.12em;">
+            ⭐ Verified Premium
+          </div>
+        </div>
+
+        <!-- Bottom context info and branding layers -->
+        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
+          <div>
+            <h1 style="font-size: 72px; font-weight: 900; line-height: 1.15; margin: 0; text-shadow: 0 4px 15px rgba(0,0,0,0.85); max-width: 900px; color: #FFFFFF; font-family: system-ui, sans-serif; letter-spacing: -0.02em;">
+              \${params.businessName}
+            </h1>
+            <p style="font-size: 26px; font-weight: 400; line-height: 1.45; color: #E2E8F0; margin: 15px 0 0 0; text-shadow: 0 2px 8px rgba(0,0,0,0.8); max-width: 850px; letter-spacing: -0.01em;">
+              "\${params.aboutBusiness}"
+            </p>
+          </div>
+
+          <!-- Phone and Physical Location Contact Footer Box -->
+          <div style="display: flex; flex-wrap: wrap; gap: 24px; margin-top: 15px; padding: 20px 30px; background: rgba(0,0,0,0.65); backdrop-filter: blur(20px); border-radius: 20px; border: 1px solid rgba(255,255,255,0.12); width: fit-content; max-width: 960px;">
+            \${params.address ? \`
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 500; color: #E2E8F0;">
+              <span style="font-size: 24px;">📍</span> \${params.address}
+            </div>
+            \` : ''}
+            \${params.phone ? \`
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 500; color: #E2E8F0;">
+              <span style="font-size: 24px;">📞</span> \${params.phone}
+            </div>
+            \` : ''}
+          </div>
+        </div>
+      </div>
+    `.replace(/\${params\.businessName}/g, params.businessName)
+     .replace(/\${params\.aboutBusiness}/g, params.aboutBusiness)
+     .replace(/\${params\.address}/g, params.address || "")
+     .replace(/\${params\.phone}/g, params.phone || "");
+
+    const visualData = {
+      headline: params.businessName,
+      subtext: params.aboutBusiness,
+      customHtml: customHtml,
+      layout: analyzedLayout,
+      editorState: editorStateResult || {
+        baseBg: baseImageBase64,
+        scrimHeight: 80,
+        scrimOpacity: 0.85,
+        scrimColor: "#000000",
+        title: params.businessName,
+        subtitle: params.aboutBusiness,
+        titleSize: 72,
+        fontFamily: "'Inter', system-ui, sans-serif",
+        customHtml: customHtml
+      }
+    };
+
+    // 4. Render and flatten to the pixel-perfect final JPEG
+    loggerService.addLog("overlay", "info", "Step 3: Compiling layout vector structures and launching offscreen Puppeteer renderer...");
+    const renderedImage = await renderVisualToJpegOffscreen(
+      'custom-overlay',
+      visualData,
+      baseImageBase64,
+      null,
+      params.businessName,
+      params.dnaUrl || null
+    );
+
+    loggerService.addLog("whatsapp", "success", "Step 4: Offscreen canvas flatten complete! 1-Day story creative loaded successfully.");
+    return {
+      imageUrl: renderedImage,
+      visualType: 'custom-overlay',
+      visualData
+    };
+  } catch (error: any) {
+    loggerService.addLog("whatsapp", "error", "CRITICAL: Story graphic generation worker failed.", String(error));
+    console.error("Error generating one day story image:", error);
+    throw error;
+  }
+}
+
+const founderAgentSchema = {
+  type: Type.OBJECT,
+  properties: {
+    personaName: { type: Type.STRING, description: "A creative name for this founder agent/doppelganger, e.g., 'Agent Smith', 'The Maverick Creator'" },
+    behavioralTraits: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "List of 4-6 behavioral & personality traits describing how the founder behaves, acts, and approaches work."
+    },
+    communicationStyle: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "List of 4-6 style attributes defining how the founder speaks, writes, and communicates (e.g., direct, no jargon, uses bullet points)."
+    },
+    coreValues: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "List of 4-6 core values and feelings that drive the founder's decisions and campaign inputs."
+    },
+    decisionHeuristics: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "List of 4-6 actionable rules of thumb the founder uses to make decisions or handle operations."
+    }
+  },
+  required: ["personaName", "behavioralTraits", "communicationStyle", "coreValues", "decisionHeuristics"]
+};
+
+export async function synthesizeFounderAgent(
+  description: string,
+  document: { data: string, mimeType: string } | null,
+  userId?: string
+): Promise<any> {
+  const contents: any[] = [];
+  
+  let prompt = `You are a world-class cognitive profiler and executive strategist.
+Analyze the following input about a founder's personal behavior, actions, activities, feelings, and real-life approach.
+Your goal is to synthesize this input to construct a "Founder Agent" (a digital doppelganger) that can act, write, and think like this founder in the future.
+`;
+
+  if (description) {
+    prompt += `\nDescription of the Founder's voice/behavior:\n"${description}"\n`;
+  }
+  
+  if (document) {
+    prompt += `\nI have also provided an attached document with background info about the founder's behavior or writings. Please analyze it.\n`;
+  }
+  
+  prompt += `\nExtract the personality traits, core values, communication style, and key decision heuristics to build a structured profile.`;
+  
+  contents.push({ text: prompt });
+  
+  if (document) {
+    contents.push({
+      inlineData: {
+        data: document.data,
+        mimeType: document.mimeType
+      }
+    });
+  }
+  
+  const response = await generateContentProxy(
+    "gemini-3.1-pro-preview",
+    contents,
+    {
+      responseMimeType: "application/json",
+      responseSchema: founderAgentSchema
+    }
+  );
+  
+  if (response.usageMetadata && userId) {
+    await logTokenUsage(userId, "synthesizeFounderAgent", "gemini-3.1-pro-preview", response.usageMetadata);
+  }
+  
+  const text = response.text;
+  if (!text) {
+    throw new Error("Failed to synthesize Founder Agent");
+  }
+  
+  return JSON.parse(text);
+}
+

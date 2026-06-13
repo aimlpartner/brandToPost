@@ -115,12 +115,15 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'createdAt']) &&
-             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
-             data.email is string && isValidEmail(data.email) && data.email.size() < 256 &&
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'name', 'role', 'onboarded']) &&
+             (!('uid' in data) || (data.uid is string && data.uid.size() > 0 && data.uid.size() < 128)) &&
+             (!('email' in data) || (data.email is string && isValidEmail(data.email) && data.email.size() < 256)) &&
              (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
              (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 2048)) &&
-             (!('createdAt' in data) || data.createdAt is timestamp);
+             (!('createdAt' in data) || data.createdAt is string || data.createdAt is timestamp) &&
+             (!('name' in data) || (data.name is string && data.name.size() < 256)) &&
+             (!('role' in data) || (data.role is string && data.role.size() < 100)) &&
+             (!('onboarded' in data) || data.onboarded is bool);
     }
 
     function isValidProduct(data) {
@@ -196,6 +199,12 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow read: if isAdmin();
       allow update, delete: if false;
+    }
+
+    match /generation_logs/{logId} {
+      allow create: if true; // Allow diagnostic logging
+      allow read: if true; // Allow real-time log rendering
+      allow update, delete: if false; // Prevent log tampering
     }
 
     // Server-only collections (accessed via firebase-admin)

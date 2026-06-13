@@ -68,6 +68,21 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "userId", "productId", "theme"]
+    },
+    "GenerationLog": {
+      "title": "GenerationLog",
+      "description": "A fine-grained step log during campaign generation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "section": { "type": "string" },
+        "level": { "type": "string" },
+        "message": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "section", "level", "message", "timestamp"]
     }
   },
   "firestore": {
@@ -88,6 +103,12 @@
         "$ref": "#/entities/Campaign"
       },
       "description": "Stores generated campaigns"
+    },
+    "generation_logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/GenerationLog"
+      },
+      "description": "Stores user diagnostic generation logs"
     }
   }
 }

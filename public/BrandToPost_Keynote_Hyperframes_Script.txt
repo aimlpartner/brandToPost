@@ -1,0 +1,96 @@
+========================================================================
+       BRANDTOPOST: KEYNOTE / LINEAR-STYLE HYPERFRAMES SCRIPT
+========================================================================
+Target Length: 90 Seconds
+Style: Premium Startup (Stripe/Linear/Apple Keynote)
+Core Ethos: "Show, don't tell." Extreme minimalism, high contrast, typography-led. 
+Vibe: Deep focus, engineered luxury, zero-friction. 
+
+========================================================================
+▶ ANIMATION RULES (For Hyperframes / GSAP instructions):
+========================================================================
+1. NO GENERIC FADES. Elements do not simply fade in (opacity: 0 to 1). 
+2. USE TEXT MASKING: All text must be inside an `overflow: hidden` wrapper. The text translates from `y: 100%` up to `y: 0%` using `ease: "power4.out"`. This creates the signature "reveal from nothing" Apple effect.
+3. MOTION PHYSICS: Use tight, premium easing. `expo.out` for fast, snappy slides. `power3.inOut` for fluid, deliberate camera pans. 
+4. UI DEPTH: No flat UI. Mockups must have `transformPerspective` applied, using subtle 3D rotations (e.g., `rotateX: 10`, `rotateY: -15`). Show the layers.
+5. LIGHTING: Use CSS radial-gradients to create subtle spotlights tracking across dark backgrounds. 
+
+========================================================================
+🎨 DESIGN SYSTEM
+========================================================================
+Backgrounds: Void Black (#0A0A0F) and dark glassmorphism.
+Typography: "Outfit" (Headings), "Inter" (UI details). Both strictly white (#FFFFFF) or muted gray (#A1A1AA).
+Accents: Brand Purple (#7C3AED) used strictly for glowing highlights, and Brand Green (#18F07A) for completion states.
+
+========================================================================
+🎬 SCRIPT & SCENE DIRECTIVES
+========================================================================
+
+--- SCENE 1: THE VOID (0:00 - 0:10) ---
+Visual: Pitch black. Silent. 
+Motion: A single horizontal 1px line of light (#7C3AED) traces across the screen from left to right. It expands vertically into a completely blurred, frosted glass rectangle.
+Text Reveals (Masked Y-translation, perfectly staggered):
+"Creative production"
+"is broken."
+
+--- SCENE 2: THE FRICTION (0:10 - 0:22) ---
+Visual: The glass rectangle fractures. We see beautifully rendered Pill-shapes (representing tools) floating in an isometric 3D grid. 
+Text on Pills: "Briefs", "Slack", "Figma", "Spreadsheets".
+Motion: They slide against each other clumsily, creating "friction" (subtle shake animations). 
+Text Reveals (Minimal & Sharp):
+"Too many tools." (Pause)
+"Too much noise." (Pause)
+
+--- SCENE 3: THE PARADIGM SHIFT (0:22 - 0:35) ---
+Visual: The noisy pills are instantly sucked into a singularity at the center of the screen. Absolute silence. 
+Motion: A pulse of deep purple/blue gradient light expands from the center. Out of it, the BrandToPost 'B' logo reconstructs itself piece by piece using slow, elegant spring physics (`back.out(1.2)`).
+Text Reveals (Massive Outfit Font): 
+"BrandToPost."
+"Your Enterprise AI Creative Studio."
+
+--- SCENE 4: 1. PRODUCT DNA (0:35 - 0:48) ---
+Visual: The environment shifts to a sleek, 3D diagonal isometric view. A translucent dashboard softly slides up from the bottom edge.
+Text Reveals: "Step 1: Product DNA."
+Motion: We see lines of code/data rapidly typing out natively inside the Glass Card. 
+Lines appearing: 
+> Target ICP: Tech CMOs
+> Enemy: Wasted Spend
+> Tone: Visionary
+> Hex: #7C3AED
+Concept: The visual proves that the AI actually understands the core brand strategy before generating anything.
+
+--- SCENE 5: 2. CAMPAIGN MATRICES (0:48 - 0:58) ---
+Visual: The single DNA card snaps backward in Z-space and multiplies exponentially. 
+Motion: 7 glowing cards fan out gracefully like a deck of premium playing cards. 
+Text Reveals: "Step 2: 7-Day Campaign Matrices."
+Subtext: "Zero prompts. Perfect strategy."
+Visual Detail: Small icons inside the cards light up dynamically—LinkedIn, X, Instagram—showing cross-platform tailoring.
+
+--- SCENE 6: 3. THE STUDIO ENGINE (0:58 - 0:75) ---
+Visual: The cards clear. A raw photograph of a product (e.g., a headphone) drops into the center. 
+Text Reveals: "Step 3: Studio Production."
+Motion Sequence (THE 'WOW' FACTOR):
+1. A crisp, glowing #18F07A (Green) laser line sweeps down the image. 
+2. The messy background is instantly wiped to a pure transparent alpha grid. 
+3. The background seamlessly morphs into an ultra-luxurious, dark 3D environment.
+4. Typography (in the BrandToPost Outfit font) slides forcefully into place over the image, perfectly aligned. 
+Text Reveals: "Automated extraction." "AI environments." "Brand-locked overlays."
+
+--- SCENE 7: THE FLIGHT PATH (0:75 - 0:83) ---
+Visual: Zoom out to macro level. We see the finished creative locked behind a glass card.
+Text Reveals: "Step 4: Review & Deploy."
+Motion: The card shrinks slightly. A UI cursor appears, clicks an "Approve" button. 
+Data streams (beautiful glowing lines) shoot out from the card connecting to nodes labeled by social networks. 
+
+--- SCENE 8: THE FINALE (0:83 - 0:90) ---
+Visual: Everything collapses back into the sheer, pitch-black void.
+Text reveals in massive pure white typography:
+"An elite creative agency."
+"Inside one intelligent agent."
+
+Motion: The BrandToPost Logo pulses once softly in the center. 
+Below it, a perfectly manicured 1px border button fades up smoothly:
+"[ Experience BrandToPost ]"
+
+(Fade to black)
+========================================================================

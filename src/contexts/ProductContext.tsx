@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { db } from '../firebase';
 import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType, logSilentError } from '../lib/firestore-error';
+import { AppSkeleton } from '../components/AppSkeleton';
 
 interface ProductContextType {
   products: ProductDNA[];
@@ -12,12 +13,13 @@ interface ProductContextType {
   addProduct: (name: string) => void;
   updateProduct: (id: string, data: Partial<ProductDNA>) => void;
   deleteProduct: (id: string) => void;
+  isLoaded: boolean;
 }
 
 export const ProductContext = createContext<ProductContextType | null>(null);
 
 export function ProductProvider({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, userProfile } = useAuth();
   const [products, setProducts] = useState<ProductDNA[]>([]);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -79,9 +81,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
             localStorage.removeItem('products'); // Clean up invalid data
           }
         } else {
-          // Create default product
+          // Always create a default product for new users so that onboarding/setup has a valid active product target
           const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
-          const defaultProduct: ProductDNA = { id: newId, userId: user.uid, name: 'My Product', website: '', positioning: '', audience: '', tone: '', stage: '', visualStyle: '' };
+          const defaultProduct: ProductDNA = { id: newId, userId: user.uid, name: 'My Product', website: '', positioning: '', audience: '', tone: '', stage: 'Early Growth', visualStyle: '' };
           try {
             await setDoc(doc(db, 'products', newId), defaultProduct);
           } catch (error) {
@@ -107,7 +109,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [user, loading]);
+  }, [user, loading, userProfile]);
 
   const addProduct = async (name: string) => {
     const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
@@ -205,7 +207,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
 
   const activeProduct = products.find(p => p.id === activeProductId) || null;
 
-  if (!isLoaded) return null;
+  if (!isLoaded) return <AppSkeleton />;
 
   return (
     <ProductContext.Provider value={{ 
@@ -217,7 +219,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       }, 
       addProduct, 
       updateProduct, 
-      deleteProduct 
+      deleteProduct,
+      isLoaded 
     }}>
       {children}
     </ProductContext.Provider>

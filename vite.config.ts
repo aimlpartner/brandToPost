@@ -12,19 +12,22 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        includeAssets: ['icon.png'],
+        workbox: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
+        },
         manifest: {
           name: 'BrandToPost',
           short_name: 'BrandToPost',
           description: 'Turn your Brand Position into weekly, platform-specific campaigns.',
-          theme_color: '#FFBFA8',
-          background_color: '#ffffff',
+          theme_color: '#0A0A0F',
+          background_color: '#0A0A0F',
           display: 'standalone',
           icons: [
             {
-              src: 'icon.svg',
+              src: 'icon.png',
               sizes: '192x192 512x512',
-              type: 'image/svg+xml',
+              type: 'image/png',
               purpose: 'any maskable'
             }
           ]
@@ -43,9 +46,6 @@ export default defineConfig(({mode}) => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-    },
-    build: {
-      chunkSizeWarningLimit: 900,
     },
   };
 });
