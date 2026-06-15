@@ -3,6 +3,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import fs from 'fs/promises';
 import nodemailer from 'nodemailer';
 import { GoogleGenAI, Type } from '@google/genai';
 import admin from 'firebase-admin';
@@ -67,7 +68,37 @@ async function logBackendTokenUsage(userId: string | undefined, operationType: s
     });
     console.log(`[Token Usage Logged] ${operationType} (${model}): ${totalTokenCount} tokens`);
   } catch (error) {
-    console.error("[logBackendTokenUsage Error]", error);
+    console.error('[Token Usage Logged Error]', error);
+  }
+}
+
+async function saveImageLocalAndDb(imageId: string, base64Data: string, mimeType: string, prompt: string) {
+  let dbSuccess = false;
+  if (db) {
+    try {
+      await db.collection('whatsapp_images').doc(imageId).set({
+        base64Data,
+        mimeType,
+        prompt: prompt || "",
+        createdAt: new Date().toISOString()
+      });
+      dbSuccess = true;
+      console.log(`[saveImageLocalAndDb] Image ${imageId} successfully saved to Firestore.`);
+    } catch (dbErr: any) {
+      console.warn(`[saveImageLocalAndDb] Firestore save failed for ${imageId} (likely size limit): ${dbErr.message}`);
+    }
+  }
+
+  try {
+    const dirPath = path.join(process.cwd(), 'public', 'whatsapp_images');
+    await fs.mkdir(dirPath, { recursive: true });
+    await fs.writeFile(path.join(dirPath, `${imageId}.png`), Buffer.from(base64Data, 'base64'));
+    console.log(`[saveImageLocalAndDb] Image ${imageId} successfully saved to local disk: public/whatsapp_images/${imageId}.png`);
+  } catch (fsErr: any) {
+    console.error(`[saveImageLocalAndDb] Local filesystem save failed for ${imageId}:`, fsErr);
+    if (!dbSuccess) {
+      throw new Error(`Failed to save image ${imageId} to both Firestore and local disk: ${fsErr.message}`);
+    }
   }
 }
 
@@ -851,7 +882,7 @@ Return the result in a JSON object with the following fields:
       const imgRes = await ai.models.generateContent({
         model: 'gemini-3.1-flash-image-preview',
         contents: { parts: [{ text: blogData.blogImagePrompt }] },
-        config: { imageConfig: { aspectRatio: "16:9" } }
+        config: { imageConfig: { aspectRatio: "16:9", imageSize: "1K" } }
       });
 
       await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_image", "gemini-3.1-flash-image-preview", {
@@ -867,22 +898,27 @@ Return the result in a JSON object with the following fields:
             const mimeType = pt.inlineData.mimeType || 'image/png';
             
             const imageId = 'img_blog_' + Math.random().toString(36).substring(2, 10);
-            await db.collection('whatsapp_images').doc(imageId).set({
-              base64Data,
-              mimeType,
-              prompt: blogData.blogImagePrompt,
-              createdAt: new Date().toISOString()
-            });
+            
+            await saveImageLocalAndDb(imageId, base64Data, mimeType, blogData.blogImagePrompt);
 
-            const host = process.env.APP_URL || "https://b2p-prod.up.railway.app";
-            blogImageUrl = `${host.replace(/\/$/, '')}/api/whatsapp/images/${imageId}.png`;
-            console.log(`[executeAutoDailyBlogGeneration] Blog image successfully served at: ${blogImageUrl}`);
+            // Use relative path so the frontend resolves it correctly against the active origin
+            blogImageUrl = `/api/whatsapp/images/${imageId}.png`;
+            console.log(`[executeAutoDailyBlogGeneration] Blog image successfully served relative at: ${blogImageUrl}`);
             break;
           }
         }
       }
     } catch (eImg: any) {
       console.warn('[executeAutoDailyBlogGeneration Image Gen Failed]', eImg);
+      if (db) {
+        db.collection('error_logs').add({
+          error: eImg instanceof Error ? eImg.message : String(eImg),
+          stack: eImg instanceof Error ? eImg.stack : null,
+          context: { context: "executeAutoDailyBlogGeneration_ImageGen", prompt: blogData.blogImagePrompt },
+          timestamp: new Date().toISOString(),
+          type: 'daily_blog_image_error'
+        }).catch(err => console.error("Failed to log image gen error to db", err));
+      }
     }
   }
 
@@ -3028,10 +3064,23 @@ ${htmlContent}
     });
   });
 
-  // --- Public Route to Serve Generated WhatsApp Images ---
   app.get('/api/whatsapp/images/:imageId.png', async (req, res) => {
     try {
       const { imageId } = req.params;
+      
+      // Try serving from local disk first
+      try {
+        const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
+        const buffer = await fs.readFile(localPath);
+        res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Content-Length': buffer.length
+        });
+        return res.end(buffer);
+      } catch (err) {
+        // Not found locally or read error, fallback to Firestore
+      }
+
       if (!db) {
         return res.status(404).send('Database not initialized');
       }
@@ -3358,12 +3407,7 @@ ${htmlContent}
                 mimeType = message.image.mime_type || mimeType;
                 if (db) {
                   const assetId = 'asset_' + Math.random().toString(36).substring(2, 10);
-                  await db.collection('whatsapp_images').doc(assetId).set({
-                    base64Data: base64Data,
-                    mimeType: mimeType,
-                    prompt: `Uploaded via Chat Sandbox by ${from}`,
-                    createdAt: new Date().toISOString()
-                  });
+                  await saveImageLocalAndDb(assetId, base64Data, mimeType, `Uploaded via Chat Sandbox by ${from}`);
 
                   const host = req.get('host');
                   const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
@@ -3394,12 +3438,7 @@ ${htmlContent}
                         // Store image locally so dashboard/posts can serve it back directly
                         if (db) {
                           const assetId = 'asset_' + Math.random().toString(36).substring(2, 10);
-                          await db.collection('whatsapp_images').doc(assetId).set({
-                            base64Data: base64Data,
-                            mimeType: mimeType,
-                            prompt: `Uploaded via WhatsApp by ${from}`,
-                            createdAt: new Date().toISOString()
-                          });
+                          await saveImageLocalAndDb(assetId, base64Data, mimeType, `Uploaded via WhatsApp by ${from}`);
 
                           const host = req.get('host');
                           const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
@@ -3949,12 +3988,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
                   try {
                     addLog("Saving branded story flyer to database...");
                     const outImageId = 'img_' + Math.random().toString(36).substring(2, 10);
-                    await db.collection('whatsapp_images').doc(outImageId).set({
-                      base64Data: base64ToSave,
-                      mimeType: mimeToSave,
-                      prompt: imagePrompt || "",
-                      createdAt: new Date().toISOString()
-                    });
+                    await saveImageLocalAndDb(outImageId, base64ToSave, mimeToSave, imagePrompt || "");
 
                     const host = req.get('host');
                     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
