@@ -19,6 +19,15 @@
   --color-glass-border: rgba(124, 58, 237, 0.15);
   --color-glass-shadow: rgba(124, 58, 237, 0.08);
 
+  /* Reduced Global Border Radius Theme variables */
+  --radius-3xl: 12px;
+  --radius-2xl: 8px;
+  --radius-xl: 6px;
+  --radius-lg: 4px;
+  --radius-md: 3px;
+  --radius-sm: 2px;
+  --radius-default: 4px;
+
   --animate-gradient-x: gradient-x 15s ease infinite;
   --animate-marquee: marquee 25s linear infinite;
   --animate-shimmer: shimmer 2s linear infinite;
@@ -81,7 +90,7 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(255, 255, 255, 0.65);
   border: 1px solid rgba(124, 58, 237, 0.12);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03), inset 0 0 20px rgba(124, 58, 237, 0.01);
-  border-radius: 16px;
+  border-radius: 8px;
   backdrop-filter: blur(16px);
 }
 
@@ -89,7 +98,7 @@ h1, h2, h3, h4, h5, h6 {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.45) 100%);
   border: 1px solid rgba(124, 58, 237, 0.12);
   box-shadow: 0 4px 20px -5px rgba(124, 58, 237, 0.03);
-  border-radius: 12px;
+  border-radius: 6px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(12px);
 }
@@ -138,7 +147,7 @@ h1, h2, h3, h4, h5, h6 {
 .glass-input {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(124, 58, 237, 0.22);
-  border-radius: 8px;
+  border-radius: 4px;
   transition: all 0.3s ease;
   color: #111827;
   width: 100%;
