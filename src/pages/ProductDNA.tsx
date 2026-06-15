@@ -253,11 +253,17 @@ export function ProductDNA() {
     if (!activeProduct) return;
     setIsSaving(true);
     // Simulate API call
-    setTimeout(() => {
-      updateProduct(activeProduct.id, dna);
-      setIsSaving(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+    setTimeout(async () => {
+      try {
+        await updateProduct(activeProduct.id, dna);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } catch (err) {
+        logSilentError(err as Error, { context: "handleSubmitProductDNA" });
+        setError("Failed to save product DNA. Please try again.");
+      } finally {
+        setIsSaving(false);
+      }
     }, 600);
   };
 
@@ -437,7 +443,7 @@ export function ProductDNA() {
       delete (newDna as any).extractedMediaImages;
 
       setDna(newDna);
-      updateProduct(activeProduct.id, newDna);
+      await updateProduct(activeProduct.id, newDna);
       setExtractionComplete(true);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -572,13 +578,11 @@ export function ProductDNA() {
       };
 
       setDna(updatedDna);
-      updateProduct(activeProduct.id, updatedDna);
+      await updateProduct(activeProduct.id, updatedDna);
 
-      setTimeout(() => {
-        setIsSynthesizing(false);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
-      }, 1200);
+      setIsSynthesizing(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
 
     } catch (err) {
       logSilentError(err as Error, { context: "handleSynthesizeFounderAgent" });

@@ -221,7 +221,7 @@ export function Campaigns() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [currentPage, setCurrentPage] = useState(1);
-  const [campaignTypeFilter, setCampaignTypeFilter] = useState<"weekly" | "oneday">("weekly");
+  const [campaignTypeFilter, setCampaignTypeFilter] = useState<"weekly" | "oneday" | "blogs">("weekly");
 
   // Reset page when filters or product changes
   useEffect(() => {
@@ -498,8 +498,14 @@ export function Campaigns() {
   const filteredCampaigns = campaigns
     .filter((c) => {
       const isOneDay = c.isOneDay === true;
-      if (campaignTypeFilter === "weekly" && isOneDay) return false;
-      if (campaignTypeFilter === "oneday" && !isOneDay) return false;
+      const isBlog = c.isBlog === true;
+      if (campaignTypeFilter === "blogs") {
+        if (!isBlog) return false;
+      } else if (campaignTypeFilter === "oneday") {
+        if (!isOneDay || isBlog) return false;
+      } else {
+        if (isOneDay || isBlog) return false;
+      }
 
       if (selectedTagFilter && (!c.tags || !c.tags.includes(selectedTagFilter)))
         return false;
@@ -887,7 +893,14 @@ export function Campaigns() {
       const typeFiltered = campaigns.filter((c) => {
         if (c.productId !== activeProduct.id) return false;
         const isOneDay = c.isOneDay === true;
-        return campaignTypeFilter === "weekly" ? !isOneDay : isOneDay;
+        const isBlog = c.isBlog === true;
+        if (campaignTypeFilter === "blogs") {
+          return isBlog;
+        } else if (campaignTypeFilter === "oneday") {
+          return isOneDay && !isBlog;
+        } else {
+          return !isOneDay && !isBlog;
+        }
       });
 
       if (typeFiltered.length > 0) {
@@ -1798,7 +1811,7 @@ export function Campaigns() {
           </div>
         </div>
 
-        {/* View Switcher for Weekly Campaigns vs 1-Day Posts */}
+        {/* View Switcher for Weekly Campaigns vs 1-Day Posts vs Blogs */}
         <div className="flex bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 shadow-sm shrink-0">
           <button
             onClick={() => setCampaignTypeFilter("weekly")}
@@ -1821,6 +1834,17 @@ export function Campaigns() {
             )}
           >
             1-Day Posts
+          </button>
+          <button
+            onClick={() => setCampaignTypeFilter("blogs")}
+            className={cn(
+              "flex-1 text-center py-2 rounded-lg text-xs font-semibold transition-all duration-200",
+              campaignTypeFilter === "blogs"
+                ? "bg-white text-violet-600 shadow-sm font-bold border border-slate-200/30"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            Blogs & Newsletters
           </button>
         </div>
 
@@ -2096,6 +2120,11 @@ export function Campaigns() {
                 <span className="inline-flex items-center rounded-lg bg-slate-50 border border-slate-200/50 px-2.5 py-1 text-xs font-semibold text-slate-600">
                   {selectedCampaign.contentFormat}
                 </span>
+                {selectedCampaign.isBlog && (
+                  <span className="inline-flex items-center rounded-lg bg-emerald-50 border border-emerald-250 px-2.5 py-1 text-xs font-bold text-emerald-700 shadow-sm">
+                    Blog & Newsletter
+                  </span>
+                )}
                 <div className="flex-1 hidden sm:block" />
                 <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 justify-end">
                   <button
@@ -2343,67 +2372,131 @@ export function Campaigns() {
             )}
 
             <div className="pt-8 border-t border-slate-205">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-4 sm:px-0">
-                <div className="flex items-center gap-2">
-                  <Layers className="h-5 w-5 text-slate-400" />
-                  <h3 className="text-lg font-semibold text-slate-800 font-display">
-                    Platform Execution
-                  </h3>
-                </div>
+              {!selectedCampaign.isBlog && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-4 sm:px-0">
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-5 w-5 text-slate-400" />
+                    <h3 className="text-lg font-semibold text-slate-800 font-display">
+                      Platform Execution
+                    </h3>
+                  </div>
 
-                <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm overflow-x-auto hide-scrollbar">
-                  {[
-                    "All",
-                    "LinkedIn",
-                    "Twitter",
-                    "Facebook",
-                    "Instagram",
-                    "TikTok",
-                    "Reddit",
-                    "YouTube",
-                  ].map((platform) => {
-                    const pLowerCase = platform.toLowerCase();
-                    // Check if this campaign has any posts for this platform
-                    const hasPostsForPlatform =
-                      platform === "All" ||
-                      (selectedCampaign.dailyPosts &&
-                        selectedCampaign.dailyPosts.some((dp) =>
-                          dp.platformVersions.some(
+                  <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm overflow-x-auto hide-scrollbar">
+                    {[
+                      "All",
+                      "LinkedIn",
+                      "Twitter",
+                      "Facebook",
+                      "Instagram",
+                      "TikTok",
+                      "Reddit",
+                      "YouTube",
+                    ].map((platform) => {
+                      const pLowerCase = platform.toLowerCase();
+                      // Check if this campaign has any posts for this platform
+                      const hasPostsForPlatform =
+                        platform === "All" ||
+                        (selectedCampaign.dailyPosts &&
+                          selectedCampaign.dailyPosts.some((dp) =>
+                            dp.platformVersions.some(
+                              (pv) => pv.platform.toLowerCase() === pLowerCase,
+                            ),
+                          )) ||
+                        (selectedCampaign.platformVersions &&
+                          selectedCampaign.platformVersions.some(
                             (pv) => pv.platform.toLowerCase() === pLowerCase,
-                          ),
-                        )) ||
-                      (selectedCampaign.platformVersions &&
-                        selectedCampaign.platformVersions.some(
-                          (pv) => pv.platform.toLowerCase() === pLowerCase,
-                        ));
+                          ));
 
-                    if (!hasPostsForPlatform && platform !== "All") return null;
+                      if (!hasPostsForPlatform && platform !== "All") return null;
 
-                    return (
-                      <button
-                        key={platform}
-                        onClick={() =>
-                          setPlatformFilter(
-                            platform === "All" ? null : pLowerCase,
-                          )
-                        }
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
-                          platformFilter === pLowerCase ||
-                            (platform === "All" && platformFilter === null)
-                            ? "bg-[#7C3AED] text-white shadow-sm"
-                            : "text-slate-500 hover:text-[#7C3AED] hover:bg-[#7C3AED]/4",
-                        )}
-                      >
-                        {platform}
-                      </button>
-                    );
-                  })}
+                      return (
+                        <button
+                          key={platform}
+                          onClick={() =>
+                            setPlatformFilter(
+                              platform === "All" ? null : pLowerCase,
+                            )
+                          }
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
+                            platformFilter === pLowerCase ||
+                              (platform === "All" && platformFilter === null)
+                              ? "bg-[#7C3AED] text-white shadow-sm"
+                              : "text-slate-500 hover:text-[#7C3AED] hover:bg-[#7C3AED]/4",
+                          )}
+                        >
+                          {platform}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-8">
-                {selectedCampaign.dailyPosts &&
+                {selectedCampaign.isBlog ? (
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
+                    {/* Visual 16:9 Image Backdrop (No Overlay Text) */}
+                    {selectedCampaign.blogImageUrl && (
+                      <div className="relative aspect-[16/9] w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner group">
+                        <img
+                          src={selectedCampaign.blogImageUrl}
+                          alt="Blog visual"
+                          className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-300"
+                        />
+                        <div className="absolute top-4 right-4 flex gap-2">
+                          <button
+                            onClick={() => handleDownloadImage(selectedCampaign.blogImageUrl!, `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_visual.png`)}
+                            className="bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl backdrop-blur-md transition-colors"
+                            title="Download Visual"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Blog Content Header */}
+                    <div className="space-y-2">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-violet-100 text-violet-700 border border-violet-200/50">
+                        📰 Blog & Newsletter Content
+                      </span>
+                      <h3 className="text-2xl font-bold text-slate-800 font-display leading-tight">
+                        {selectedCampaign.blogTitle || selectedCampaign.theme}
+                      </h3>
+                      {selectedCampaign.blogImagePrompt && (
+                        <p className="text-xs text-slate-400 font-light italic mt-1">
+                          Visual Prompt: "{selectedCampaign.blogImagePrompt}"
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Blog Text Content */}
+                    <div className="border-t border-slate-100 pt-6">
+                      <div className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap font-light tracking-wide bg-slate-50/50 p-6 rounded-2xl border border-slate-100 shadow-inner">
+                        {selectedCampaign.blogContent || "No blog content generated yet."}
+                      </div>
+                    </div>
+
+                    {/* Copy to Clipboard CTA */}
+                    <div className="flex justify-end pt-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(selectedCampaign.blogContent || "");
+                            alert("Blog content copied to clipboard!");
+                          } catch (err) {
+                            console.error("Clipboard copy failed:", err);
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 text-sm font-semibold transition-colors shadow-md shadow-violet-500/20"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy Blog Text
+                      </button>
+                    </div>
+                  </div>
+                ) : selectedCampaign.dailyPosts &&
                 selectedCampaign.dailyPosts.length > 0
                   ? selectedCampaign.dailyPosts.map((dp, dayIdx) => {
                       const filteredPVs = dp.platformVersions.filter(

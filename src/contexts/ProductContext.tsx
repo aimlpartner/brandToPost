@@ -142,7 +142,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      await updateDoc(doc(db, 'products', id), data);
+      const sanitizedData = JSON.parse(JSON.stringify(data));
+      await updateDoc(doc(db, 'products', id), sanitizedData);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `products/${id}`);
     }

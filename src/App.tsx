@@ -6,6 +6,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { LandingPage } from "./pages/LandingPage";
+import { Waitlist } from "./pages/Waitlist";
 import { Dashboard } from "./pages/Dashboard";
 import { ProductDNA } from "./pages/ProductDNA";
 import { Campaigns } from "./pages/Campaigns";
@@ -31,7 +32,8 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<Waitlist />} />
+            <Route path="/landing" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/whatsapp/login" element={<WhatsAppLogin />} />
             <Route
