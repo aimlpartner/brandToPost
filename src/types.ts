@@ -86,7 +86,10 @@ export interface ProductDNA {
   // Founder Agent Automation
   automationAgentEnabled?: boolean;
   automateDailyPosts?: boolean;
+  automateDailyBlogs?: boolean;
   automateWeeklyCampaigns?: boolean;
+  automationTimeUtc?: string;
+  automationWeeklyDay?: string;
   automationLogs?: Array<{ timestamp: string, type: string, theme: string, focus: string, status: string }>;
 
   // Script Studio persistent configuration
@@ -176,4 +179,9 @@ export interface WeeklyCampaign {
   tags?: string[];
   isOneDay?: boolean;
   isAutomated?: boolean;
+  isBlog?: boolean;
+  blogTitle?: string;
+  blogContent?: string;
+  blogImageUrl?: string;
+  blogImagePrompt?: string;
 }

@@ -64,7 +64,12 @@
 
 html, body {
   font-family: var(--font-sans);
-  background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 50%, #FAF5FF 100%);
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(circle at 1px 1px, rgba(124, 58, 237, 0.045) 1px, transparent 0),
+    linear-gradient(rgba(124, 58, 237, 0.015) 1px, transparent 0),
+    linear-gradient(90deg, rgba(124, 58, 237, 0.015) 1px, transparent 0);
+  background-size: 24px 24px, 72px 72px, 72px 72px;
   background-attachment: fixed;
   color: var(--color-brand-light);
   min-height: 100vh;

@@ -48,6 +48,29 @@ function formatDate(d: Date) {
   return `${year}-${month}-${day}`;
 }
 
+async function logBackendTokenUsage(userId: string | undefined, operationType: string, model: string, usageMetadata: any) {
+  if (!db) return;
+  if (!userId || !usageMetadata) return;
+  try {
+    const promptTokenCount = usageMetadata.promptTokenCount || 0;
+    const candidatesTokenCount = usageMetadata.candidatesTokenCount || 0;
+    const totalTokenCount = usageMetadata.totalTokenCount || 0;
+
+    await db.collection("token_usage").add({
+      userId,
+      operationType,
+      model,
+      promptTokenCount,
+      candidatesTokenCount,
+      totalTokenCount,
+      timestamp: new Date().toISOString()
+    });
+    console.log(`[Token Usage Logged] ${operationType} (${model}): ${totalTokenCount} tokens`);
+  } catch (error) {
+    console.error("[logBackendTokenUsage Error]", error);
+  }
+}
+
 const campaignSchema = {
   type: Type.OBJECT,
   properties: {
@@ -176,8 +199,10 @@ async function executeAutoCampaignGeneration(productId: string) {
   if (!founderAgent) {
     throw new Error("Founder Agent doppelganger has not been synthesized yet.");
   }
-
-  const apiKey = "AIzaSyCYK86PmlReHZSQ2dTNeKRhYL6IG8Jc6IM";
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY environment variable.");
+  }
   const ai = new GoogleGenAI({ apiKey });
 
   // 1. Get campaign inputs from Founder Agent
@@ -219,6 +244,8 @@ Return the result in a JSON object with the following fields:
     }
   });
 
+  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_founder_focus", "gemini-3.1-pro-preview", founderResponse.usageMetadata);
+
   const founderInputs = JSON.parse(founderResponse.text || "{}");
   if (!founderInputs.focusInput) throw new Error("Founder Agent failed to generate campaign focus.");
 
@@ -250,6 +277,8 @@ Return the result in a JSON object with the following fields:
       }
     }
   });
+
+  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_research", "gemini-3.1-pro-preview", researchResponse.usageMetadata);
 
   const insights = JSON.parse(researchResponse.text || "[]");
 
@@ -319,6 +348,8 @@ Return the result in a JSON object with the following fields:
       responseSchema: campaignSchema
     }
   });
+
+  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_draft", "gemini-3.1-pro-preview", campaignResponse.usageMetadata);
 
   const campaignData = JSON.parse(campaignResponse.text || "{}");
 
@@ -421,8 +452,10 @@ async function executeAutoDailyPostGeneration(productId: string) {
   if (!founderAgent) {
     throw new Error("Founder Agent doppelganger has not been synthesized yet.");
   }
-
-  const apiKey = "AIzaSyCYK86PmlReHZSQ2dTNeKRhYL6IG8Jc6IM";
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY environment variable.");
+  }
   const ai = new GoogleGenAI({ apiKey });
 
   // 1. Get campaign inputs from Founder Agent
@@ -464,6 +497,8 @@ Return the result in a JSON object with the following fields:
     }
   });
 
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_founder_focus", "gemini-3.1-pro-preview", founderResponse.usageMetadata);
+
   const founderInputs = JSON.parse(founderResponse.text || "{}");
   if (!founderInputs.focusInput) throw new Error("Founder Agent failed to generate daily post focus.");
 
@@ -494,6 +529,8 @@ Return the result in a JSON object with the following fields:
       }
     }
   });
+
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_research", "gemini-3.1-pro-preview", researchResponse.usageMetadata);
 
   const insights = JSON.parse(researchResponse.text || "[]");
 
@@ -569,6 +606,8 @@ Return the result in a JSON object with the following fields:
     }
   });
 
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_draft", "gemini-3.1-pro-preview", campaignResponse.usageMetadata);
+
   const campaignData = JSON.parse(campaignResponse.text || "{}");
 
   const campaignId = typeof crypto !== "undefined" && crypto.randomUUID
@@ -621,7 +660,302 @@ Return the result in a JSON object with the following fields:
     }
   }
 
+  // 6. Update logs in product
+  console.log(`[executeAutoDailyGeneration] Daily content successfully created. Logging execution state.`);
+  const currentDateUtc = new Date().toISOString().split('T')[0];
+  const newLog = {
+    timestamp: new Date().toISOString(),
+    type: 'daily_content',
+    theme: founderInputs.campaignTheme || "Daily Post",
+    focus: founderInputs.focusInput,
+    status: 'Success'
+  };
+
+  const currentLogs = product.automationLogs || [];
+  currentLogs.unshift(newLog);
+  const trimmedLogs = currentLogs.slice(0, 10);
+
+  await db.collection('products').doc(productId).update({
+    automationLogs: trimmedLogs,
+    lastDailyRunDate: currentDateUtc
+  });
+
   return newCampaign;
+}
+
+async function executeAutoDailyBlogGeneration(productId: string) {
+  if (!db) throw new Error("Database connection is not active.");
+
+  const productDoc = await db.collection('products').doc(productId).get();
+  if (!productDoc.exists) throw new Error("Product not found");
+  const product = productDoc.data()!;
+
+  const founderAgent = product.founderAgentSynthesized;
+  if (!founderAgent) {
+    throw new Error("Founder Agent doppelganger has not been synthesized yet.");
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY environment variable.");
+  }
+  const ai = new GoogleGenAI({ apiKey });
+
+  // 1. Get campaign inputs / blog topic from Founder Agent
+  console.log(`[executeAutoDailyBlogGeneration] Querying Founder Agent Doppelganger "${founderAgent.personaName}" for blog direction...`);
+  const founderPrompt = `You are a virtual Founder Agent named "${founderAgent.personaName}".
+Your profile:
+- Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
+- Core Values: ${founderAgent.coreValues?.join(", ") || ""}
+- Communication Style: ${founderAgent.communicationStyle?.join(", ") || ""}
+- Decision Heuristics: ${founderAgent.decisionHeuristics?.join(", ") || ""}
+
+Company Position & Product DNA:
+- Product Name: ${product.name}
+- Positioning: ${product.positioning}
+- Target Audience: ${product.audience}
+- Tone of Voice: ${product.tone}
+
+Based on your profile, values, behavioral traits, and positioning, identify a highly specific, compelling blog post topic or focus area, a sub-category/niche, and an engaging blog title/theme for today.
+Return the result in a JSON object with the following fields:
+- focusInput: A punchy focus area (e.g. "early stage B2B SaaS", "manual spreadsheet fatigue")
+- subCategory: A specific sub-category or niche (e.g. "productivity tools", "accounting automation")
+- blogTitle: An engaging, click-worthy blog title (e.g. "The Hidden Cost of Manual Data Entry in B2B Teams")
+`;
+
+  const founderResponse = await ai.models.generateContent({
+    model: "gemini-3.1-pro-preview",
+    contents: [{ text: founderPrompt }],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          focusInput: { type: Type.STRING },
+          subCategory: { type: Type.STRING },
+          blogTitle: { type: Type.STRING }
+        },
+        required: ["focusInput", "subCategory", "blogTitle"]
+      }
+    }
+  });
+
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_founder_focus", "gemini-3.1-pro-preview", founderResponse.usageMetadata);
+
+  const founderInputs = JSON.parse(founderResponse.text || "{}");
+  if (!founderInputs.focusInput || !founderInputs.blogTitle) throw new Error("Founder Agent failed to generate daily blog focus.");
+
+  // 2. Research focus area
+  console.log(`[executeAutoDailyBlogGeneration] Researching focus area: ${founderInputs.focusInput}...`);
+  const researchPrompt = `
+    You are an expert market researcher.
+    
+    Research the following industry or focus area: "${founderInputs.focusInput}"
+    Specifically focus on this sub-category or niche: "${founderInputs.subCategory}"
+    
+    Generate 4-6 highly engaging key insights about this focus area, including:
+    - Current trends and emerging topics
+    - Audience pain points and desires
+    - Competitor landscape or market gaps
+    
+    Return a JSON array of strings, where each string is a detailed key insight.
+  `;
+
+  const researchResponse = await ai.models.generateContent({
+    model: "gemini-3.1-pro-preview",
+    contents: [{ text: researchPrompt }],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING }
+      }
+    }
+  });
+
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_research", "gemini-3.1-pro-preview", researchResponse.usageMetadata);
+
+  const insights = JSON.parse(researchResponse.text || "[]");
+
+  // 3. Generate blog body and image prompt
+  console.log(`[executeAutoDailyBlogGeneration] Drafting daily blog for "${founderInputs.blogTitle}"...`);
+  const blogPrompt = `
+    You are an expert B2B SaaS copywriter and growth marketer.
+    
+    Generate a full-length, highly engaging blog post and newsletter based on the provided Brand Position, Key Insights, and specific topic.
+    The writing style MUST reflect the virtual Founder Agent "${founderAgent.personaName}" who has the following traits:
+    - Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
+    - Core Values: ${founderAgent.coreValues?.join(", ") || ""}
+    - Communication Style: ${founderAgent.communicationStyle?.join(", ") || ""}
+    - Decision Heuristics: ${founderAgent.decisionHeuristics?.join(", ") || ""}
+
+    Blog Title: ${founderInputs.blogTitle}
+    Industry Focus Area: ${founderInputs.focusInput}
+    Industry Sub-Category/Niche: ${founderInputs.subCategory}
+    
+    Key Insights about this Focus:
+    ${insights.map((i: string) => `- ${i}`).join('\n')}
+    
+    Brand Position:
+    Website: ${product.website}
+    Positioning: ${product.positioning}
+    Audience: ${product.audience}
+    Tone: ${product.tone}
+    Stage: ${product.stage}
+    
+    Advanced DNA:
+    ${product.enemy ? `- The Enemy / Status Quo: ${product.enemy}` : ''}
+    ${product.earnedSecret ? `- The Earned Secret: ${product.earnedSecret}` : ''}
+    ${product.originStory ? `- Origin Story: ${product.originStory}` : ''}
+    ${product.hellState ? `- 'Hell' State (Before): ${product.hellState}` : ''}
+    ${product.heavenState ? `- 'Heaven' State (After): ${product.heavenState}` : ''}
+    ${product.uniqueMechanism ? `- Unique Mechanism: ${product.uniqueMechanism}` : ''}
+    ${product.proofPoints ? `- Proof Points: ${product.proofPoints}` : ''}
+
+    The output must contain:
+    - blogContent: A full-length (500-800 words) detailed, insightful blog post written in a conversational, authoritative founder voice. Format with markdown headings (##, ###) and clean paragraphs.
+    - blogImagePrompt: A detailed, scenic background image prompt for Imagen AI to generate a header graphic for this blog. Should be photographic, professional, and contain NO text.
+    - targetAudience: The specific reader persona targeted.
+    - coreMessage: A 1-sentence value proposition of this blog post.
+    - cta: A clear newsletter or product call-to-action at the end (e.g. "Try ${product.name} today").
+  `;
+
+  const blogResponse = await ai.models.generateContent({
+    model: "gemini-3.1-pro-preview",
+    contents: [{ text: blogPrompt }],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          blogContent: { type: Type.STRING },
+          blogImagePrompt: { type: Type.STRING },
+          targetAudience: { type: Type.STRING },
+          coreMessage: { type: Type.STRING },
+          cta: { type: Type.STRING }
+        },
+        required: ["blogContent", "blogImagePrompt", "targetAudience", "coreMessage", "cta"]
+      }
+    }
+  });
+
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_draft", "gemini-3.1-pro-preview", blogResponse.usageMetadata);
+
+  const blogData = JSON.parse(blogResponse.text || "{}");
+  if (!blogData.blogContent) throw new Error("Failed to generate blog content.");
+
+  // 4. Generate AI image for the blog
+  let blogImageUrl = null;
+  if (blogData.blogImagePrompt) {
+    try {
+      console.log(`[executeAutoDailyBlogGeneration] Generating Imagen header image for blog: "${blogData.blogImagePrompt}"...`);
+      const imgRes = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-image-preview',
+        contents: { parts: [{ text: blogData.blogImagePrompt }] },
+        config: { imageConfig: { aspectRatio: "16:9" } }
+      });
+
+      await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_image", "gemini-3.1-flash-image-preview", {
+        promptTokenCount: 0,
+        candidatesTokenCount: 0,
+        totalTokenCount: 1
+      });
+
+      if (imgRes?.candidates?.[0]?.content?.parts) {
+        for (const pt of imgRes.candidates[0].content.parts) {
+          if (pt.inlineData) {
+            const base64Data = pt.inlineData.data;
+            const mimeType = pt.inlineData.mimeType || 'image/png';
+            
+            const imageId = 'img_blog_' + Math.random().toString(36).substring(2, 10);
+            await db.collection('whatsapp_images').doc(imageId).set({
+              base64Data,
+              mimeType,
+              prompt: blogData.blogImagePrompt,
+              createdAt: new Date().toISOString()
+            });
+
+            const host = process.env.APP_URL || "https://b2p-prod.up.railway.app";
+            blogImageUrl = `${host.replace(/\/$/, '')}/api/whatsapp/images/${imageId}.png`;
+            console.log(`[executeAutoDailyBlogGeneration] Blog image successfully served at: ${blogImageUrl}`);
+            break;
+          }
+        }
+      }
+    } catch (eImg: any) {
+      console.warn('[executeAutoDailyBlogGeneration Image Gen Failed]', eImg);
+    }
+  }
+
+  // 5. Assemble campaign dates & save to Firestore as a Blog campaign
+  const campaignId = typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+  const currentDate = formatDate(new Date());
+
+  const newCampaign = {
+    id: campaignId,
+    productId,
+    userId: product.userId || "anonymous",
+    productName: product.name,
+    productLogoUrl: product.logoUrl || product.logoDarkUrl || product.logoLightUrl || null,
+    createdAt: new Date().toISOString(),
+    startDate: currentDate,
+    theme: founderInputs.blogTitle,
+    focus: founderInputs.focusInput,
+    subCategory: founderInputs.subCategory,
+    campaignThemeInput: founderInputs.blogTitle,
+    isOneDay: true,
+    isBlog: true,
+    isAutomated: true,
+    
+    // Blog fields
+    blogTitle: founderInputs.blogTitle,
+    blogContent: blogData.blogContent,
+    blogImagePrompt: blogData.blogImagePrompt || null,
+    blogImageUrl: blogImageUrl || null,
+    targetAudience: blogData.targetAudience || product.audience || "",
+    coreMessage: blogData.coreMessage || "",
+    cta: blogData.cta || ""
+  };
+
+  await db.collection('campaigns').doc(campaignId).set(newCampaign);
+
+  // 6. Update logs in product
+  console.log(`[executeAutoDailyBlogGeneration] Blog content successfully created. Logging execution state.`);
+  const currentDateUtc = new Date().toISOString().split('T')[0];
+  const newLog = {
+    timestamp: new Date().toISOString(),
+    type: 'daily_content',
+    theme: founderInputs.blogTitle,
+    focus: founderInputs.focusInput,
+    status: 'Success'
+  };
+
+  const currentLogs = product.automationLogs || [];
+  currentLogs.unshift(newLog);
+  const trimmedLogs = currentLogs.slice(0, 10);
+
+  await db.collection('products').doc(productId).update({
+    automationLogs: trimmedLogs,
+    lastDailyRunDate: currentDateUtc
+  });
+
+  return newCampaign;
+}
+
+async function executeAutoDailyGeneration(productId: string, automatePosts: boolean, automateBlogs: boolean) {
+  console.log(`[executeAutoDailyGeneration] Triggered for product ${productId}. Automate Posts: ${automatePosts}, Automate Blogs: ${automateBlogs}`);
+  
+  if (automatePosts) {
+    console.log(`[executeAutoDailyGeneration] Starting automated post generation...`);
+    await executeAutoDailyPostGeneration(productId);
+  }
+  
+  if (automateBlogs) {
+    console.log(`[executeAutoDailyGeneration] Starting automated blog generation...`);
+    await executeAutoDailyBlogGeneration(productId);
+  }
 }
 
 // --- Storage Helpers ---
@@ -951,45 +1285,126 @@ setInterval(async () => {
 // --- Automation Agent Background Check ---
 setInterval(async () => {
   if (!db) return;
-  console.log('[Automation Agent] Running periodic check for automated campaigns...');
+  
+  const now = new Date();
+  const hours = now.getUTCHours().toString().padStart(2, '0');
+  const minutes = now.getUTCMinutes().toString().padStart(2, '0');
+  const currentTimeUtc = `${hours}:${minutes}`;
+  const currentDateUtc = now.toISOString().split('T')[0];
+  
+  const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const currentDayName = weekdays[now.getUTCDay()];
+
   try {
     const productsSnap = await db.collection('products').where('automationAgentEnabled', '==', true).get();
     for (const productDoc of productsSnap.docs) {
       const product = productDoc.data();
       if (!product.founderAgentSynthesized) continue;
 
+      const triggerTime = product.automationTimeUtc || "14:00";
+      const [trigH, trigM] = triggerTime.split(':');
+      const trigMinutes = parseInt(trigH, 10) * 60 + parseInt(trigM, 10);
+      const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+      const shouldRunToday = nowMinutes >= trigMinutes;
+
+      if (!shouldRunToday) {
+        continue;
+      }
+
       // Weekly Campaign Automation
       if (product.automateWeeklyCampaigns) {
-        // Find last weekly campaign
-        const campaignsSnap = await db.collection('campaigns')
-          .where('productId', '==', product.id)
-          .orderBy('createdAt', 'desc')
-          .get();
+        const triggerDay = product.automationWeeklyDay || "Monday";
+        if (currentDayName === triggerDay) {
+          // Check last weekly run date to avoid double-running and excessive DB reads
+          let needsGeneration = product.lastWeeklyRunDate !== currentDateUtc;
+          if (needsGeneration) {
+            // Additional safety check against DB (in case of server restarts)
+            const campaignsSnap = await db.collection('campaigns')
+              .where('productId', '==', product.id)
+              .orderBy('createdAt', 'desc')
+              .limit(10)
+              .get();
 
-        const weeklyCampaigns = campaignsSnap.docs.filter(doc => !doc.data().isOneDay);
+            const weeklyCampaigns = campaignsSnap.docs.filter(doc => !doc.data().isOneDay);
+            if (weeklyCampaigns.length > 0) {
+              const lastCampaign = weeklyCampaigns[0].data();
+              const lastCreatedDate = lastCampaign.createdAt.split('T')[0];
+              if (lastCreatedDate === currentDateUtc) {
+                needsGeneration = false;
+                // Sync the field to avoid hitting DB again today
+                await db.collection('products').doc(product.id).update({
+                  lastWeeklyRunDate: currentDateUtc
+                });
+              }
+            }
+          }
 
-        let needsGeneration = false;
-        if (weeklyCampaigns.length === 0) {
-          needsGeneration = true;
-        } else {
-          const lastCampaign = weeklyCampaigns[0].data();
-          const lastCreatedAt = new Date(lastCampaign.createdAt).getTime();
-          const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-          if (lastCreatedAt < oneWeekAgo) {
-            needsGeneration = true;
+          if (needsGeneration) {
+            console.log(`[Automation Agent] Triggering campaign generation for product ${product.id} automatically...`);
+            try {
+              await executeAutoCampaignGeneration(product.id);
+              await db.collection('products').doc(product.id).update({
+                lastWeeklyRunDate: currentDateUtc
+              });
+            } catch (err: any) {
+              console.error(`[Automation Agent] Generation failed for product ${product.id}:`, err);
+              // Log failure
+              const newLog = {
+                timestamp: new Date().toISOString(),
+                type: 'weekly_campaign',
+                theme: 'N/A',
+                focus: 'N/A',
+                status: `Error: ${err?.message || 'Unknown error'}`
+              };
+              const currentLogs = product.automationLogs || [];
+              currentLogs.unshift(newLog);
+              await db.collection('products').doc(product.id).update({
+                automationLogs: currentLogs.slice(0, 10),
+                lastWeeklyRunDate: currentDateUtc
+              });
+            }
+          }
+        }
+      }
+
+      // Daily Post & Blog Automation
+      if (product.automateDailyPosts || product.automateDailyBlogs) {
+        let needsDailyGeneration = product.lastDailyRunDate !== currentDateUtc;
+        if (needsDailyGeneration) {
+          // Additional safety check against DB
+          const dailySnap = await db.collection('campaigns')
+            .where('productId', '==', product.id)
+            .where('isOneDay', '==', true)
+            .orderBy('createdAt', 'desc')
+            .limit(1)
+            .get();
+
+          if (!dailySnap.empty) {
+            const lastDaily = dailySnap.docs[0].data();
+            const lastCreatedDate = lastDaily.createdAt.split('T')[0];
+            if (lastCreatedDate === currentDateUtc) {
+              needsDailyGeneration = false;
+              // Sync the field
+              await db.collection('products').doc(product.id).update({
+                lastDailyRunDate: currentDateUtc
+              });
+            }
           }
         }
 
-        if (needsGeneration) {
-          console.log(`[Automation Agent] Triggering campaign generation for product ${product.id} automatically...`);
+        if (needsDailyGeneration) {
+          console.log(`[Automation Agent] Triggering daily generation for product ${product.id} automatically...`);
           try {
-            await executeAutoCampaignGeneration(product.id);
+            await executeAutoDailyGeneration(product.id, !!product.automateDailyPosts, !!product.automateDailyBlogs);
+            await db.collection('products').doc(product.id).update({
+              lastDailyRunDate: currentDateUtc
+            });
           } catch (err: any) {
-            console.error(`[Automation Agent] Generation failed for product ${product.id}:`, err);
-            // Log failure
+            console.error(`[Automation Agent] Daily generation failed for product ${product.id}:`, err);
+            // Log failure in database
             const newLog = {
               timestamp: new Date().toISOString(),
-              type: 'weekly_campaign',
+              type: 'daily_content',
               theme: 'N/A',
               focus: 'N/A',
               status: `Error: ${err?.message || 'Unknown error'}`
@@ -997,40 +1412,9 @@ setInterval(async () => {
             const currentLogs = product.automationLogs || [];
             currentLogs.unshift(newLog);
             await db.collection('products').doc(product.id).update({
-              automationLogs: currentLogs.slice(0, 10)
+              automationLogs: currentLogs.slice(0, 10),
+              lastDailyRunDate: currentDateUtc
             });
-          }
-        }
-      }
-
-      // Daily Post Automation
-      if (product.automateDailyPosts) {
-        // Find last daily campaign/post (isOneDay: true)
-        const dailySnap = await db.collection('campaigns')
-          .where('productId', '==', product.id)
-          .where('isOneDay', '==', true)
-          .orderBy('createdAt', 'desc')
-          .limit(1)
-          .get();
-
-        let needsDailyGeneration = false;
-        if (dailySnap.empty) {
-          needsDailyGeneration = true;
-        } else {
-          const lastDaily = dailySnap.docs[0].data();
-          const lastCreatedAt = new Date(lastDaily.createdAt).getTime();
-          const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-          if (lastCreatedAt < oneDayAgo) {
-            needsDailyGeneration = true;
-          }
-        }
-
-        if (needsDailyGeneration) {
-          console.log(`[Automation Agent] Triggering daily post generation for product ${product.id} automatically...`);
-          try {
-            await executeAutoDailyPostGeneration(product.id);
-          } catch (err: any) {
-            console.error(`[Automation Agent] Daily post generation failed for product ${product.id}:`, err);
           }
         }
       }
@@ -1038,7 +1422,7 @@ setInterval(async () => {
   } catch (err) {
     console.error('[Automation Agent Error] Check failed:', err);
   }
-}, 30 * 60 * 1000); // Check every 30 minutes
+}, 60 * 1000); // Check every 60 seconds
 
 async function publishToInstagramGraphAPI(token: string, text: string, imageUrl: string, appHost: string): Promise<string> {
   const baseUrl = appHost || process.env.APP_URL || '';
@@ -1483,9 +1867,7 @@ ${htmlContent}
   app.post('/api/ai/generate', requireAuth, routeRateLimiter(15, 60 * 1000), async (req, res) => {
     try {
       const { model, contents, config } = req.body;
-      
-      // Force the API key as provided by the user, ignoring environment variable
-      const apiKey = "AIzaSyCYK86PmlReHZSQ2dTNeKRhYL6IG8Jc6IM";
+      const apiKey = process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
         return res.status(500).json({ error: 'Server API key not configured. Please set GEMINI_API_KEY in settings.' });
@@ -1678,6 +2060,8 @@ ${htmlContent}
       let generatedCampaign = null;
       if (product.automateDailyPosts && !product.automateWeeklyCampaigns) {
         generatedCampaign = await executeAutoDailyPostGeneration(productId);
+      } else if (product.automateDailyBlogs && !product.automateWeeklyCampaigns) {
+        generatedCampaign = await executeAutoDailyBlogGeneration(productId);
       } else {
         generatedCampaign = await executeAutoCampaignGeneration(productId);
       }
@@ -3245,7 +3629,11 @@ However, if they ask to make a campaign or send a product photo, and they have n
               }
 
               // Instantiate Google Gen AI Client
-              const geminiKey = process.env.GEMINI_API_KEY || "AIzaSyCYK86PmlReHZSQ2dTNeKRhYL6IG8Jc6IM";
+              const geminiKey = process.env.GEMINI_API_KEY;
+              if (!geminiKey) {
+                addLog("ERROR: process.env.GEMINI_API_KEY is not configured.");
+                throw new Error("Missing GEMINI_API_KEY environment variable.");
+              }
               const ai = new GoogleGenAI({
                 apiKey: geminiKey,
                 httpOptions: {
@@ -3265,6 +3653,25 @@ However, if they ask to make a campaign or send a product photo, and they have n
                   systemInstruction
                 }
               });
+
+              if (matchedProductId && db) {
+                try {
+                  const productDoc = await db.collection('products').doc(matchedProductId).get();
+                  if (productDoc.exists) {
+                    const webhookUserId = productDoc.data()?.userId;
+                    if (webhookUserId) {
+                      await logBackendTokenUsage(
+                        webhookUserId,
+                        "whatsapp_chatbot_generation",
+                        "gemini-3.5-flash",
+                        geminiResponse.usageMetadata
+                      );
+                    }
+                  }
+                } catch (eTokenLog) {
+                  console.error('[WhatsApp webhook token log error]', eTokenLog);
+                }
+              }
 
               addLog("Gemini content synthesis and layout analysis completed.");
               const replyText = geminiResponse.text || "Hello! We couldn't generate a text response at this stage.";
@@ -3435,6 +3842,29 @@ However, if they ask to make a campaign or send a product photo, and they have n
                       contents: { parts: [{ text: overlayPrompt }] },
                       config: { imageConfig: { aspectRatio: "1:1" } }
                     });
+
+                    if (matchedProductId && db) {
+                      try {
+                        const productDoc = await db.collection('products').doc(matchedProductId).get();
+                        if (productDoc.exists) {
+                          const webhookUserId = productDoc.data()?.userId;
+                          if (webhookUserId) {
+                            await logBackendTokenUsage(
+                              webhookUserId,
+                              "whatsapp_chatbot_image",
+                              "gemini-3.1-flash-image-preview",
+                              {
+                                promptTokenCount: 0,
+                                candidatesTokenCount: 0,
+                                totalTokenCount: 1
+                              }
+                            );
+                          }
+                        }
+                      } catch (eTokenLog) {
+                        console.error('[WhatsApp webhook image token log error]', eTokenLog);
+                      }
+                    }
 
                     if (imgRes?.candidates?.[0]?.content?.parts) {
                       for (const pt of imgRes.candidates[0].content.parts) {
