@@ -9,6 +9,18 @@ import { GoogleGenAI, Type } from '@google/genai';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
+// --- Environment Variable Validation ---
+const requiredEnvVars = [
+  'GEMINI_API_KEY',
+  'APP_URL',
+  'FIREBASE_SERVICE_ACCOUNT'
+];
+requiredEnvVars.forEach(v => {
+  if (!process.env[v]) {
+    console.warn(`[Warning] Environment variable ${v} is not set in the deployment environment!`);
+  }
+});
+
 // --- Firebase Admin Initialization ---
 let db: admin.firestore.Firestore | null = null;
 try {
