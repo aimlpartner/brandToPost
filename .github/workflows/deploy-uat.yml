@@ -37,16 +37,24 @@ jobs:
           PassengerRestartDir /home/u769235882/domains/brandtopost.com/public_html/uat/tmp
           EOF
 
-      - name: Copy files via SFTP
-        uses: appleboy/scp-action@master
+      - name: Prepare deployment folder
+        run: |
+          mkdir deploy_temp
+          cp -r dist deploy_temp/
+          cp server.js deploy_temp/
+          cp package.json deploy_temp/
+          cp package-lock.json deploy_temp/
+          cp .htaccess deploy_temp/
+
+      - name: Sync files via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ secrets.SSH_PORT }}
-          source: "dist/**,server.js,package.json,package-lock.json,.htaccess"
-          target: "/home/u769235882/domains/brandtopost.com/public_html/uat"
-          strip_components: 0
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          local-dir: ./deploy_temp/
+          server-dir: domains/brandtopost.com/public_html/uat/
 
       - name: Post-deployment commands via SSH
         uses: appleboy/ssh-action@master
