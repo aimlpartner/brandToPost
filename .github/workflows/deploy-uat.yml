@@ -56,8 +56,9 @@ jobs:
           local-dir: ./deploy_temp/
           server-dir: public_html/uat/
 
-       - name: Post-deployment commands via SSH
+      - name: Post-deployment commands via SSH
         uses: appleboy/ssh-action@master
+        continue-on-error: true
         with:
           host: ${{ secrets.SSH_HOST || secrets.FTP_SERVER }}
           username: ${{ secrets.SSH_USERNAME }}
