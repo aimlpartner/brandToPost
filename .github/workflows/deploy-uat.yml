@@ -1,0 +1,69 @@
+name: Deploy to UAT (brandtopost.com)
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build application
+        run: npm run build
+
+      - name: Create local .htaccess for Passenger
+        run: |
+          cat << 'EOF' > .htaccess
+          PassengerEnabled on
+          PassengerAppRoot /home/u769235882/domains/brandtopost.com/public_html/uat
+          PassengerAppType node
+          PassengerNodejs /opt/alt/alt-nodejs22/root/usr/bin/node
+          PassengerStartupFile server.js
+          PassengerBaseURI /
+          PassengerRestartDir /home/u769235882/domains/brandtopost.com/public_html/uat/tmp
+          EOF
+
+      - name: Copy files via SFTP
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "dist/**,server.js,package.json,package-lock.json,.htaccess"
+          target: "/home/u769235882/domains/brandtopost.com/public_html/uat"
+          strip_components: 0
+
+      - name: Post-deployment commands via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            # Remove default landing page if exists
+            rm -f /home/u769235882/domains/brandtopost.com/public_html/uat/default.php
+            
+            # Setup environment and run npm install with memory-saving options
+            export PATH=/opt/alt/alt-nodejs22/root/usr/bin:$PATH
+            cd /home/u769235882/domains/brandtopost.com/public_html/uat
+            npm install --omit=dev --no-audit --no-fund --jobs=1
+            
+            # Restart application
+            mkdir -p tmp
+            touch tmp/restart.txt
