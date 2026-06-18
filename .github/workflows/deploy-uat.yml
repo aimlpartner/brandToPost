@@ -45,6 +45,9 @@ jobs:
           cp package.json deploy_temp/
           cp package-lock.json deploy_temp/
           cp .htaccess deploy_temp/
+          # Create Passenger restart trigger so the app restarts on FTP deploy
+          mkdir -p deploy_temp/tmp
+          touch deploy_temp/tmp/restart.txt
 
       - name: Sync files via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
