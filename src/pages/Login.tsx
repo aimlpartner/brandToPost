@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogIn, Sparkles, ShieldCheck, Zap, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
@@ -7,8 +7,9 @@ import { VideoLoader } from '../components/VideoLoader';
 import { motion } from 'motion/react';
 
 export function Login() {
-  const { user, loading, signInWithGoogle, signInWithFacebook, signInWithApple, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
+  const { user, userProfile, loading, logout, signInWithGoogle, signInWithFacebook, signInWithApple, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
   const navigate = useNavigate();
+  const hasActioned = useRef(false);
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [email, setEmail] = useState('');
@@ -19,16 +20,24 @@ export function Login() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate('/dashboard');
+      if (userProfile?.onboarded || hasActioned.current) {
+        navigate('/dashboard');
+      } else {
+        // If the user loaded the login page with an existing session that is NOT onboarded,
+        // sign them out so they are not trapped and can sign in to their actual account.
+        logout();
+      }
     }
-  }, [user, loading, navigate]);
+  }, [user, userProfile, loading, navigate, logout]);
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setErrorError(null);
+    hasActioned.current = true;
     try {
       await signInWithGoogle();
     } catch (error: any) {
+      hasActioned.current = false;
       setErrorError(error.message || 'Failed to sign in with Google');
       logSilentError(error as Error, { context: "handleGoogleLogin" });
       setIsLoading(false);
@@ -38,9 +47,11 @@ export function Login() {
   const handleFacebookLogin = async () => {
     setIsLoading(true);
     setErrorError(null);
+    hasActioned.current = true;
     try {
       await signInWithFacebook();
     } catch (error: any) {
+      hasActioned.current = false;
       setErrorError(error.message || 'Failed to sign in with Facebook');
       logSilentError(error as Error, { context: "handleFacebookLogin" });
       setIsLoading(false);
@@ -50,9 +61,11 @@ export function Login() {
   const handleAppleLogin = async () => {
     setIsLoading(true);
     setErrorError(null);
+    hasActioned.current = true;
     try {
       await signInWithApple();
     } catch (error: any) {
+      hasActioned.current = false;
       setErrorError(error.message || 'Failed to sign in with Apple');
       logSilentError(error as Error, { context: "handleAppleLogin" });
       setIsLoading(false);
@@ -64,6 +77,9 @@ export function Login() {
     setIsLoading(true);
     setErrorError(null);
     setMsg(null);
+    if (mode === 'signin' || mode === 'signup') {
+      hasActioned.current = true;
+    }
 
     try {
       if (mode === 'signin') {
@@ -75,6 +91,7 @@ export function Login() {
         setMsg('Password reset email sent. Please check your inbox.');
       }
     } catch (error: any) {
+      hasActioned.current = false;
       let friendlyError = error.message;
       if (error.code === 'auth/email-already-in-use') friendlyError = 'Email already in use';
       if (error.code === 'auth/wrong-password') friendlyError = 'Incorrect password';
