@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs/promises';
@@ -4666,6 +4665,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
