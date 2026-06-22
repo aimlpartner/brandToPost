@@ -174,9 +174,9 @@ export const ImmersiveHero = ({
                     <ambientLight intensity={1} />
                 </Canvas>
                 
-                {/* Gradient vignette to blend nicely with the rest of the page */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#0A0A0F_90%)] pointer-events-none" />
-                <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#0A0A0F] to-transparent pointer-events-none" />
+                {/* Flat overlay vignette */}
+                <div className="absolute inset-0 bg-[#0A0A0F]/20 pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 h-40 bg-[#0A0A0F]/80 pointer-events-none" />
             </div>
 
             {/* Foreground Content */}
@@ -196,11 +196,11 @@ export const ImmersiveHero = ({
                         initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1, ease: "circOut" }}
                         className="block"
                     >
-                        You need <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500">distribution.</span>
+                        You need <span className="text-white">distribution.</span>
                     </motion.span>
                     <motion.span 
                         initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.3, ease: "circOut" }}
-                        className="block text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] via-[#FF7778] to-[#18F07A]"
+                        className="block text-[#7C3AED]"
                     >
                         You lack 20 hours.
                     </motion.span>
@@ -220,7 +220,7 @@ export const ImmersiveHero = ({
                     <Link to="/login" className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 rounded-full bg-white text-black font-semibold text-lg overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(255,255,255,0.2)]">
                         <span className="relative z-10">Deploy Your Agents</span>
                         <ArrowRight className="h-5 w-5 relative z-10 group-hover:translate-x-1 transition-transform" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-gray-100 to-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="absolute inset-0 bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </Link>
                     
                     <a 
@@ -246,7 +246,7 @@ export const ImmersiveHero = ({
                 className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-10"
             >
                 <span className="text-xs text-gray-500 uppercase tracking-widest font-medium">Scroll to Dive In</span>
-                <div className="w-px h-12 bg-gradient-to-b from-gray-500 to-transparent animate-pulse" />
+                <div className="w-px h-12 bg-gray-500/40 animate-pulse" />
             </motion.div>
         </section>
     );

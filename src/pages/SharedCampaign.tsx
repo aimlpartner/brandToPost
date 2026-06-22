@@ -219,7 +219,7 @@ export function SharedCampaign() {
  {/* Name Setting Modal */}
  {isSettingName && createPortal(
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
- <div className="bg-[#1C1C22] rounded-2xl p-6 max-w-sm w-full shadow-xl">
+ <div className="bg-[#1C1C22] rounded-[22px] p-6 max-w-sm w-full shadow-xl">
  <h3 className="text-lg font-bold text-white mb-2">Leave Feedback</h3>
  <p className="text-sm text-gray-400 mb-4">Please enter your name so the team knows who is leaving feedback.</p>
  <input
@@ -247,7 +247,7 @@ export function SharedCampaign() {
  <header className="sticky top-0 z-30 bg-[#0A0A0F]/80 backdrop-blur-xl border-b border-white/5 shadow-sm">
  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
  <div className="flex items-center gap-3 group">
- <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#7C3AED] to-[#FF7778] p-[1px] shadow-[0_0_15px_rgba(124,58,237,0.3)]">
+  <div className="w-8 h-8 rounded-lg bg-[#7C3AED] p-[1px] shadow-[0_0_15px_rgba(124,58,237,0.3)]">
  <div className="w-full h-full bg-[#1C1C22] rounded-[7px] flex items-center justify-center">
  <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-5 h-5 object-contain" />
  </div>
@@ -270,14 +270,13 @@ export function SharedCampaign() {
  </header>
 
  <main className="pb-24">
- <div className="relative border-b border-white/5 bg-gradient-to-b from-[#1C1C22]/40 to-[#0A0A0F] pt-12 sm:pt-20 pb-12 sm:pb-24 overflow-hidden">
- <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: "linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)", backgroundSize: "32px 32px", maskImage: "radial-gradient(ellipse at center, black 40%, transparent 80%)" }}></div>
+  <div className="relative border-b border-white/5 bg-[#0A0A0F]/60 pt-12 sm:pt-20 pb-12 sm:pb-24 overflow-hidden">
  <div className="relative z-10 max-w-7xl mx-auto px-4 text-center">
  <div className="flex justify-center mb-6">
  {campaign.productLogoUrl ? (
  <img src={campaign.productLogoUrl || undefined} alt={campaign.productName} className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl object-contain shadow-xl ring-1 ring-white/10 bg-[#1C1C22]" />
  ) : (
- <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-gradient-to-br from-[#7C3AED] to-[#2583EB] flex items-center justify-center text-white font-bold text-2xl shadow-xl ring-1 ring-white/10">
+  <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-[#7C3AED] flex items-center justify-center text-white font-bold text-2xl shadow-xl ring-1 ring-white/10">
  {campaign.productName?.charAt(0) || 'C'}
  </div>
  )}

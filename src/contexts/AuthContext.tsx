@@ -8,6 +8,7 @@ interface AuthProfile {
   name: string;
   role: string;
   onboarded: boolean;
+  createdAt?: string;
 }
 
 interface AuthContextType {
@@ -153,11 +154,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 2. Create user profile doc
       const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
+      const profileDoc: any = {
         ...profileData,
-        onboarded: true,
-        createdAt: new Date().toISOString()
-      });
+        onboarded: true
+      };
+      if (userProfile?.createdAt) {
+        profileDoc.createdAt = userProfile.createdAt;
+      } else {
+        profileDoc.createdAt = new Date().toISOString();
+      }
+      await setDoc(userRef, profileDoc, { merge: true });
     } catch (error) {
       logSilentError(error as Error, { context: "completeOnboarding", userId: user.uid });
       throw error;

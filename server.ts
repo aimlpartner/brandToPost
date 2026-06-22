@@ -1330,6 +1330,7 @@ setInterval(async () => {
 }, 30000);
 
 // --- Automation Agent Background Check ---
+const processingProductIds = new Set<string>();
 setInterval(async () => {
   if (!db) return;
   
@@ -1348,11 +1349,19 @@ setInterval(async () => {
       const product = productDoc.data();
       if (!product.founderAgentSynthesized) continue;
 
-      const triggerTime = product.automationTimeUtc || "14:00";
-      const [trigH, trigM] = triggerTime.split(':');
-      const trigMinutes = parseInt(trigH, 10) * 60 + parseInt(trigM, 10);
-      const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-      const shouldRunToday = nowMinutes >= trigMinutes;
+      if (processingProductIds.has(product.id)) {
+        console.log(`[Automation Agent] Skipping product ${product.id} because a generation is already in progress.`);
+        continue;
+      }
+
+      processingProductIds.add(product.id);
+      try {
+        const triggerTime = product.automationTimeUtc || "14:00";
+        const [trigH, trigM] = triggerTime.split(':');
+        const trigMinutes = parseInt(trigH, 10) * 60 + parseInt(trigM, 10);
+        const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+        // Only trigger within a 2-minute window around the scheduled time to prevent immediate runs when enabling the agent
+        const shouldRunToday = nowMinutes === trigMinutes || nowMinutes === (trigMinutes + 1) % 1440;
 
       if (!shouldRunToday) {
         continue;
@@ -1464,6 +1473,9 @@ setInterval(async () => {
             });
           }
         }
+      }
+      } finally {
+        processingProductIds.delete(product.id);
       }
     }
   } catch (err) {
@@ -2059,7 +2071,10 @@ ${htmlContent}
       res.json({
         enabled: !!p.automationAgentEnabled,
         automateDailyPosts: !!p.automateDailyPosts,
+        automateDailyBlogs: !!p.automateDailyBlogs,
         automateWeeklyCampaigns: !!p.automateWeeklyCampaigns,
+        automationTimeUtc: p.automationTimeUtc || "14:00",
+        automationWeeklyDay: p.automationWeeklyDay || "Monday",
         logs: p.automationLogs || []
       });
     } catch (e: any) {
@@ -2069,7 +2084,15 @@ ${htmlContent}
 
   app.post('/api/automation/config', requireAuth, async (req, res) => {
     try {
-      const { productId, enabled, automateDailyPosts, automateWeeklyCampaigns } = req.body;
+      const { 
+        productId, 
+        enabled, 
+        automateDailyPosts, 
+        automateDailyBlogs, 
+        automateWeeklyCampaigns,
+        automationTimeUtc,
+        automationWeeklyDay
+      } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
       if (!db) return res.status(500).json({ error: 'Database connection is not active' });
 
@@ -2082,7 +2105,10 @@ ${htmlContent}
       const updates: any = {};
       if (enabled !== undefined) updates.automationAgentEnabled = enabled;
       if (automateDailyPosts !== undefined) updates.automateDailyPosts = automateDailyPosts;
+      if (automateDailyBlogs !== undefined) updates.automateDailyBlogs = automateDailyBlogs;
       if (automateWeeklyCampaigns !== undefined) updates.automateWeeklyCampaigns = automateWeeklyCampaigns;
+      if (automationTimeUtc !== undefined) updates.automationTimeUtc = automationTimeUtc;
+      if (automationWeeklyDay !== undefined) updates.automationWeeklyDay = automationWeeklyDay;
 
       await docRef.update(updates);
 
@@ -2105,10 +2131,19 @@ ${htmlContent}
       const product = productDoc.data()!;
       
       let generatedCampaign = null;
-      if (product.automateDailyPosts && !product.automateWeeklyCampaigns) {
-        generatedCampaign = await executeAutoDailyPostGeneration(productId);
-      } else if (product.automateDailyBlogs && !product.automateWeeklyCampaigns) {
-        generatedCampaign = await executeAutoDailyBlogGeneration(productId);
+      if ((product.automateDailyPosts || product.automateDailyBlogs) && !product.automateWeeklyCampaigns) {
+        await executeAutoDailyGeneration(productId, !!product.automateDailyPosts, !!product.automateDailyBlogs);
+        
+        // Fetch the latest daily campaign created for this product
+        const campaignSnap = await db.collection('campaigns')
+          .where('productId', '==', productId)
+          .where('isOneDay', '==', true)
+          .orderBy('createdAt', 'desc')
+          .limit(1)
+          .get();
+        if (!campaignSnap.empty) {
+          generatedCampaign = campaignSnap.docs[0].data();
+        }
       } else {
         generatedCampaign = await executeAutoCampaignGeneration(productId);
       }

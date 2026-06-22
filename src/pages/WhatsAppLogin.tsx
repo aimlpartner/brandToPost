@@ -103,11 +103,10 @@ export function WhatsAppLogin() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-[#25d366]/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute top-[40%] right-[20%] w-[400px] h-[400px] bg-emerald-500/5 rounded-full blur-[160px] pointer-events-none" />
 
-      {/* Grid patterns */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(24,24,32,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(24,24,32,0.05)_1px,transparent_1px)] bg-[size:48px_48px] opacity-15 pointer-events-none" />
+
 
       {/* Left side - Visual/Brand Pane (Hidden on mobile) */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-[#0c1214] to-[#070b0d] border-r border-white/5 p-12 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#0c1214] border-r border-white/5 p-12 flex-col justify-between">
         
         {/* Content Top */}
         <motion.div 
@@ -142,7 +141,7 @@ export function WhatsAppLogin() {
           >
             WhatsApp <br/>
             Onboarding & <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-[#00A884] font-bold">
+            <span className="text-emerald-400 font-bold">
               Inbound Growth.
             </span>
           </motion.h1>

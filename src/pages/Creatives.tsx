@@ -394,7 +394,7 @@ export function Creatives() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <div key={i} className="bg-white/45 backdrop-blur-md rounded-xl border border-slate-200/50 overflow-hidden shadow-sm animate-pulse">
-                  <div className="aspect-square bg-gradient-to-tr from-[#7C3AED]/5 via-[#2583EB]/5 to-[#7C3AED]/10 relative flex items-center justify-center">
+                  <div className="aspect-square bg-slate-100 relative flex items-center justify-center">
                     <div className="w-8 h-8 rounded-full bg-[#7C3AED]/10 animate-pulse" />
                   </div>
                   <div className="p-3 space-y-2">
@@ -461,7 +461,7 @@ export function Creatives() {
  {/* Delete Confirmation Modal */}
  {creativeToDelete && createPortal(
  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
- <div className="bg-[#1C1C22] rounded-xl shadow-xl max-w-md w-full p-6">
+ <div className="bg-[#1C1C22] rounded-[18px] shadow-xl max-w-md w-full p-6">
  <h3 className="text-lg font-bold text-white mb-2">Delete Creative</h3>
  <p className="text-gray-300 mb-6">
  Are you sure you want to delete "{creativeToDelete.name}"? This action cannot be undone.
@@ -504,7 +504,7 @@ export function Creatives() {
           <img 
             src={previewCreative.url || undefined} 
             alt={previewCreative.name}
-            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10"
+            className="max-w-full max-h-[90vh] object-contain rounded-[14px] shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10"
             onClick={(e) => e.stopPropagation()}
           />
           <div className="absolute bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm px-4 md:px-6 py-2 md:py-3 rounded-full border border-white/10 text-white font-medium text-sm md:text-base whitespace-nowrap max-w-[90%] truncate">

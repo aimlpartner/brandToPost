@@ -1857,66 +1857,6 @@ export function Campaigns() {
         {campaigns.filter((c) => c.productId === activeProduct?.id).length >
           0 && (
           <div className="flex flex-col gap-3 px-2 py-1">
-            <div className="flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search theme, pillar, date..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all"
-                />
-              </div>
-              <button
-                onClick={() =>
-                  setSortOrder((prev) =>
-                    prev === "newest" ? "oldest" : "newest",
-                  )
-                }
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shrink-0 shadow-sm"
-              >
-                {sortOrder === "newest" ? (
-                  <ArrowDownAZ className="h-4 w-4" />
-                ) : (
-                  <ArrowUpAZ className="h-4 w-4" />
-                )}
-                {sortOrder === "newest" ? "Newest First" : "Oldest First"}
-              </button>
-            </div>
-            {allTags.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                <span className="text-xs font-medium text-gray-400 flex-shrink-0 flex items-center gap-1">
-                  <Filter className="h-3 w-3" />
-                  Tags:
-                </span>
-                <button
-                  onClick={() => setSelectedTagFilter(null)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors",
-                    selectedTagFilter === null
-                      ? "bg-[#7C3AED] text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-                  )}
-                >
-                  All
-                </button>
-                {allTags.map((tag) => (
-                  <button
-                    key={tag}
-                    onClick={() => setSelectedTagFilter(tag)}
-                    className={cn(
-                      "px-2.5 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors",
-                      selectedTagFilter === tag
-                        ? "bg-[#7C3AED] text-white"
-                        : "bg-[#7C3AED]/10 text-[#7C3AED] hover:bg-[#7C3AED]/20",
-                    )}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <button
@@ -2159,7 +2099,7 @@ export function Campaigns() {
                   {selectedCampaign.theme}
                 </h2>
                 {selectedCampaign.isAutomated && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-[0_0_12px_rgba(124,58,237,0.5)] animate-pulse">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-violet-600 text-white shadow-[0_0_12px_rgba(124,58,237,0.5)] animate-pulse">
                     🤖 AI Agent Automated
                   </span>
                 )}
@@ -2695,7 +2635,7 @@ export function Campaigns() {
                                               disabled={
                                                 isPublishing || isPublished
                                               }
-                                              className="inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-white bg-gradient-to-tr from-[#FFB900] via-[#D500F9] to-[#FF1744] hover:opacity-90 rounded-lg transition-colors shadow-sm shrink-0"
+                                              className="inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-white bg-[#E1306C] hover:bg-[#c12456] rounded-lg transition-colors shadow-sm shrink-0"
                                             >
                                               {isPublishing ? (
                                                 <VideoLoader className="mr-1.5 h-7 w-7" />
@@ -3007,7 +2947,7 @@ export function Campaigns() {
                                         )
                                       }
                                       disabled={isPublishing || isPublished}
-                                      className="inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-white bg-gradient-to-tr from-[#FFB900] via-[#D500F9] to-[#FF1744] hover:opacity-90 rounded-lg transition-colors shadow-sm shrink-0"
+                                      className="inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-white bg-[#E1306C] hover:bg-[#c12456] rounded-lg transition-colors shadow-sm shrink-0"
                                     >
                                       {isPublishing ? (
                                         <VideoLoader className="mr-1.5 h-7 w-7" />
@@ -3160,7 +3100,7 @@ export function Campaigns() {
       {showModal &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-0 sm:p-4 backdrop-blur-sm">
-            <div className="bg-white w-full sm:max-w-3xl overflow-hidden flex flex-col h-full sm:h-auto sm:max-h-[90vh] shadow-[0_25px_60px_rgba(15,23,42,0.18)] !rounded-none sm:!rounded-2xl border-0 sm:border border-slate-200">
+            <div className="bg-white w-full sm:max-w-4xl overflow-hidden flex flex-col h-full sm:h-auto sm:max-h-[90vh] shadow-[0_25px_60px_rgba(15,23,42,0.18)] !rounded-none sm:!rounded-[22px] border-0 sm:border border-slate-200">
                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
                 <h2 className="text-lg font-bold text-slate-800 font-display">
                   {modalStep === 1 && "Campaign Focus"}
@@ -3578,7 +3518,7 @@ export function Campaigns() {
                 {modalStep === 4 && (
                   <div className="flex flex-col items-center justify-center py-10 space-y-6">
                     <div className="relative flex items-center justify-center">
-                      <div className="absolute -inset-4 bg-gradient-to-tr from-[#7C3AED]/10 to-[#2583EB]/15 rounded-full filter blur-xl animate-pulse" />
+                      <div className="absolute -inset-4 bg-[#7C3AED]/10 rounded-full filter blur-xl animate-pulse" />
                       <VideoLoader className="h-32 w-32 text-[#7C3AED] relative z-10 border-2 border-slate-200/50 shadow-[0_10px_40px_rgba(124,58,237,0.15)] bg-white" />
                       <div className="absolute -bottom-1 -right-1 bg-[#7C3AED] text-white p-2.5 rounded-full border-2 border-white shadow-xl z-20">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -3610,7 +3550,7 @@ export function Campaigns() {
                         </div>
                         <div className="h-1.5 w-full bg-slate-100 border border-slate-200 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-gradient-to-r from-[#7C3AED] to-[#9D5CFF] rounded-full transition-all duration-1000 ease-out"
+                            className="h-full bg-[#7C3AED] rounded-full transition-all duration-1000 ease-out"
                             style={{
                               width: `${(generationStep / generationTotal) * 100}%`,
                             }}
@@ -3911,7 +3851,7 @@ export function Campaigns() {
       {showDeleteConfirm &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
-            <div className="bg-white max-w-sm w-full overflow-hidden rounded-2xl border border-slate-200/80 shadow-[0_20px_60px_rgba(15,23,42,0.15)] animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white max-w-sm w-full overflow-hidden rounded-[22px] border border-slate-200/80 shadow-[0_20px_60px_rgba(15,23,42,0.15)] animate-in fade-in zoom-in-95 duration-200">
               <div className="p-6 text-center">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-rose-50 border border-rose-100 mb-4 animate-[pulse_3s_ease-in-out_infinite]">
                   <Trash2 className="h-6 w-6 text-rose-600" />
@@ -3959,7 +3899,7 @@ export function Campaigns() {
         selectedCampaign &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
-            <div className="bg-white max-w-md w-full overflow-hidden flex flex-col rounded-2xl border border-slate-200/80 shadow-[0_20px_60px_rgba(15,23,42,0.15)] animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white max-w-md w-full overflow-hidden flex flex-col rounded-[22px] border border-slate-200/80 shadow-[0_20px_60px_rgba(15,23,42,0.15)] animate-in fade-in zoom-in-95 duration-200">
               <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                 <h3 className="text-lg font-bold font-display text-slate-800 flex items-center gap-2">
                   <Share2 className="h-5 w-5 text-[#7C3AED]" />

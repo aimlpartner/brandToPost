@@ -819,7 +819,7 @@ Modify and output the complete revised JSON conforming strictly to the original 
               <button 
                 onClick={() => handleGenerateScript()}
                 disabled={isGenerating}
-                className="tour-generate-script-btn w-full text-white font-bold py-3 px-4 rounded-xl transition-all shadow-xl shadow-purple-900/20 hover:shadow-purple-900/40 inline-flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-60 bg-gradient-to-r from-[#7C3AED] to-[#4F46E5] active:scale-95 text-sm"
+                className="tour-generate-script-btn w-full text-white font-bold py-3 px-4 rounded-xl transition-all shadow-xl shadow-purple-900/20 hover:shadow-purple-900/40 inline-flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-60 bg-[#7C3AED] hover:bg-[#6D28D9] active:scale-95 text-sm"
               >
                 <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                 {isGenerating ? (
@@ -866,7 +866,7 @@ Modify and output the complete revised JSON conforming strictly to the original 
                 exit={{ opacity: 0, scale: 0.98 }}
                 className="bg-[#101015]/80 border border-[#2583EB]/25 rounded-2xl p-10 flex flex-col items-center justify-center flex-grow text-center min-h-[500px] shadow-2xl relative overflow-hidden"
               >
-                <div className="absolute inset-0 bg-gradient-to-b from-[#2583EB]/5 to-transparent pointer-events-none" />
+
                 
                 {/* Visual loading ring */}
                 <div className="relative w-20 h-20 mb-8">
@@ -901,7 +901,7 @@ Modify and output the complete revised JSON conforming strictly to the original 
                 exit={{ opacity: 0 }}
                 className="bg-[#101015]/80 border border-[#7C3AED]/15 rounded-2xl p-6 md:p-8 flex flex-col justify-between flex-grow min-h-[500px] shadow-2xl relative overflow-hidden"
               >
-                <div className="absolute inset-0 bg-gradient-to-b from-[#7C3AED]/5 via-transparent to-transparent pointer-events-none" />
+
                 
                 {/* Upper Hero Panel */}
                 <div className="flex flex-col items-center justify-center text-center pt-8 max-w-lg mx-auto">
@@ -1057,7 +1057,7 @@ Modify and output the complete revised JSON conforming strictly to the original 
                         <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">
                           Primary Audience Targets
                         </span>
-                        <div className="bg-gradient-to-r from-[#1C1C22]/50 to-[#101015] border border-gray-800 p-3 rounded-xl flex items-center gap-2">
+                        <div className="bg-[#1C1C22]/50 border border-gray-800 p-3 rounded-xl flex items-center gap-2">
                           <div className="w-1.5 h-1.5 bg-[#2583EB] rounded-full shrink-0" />
                           <span className="text-xs text-gray-200 font-medium leading-normal">{scriptData.primaryAudience}</span>
                         </div>
@@ -1391,7 +1391,7 @@ Modify and output the complete revised JSON conforming strictly to the original 
                                 key={index} 
                                 className="bg-[#0C0C12]/90 border border-[#7C3AED]/15 hover:border-[#7C3AED]/30 p-4 rounded-xl flex flex-col gap-2 relative overflow-hidden transition-colors group"
                               >
-                                <div className="absolute top-0 bottom-0 left-0 w-1 bg-gradient-to-b from-[#7C3AED] to-indigo-500" />
+                                <div className="absolute top-0 bottom-0 left-0 w-1 bg-[#7C3AED]" />
                                 
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-[10px] bg-indigo-500/10 text-indigo-300 font-extrabold px-2 py-0.5 rounded border border-indigo-400/10 uppercase tracking-widest scale-95 origin-left">

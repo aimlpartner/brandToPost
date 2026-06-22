@@ -191,8 +191,8 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
                    <ImageIcon className="w-32 h-32 text-gray-700" />
                  </div>
               )}
-              {/* Cinematic Gradient overlay on the left */}
-              <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent pointer-events-none" />
+              {/* Translucent solid black overlay on the left */}
+              <div className="absolute inset-0 bg-black/60 pointer-events-none" />
               
               <div className="relative z-10 p-24 h-full flex flex-col justify-center w-[85%]">
                 {visualData?.subtext && (
@@ -213,7 +213,7 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
               <div 
                  className="absolute inset-0 opacity-80"
                  style={{ 
-                   background: `radial-gradient(circle at top right, ${primaryColor}40, transparent 60%), radial-gradient(circle at bottom left, ${secondaryColor}80, ${primaryColor}20 80%)`
+                   backgroundColor: secondaryColor || "#0B0F19"
                  }}
               />
               {imageUrl && (
@@ -281,11 +281,10 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
           {/* TEMPLATE 4: Powerful Quote */}
           {safeVisualType === "powerful-quote" && (
             <div className="absolute inset-0 flex flex-col justify-center items-center p-24 text-center"
-                 style={{ background: `linear-gradient(135deg, ${secondaryColor}, #000000 70%)` }}
+                 style={{ backgroundColor: secondaryColor || "#000000" }}
             >
               <div className="text-[140px] text-white/20 mb-10 font-serif leading-none">"</div>
-              <h2 className={`text-white font-black leading-[1.1] tracking-tight bg-clip-text text-transparent drop-shadow-md pb-8 ${(visualData?.headline || fallbackText || "").length > 150 ? "text-[42px]" : (visualData?.headline || fallbackText || "").length > 80 ? "text-[56px]" : "text-[72px]"}`}
-                  style={{ backgroundImage: `linear-gradient(to bottom right, #FFFFFF, ${primaryColor})` }}
+              <h2 className={`text-white font-black leading-[1.1] tracking-tight drop-shadow-md pb-8 ${(visualData?.headline || fallbackText || "").length > 150 ? "text-[42px]" : (visualData?.headline || fallbackText || "").length > 80 ? "text-[56px]" : "text-[72px]"}`}
               >
                 {visualData?.headline || fallbackText || "The old way of working is broken beyond repair."}
               </h2>
@@ -312,7 +311,7 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
                   dangerouslySetInnerHTML={{ __html: visualData.customHtml }} 
                 />
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-end p-24 text-center bg-black/40 bg-gradient-to-t from-black via-black/50 to-transparent">
+                <div className="absolute inset-0 flex flex-col items-center justify-end p-24 text-center bg-black/60">
                    <h2 className={`text-white font-extrabold leading-[1.1] mb-6 drop-shadow-lg ${(visualData?.headline || fallbackText || "").length > 150 ? "text-[36px]" : (visualData?.headline || fallbackText || "").length > 80 ? "text-[48px]" : "text-[64px]"}`}>
                       {visualData?.headline || fallbackText}
                    </h2>

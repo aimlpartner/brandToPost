@@ -518,7 +518,7 @@ export function VisualEditorModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-md">
-      <div className="bg-white w-full max-w-7xl h-[95vh] flex flex-col rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.15)] border border-slate-200">
+      <div className="bg-white w-full max-w-7xl h-[95vh] flex flex-col rounded-[22px] shadow-[0_25px_60px_rgba(0,0,0,0.15)] border border-slate-200">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layout className="w-5 h-5 text-[#7C3AED]" />
@@ -577,7 +577,7 @@ export function VisualEditorModal({
                       right: 0, 
                       bottom: 0, 
                       height: `${scrimHeight}%`, 
-                      background: `linear-gradient(to top, rgba(${parseInt(scrimColor.slice(1,3), 16) || 0},${parseInt(scrimColor.slice(3,5), 16) || 0},${parseInt(scrimColor.slice(5,7), 16) || 0},${scrimOpacity}) 0%, rgba(0,0,0,0) 100%)`, 
+                      background: `rgba(${parseInt(scrimColor.slice(1,3), 16) || 0},${parseInt(scrimColor.slice(3,5), 16) || 0},${parseInt(scrimColor.slice(5,7), 16) || 0},${scrimOpacity})`, 
                       zIndex: 1,
                       pointerEvents: 'none'
                     }} 
@@ -916,7 +916,7 @@ export function VisualEditorModal({
 
                   <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-sm">
                     <div className="flex justify-between items-center">
-                       <div className="text-xs font-bold text-slate-505 uppercase tracking-widest">Gradient Height</div>
+                       <div className="text-xs font-bold text-slate-505 uppercase tracking-widest">Scrim Height</div>
                        <div className="flex items-center gap-2">
                            <input type="number" min="0" max="100" value={Math.round(scrimHeight)} onChange={(e) => setScrimHeight(parseInt(e.target.value))} className="w-16 bg-slate-50 border border-slate-205 rounded px-2 py-1 text-sm text-slate-805 text-right font-semibold" />
                            <span className="text-xs text-slate-404 font-semibold">%</span>
@@ -926,7 +926,7 @@ export function VisualEditorModal({
                   </div>
                   
                   <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                    The scrim is a soft gradient that sits above your image but beneath the text. This guarantees text readability even on bright images. 
+                    The scrim is a soft overlay that sits above your image but beneath the text. This guarantees text readability even on bright images. 
                   </p>
                 </div>
               )}

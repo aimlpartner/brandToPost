@@ -112,17 +112,16 @@ export function BrandExtractionModal({ isOpen, inputType, isComplete, screenshot
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white border border-slate-200/80 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-4xl overflow-hidden flex flex-col md:flex-row"
+        className="bg-white border border-slate-200/80 rounded-[22px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-4xl overflow-hidden flex flex-col md:flex-row"
       >
         {/* Left Panel: Status & Steps */}
         <div className="p-8 border-b md:border-b-0 md:border-r border-slate-100 w-full md:w-[45%] relative flex flex-col bg-slate-50/50">
-          <div className="absolute inset-0 bg-gradient-to-b from-[#7C3AED]/5 to-transparent pointer-events-none opacity-40" />
           
           <div className="relative z-10 flex flex-col h-full">
              <div className="flex items-center gap-4 mb-8">
                <div className="relative">
                  <div className="absolute -inset-2 bg-[#7C3AED]/10 animate-ping rounded-full" style={{ animationDuration: '3s' }} />
-                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#2583EB] flex items-center justify-center shadow-md relative z-10">
+                 <div className="w-12 h-12 rounded-xl bg-[#7C3AED] flex items-center justify-center shadow-md relative z-10">
                    <Activity className="w-6 h-6 text-white animate-pulse" />
                  </div>
                </div>

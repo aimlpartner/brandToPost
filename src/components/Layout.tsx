@@ -68,49 +68,8 @@ export function Layout() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-transparent text-[#0F172A] relative">
       <GuidedTour />
-      {/* Universal brand-logo themed square gradient background grids */}
+      {/* Universal background container */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 bg-white">
-        {/* Beautiful, animated Gemini-style elegant gradient blobs */}
-        <div className="absolute top-[-10%] right-[10%] w-[55vw] h-[55vw] max-w-[650px] max-h-[650px] rounded-[120px] bg-gradient-to-br from-[#7C3AED]/12 via-[#2583EB]/12 to-[#D500F9]/12 blur-[120px] animate-blob-1 transform-gpu" />
-        <div className="absolute bottom-[-15%] left-[-10%] w-[60vw] h-[60vw] max-w-[700px] max-h-[700px] rounded-[140px] bg-gradient-to-tr from-[#2583EB]/10 via-[#00DF89]/9 to-[#7C3AED]/10 blur-[130px] animate-blob-2 transform-gpu" />
-        <div className="absolute top-[25%] left-[15%] w-[45vw] h-[45vw] max-w-[500px] max-h-[500px] rounded-[100px] bg-gradient-to-r from-[#D500F9]/9 via-[#FF1744]/8 to-[#FFB900]/7 blur-[110px] animate-blob-3 transform-gpu" />
-        <div className="absolute bottom-[20%] right-[5%] w-[50vw] h-[50vw] max-w-[550px] max-h-[550px] rounded-[110px] bg-gradient-to-bl from-[#7C3AED]/10 via-[#00E5FF]/9 to-[#2583EB]/10 blur-[120px] animate-blob-4 transform-gpu" />
-
-        {/* Highly optimized, high-fidelity Halftone Dot Mesh over animated flowing gradients */}
-        <div
-          className="absolute inset-0 opacity-[0.05] pointer-events-none mix-blend-multiply"
-          style={{
-            backgroundImage: `
-              radial-gradient(circle at center, currentColor 1.5px, transparent 1.5px),
-              radial-gradient(circle at center, currentColor 1.5px, transparent 1.5px)
-            `,
-            backgroundSize: "24px 24px",
-            backgroundPosition: "0 0, 12px 12px",
-            color: "#7C3AED",
-          }}
-        />
-        <div
-          className="absolute inset-0 opacity-[0.04] pointer-events-none mix-blend-multiply"
-          style={{
-            backgroundImage: `
-              radial-gradient(circle at center, currentColor 2px, transparent 2px),
-              radial-gradient(circle at center, currentColor 2px, transparent 2px)
-            `,
-            backgroundSize: "32px 32px",
-            backgroundPosition: "0 0, 16px 16px",
-            color: "#2583EB",
-          }}
-        />
-        <div
-          className="absolute inset-0 opacity-[0.035] pointer-events-none mix-blend-multiply"
-          style={{
-            backgroundImage: `
-              radial-gradient(circle at center, currentColor 1.2px, transparent 1.2px)
-            `,
-            backgroundSize: "12px 12px",
-            color: "#D500F9",
-          }}
-        />
       </div>
 
       {/* Mobile Header */}
@@ -127,7 +86,7 @@ export function Layout() {
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#2583EB] flex items-center justify-center text-xs font-bold text-white shadow-sm border border-[#7C3AED]/50">
+            <div className="h-9 w-9 rounded-full bg-[#7C3AED] flex items-center justify-center text-xs font-bold text-white shadow-sm border border-[#7C3AED]/50">
               {user?.email?.[0].toUpperCase() || "U"}
             </div>
           )}
@@ -155,7 +114,7 @@ export function Layout() {
       </div>
 
       {/* Sidebar - Desktop */}
-      <div className="hidden md:flex relative flex-shrink-0 w-[80px] h-full bg-white/95 border-r border-[#7C3AED]/15 shadow-md z-10 transition-[width] duration-300">
+      <div className="hidden md:flex relative flex-shrink-0 w-[220px] h-full z-10">
         <Sidebar onClose={() => setIsMobileMenuOpen(false)} />
       </div>
 
@@ -231,7 +190,7 @@ export function Layout() {
               cn(
                 "flex items-center justify-center transition-all duration-300 w-11 h-11",
                 isActive
-                  ? "text-[#7C3AED] bg-[#7C3AED]/10 rounded-xl"
+                  ? "text-white bg-[#7C3AED] rounded-xl shadow-sm"
                   : "text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-xl"
               )
             }
@@ -240,7 +199,7 @@ export function Layout() {
               <item.icon
                 className="h-6 w-6"
                 strokeWidth={isActive ? 2.5 : 2}
-                {...(isActive ? { fill: "currentColor", fillOpacity: 0.2 } : {})}
+                {...(isActive ? { fill: "currentColor", fillOpacity: 0.16 } : {})}
               />
             )}
           </NavLink>

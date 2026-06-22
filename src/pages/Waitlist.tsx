@@ -191,7 +191,7 @@ export function Waitlist() {
         .vignette-overlay {
           position: fixed;
           inset: 0;
-          background: radial-gradient(circle, transparent 20%, rgba(5, 5, 8, 0.75) 70%, rgba(5, 5, 8, 0.98) 100%);
+          background: rgba(5, 5, 8, 0.85);
           z-index: 2;
           pointer-events: none;
         }

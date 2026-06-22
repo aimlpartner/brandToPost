@@ -27,7 +27,7 @@ export function ImageLightbox({ src, onClose }: ImageLightboxProps) {
  <img 
  src={src || undefined} 
  alt="Enlarged view" 
- className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+ className="max-w-full max-h-[90vh] object-contain rounded-[14px] shadow-2xl"
  onClick={(e) => e.stopPropagation()}
  />
  </div>

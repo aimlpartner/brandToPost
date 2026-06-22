@@ -1,9 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&family=Outfit:wght@100;200;300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: "Outfit", "Inter", sans-serif;
+  --font-sans: "Inter Tight", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Inter Tight", -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Restored Brand Core Colors */
   --color-brand-dark-1: #F8FAFC;
@@ -65,15 +65,9 @@
 html, body {
   font-family: var(--font-sans);
   background-color: #f8fafc;
-  background-image: 
-    radial-gradient(circle at 1px 1px, rgba(124, 58, 237, 0.045) 1px, transparent 0),
-    linear-gradient(rgba(124, 58, 237, 0.015) 1px, transparent 0),
-    linear-gradient(90deg, rgba(124, 58, 237, 0.015) 1px, transparent 0);
-  background-size: 24px 24px, 72px 72px, 72px 72px;
-  background-attachment: fixed;
   color: var(--color-brand-light);
   min-height: 100vh;
-  font-weight: 300;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -85,9 +79,46 @@ body.modal-open .hide-scroll-when-modal {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
-  letter-spacing: -0.01em;
-  font-weight: 400;
+  letter-spacing: -0.02em;
+  font-weight: 600;
   color: #0F172A;
+}
+
+/* Inter Tight Typography Scale */
+.text-display {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 36px;
+  letter-spacing: -0.8px;
+}
+.text-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.2px;
+}
+.text-headline-1 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  letter-spacing: -0.2px;
+}
+.text-headline-2 {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.2px;
+}
+.text-headline-3 {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: -0.2px;
 }
 
 /* Glassmorphism Utilities - Creative Tech Luxury */
@@ -100,7 +131,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glass-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.45) 100%);
+  background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(124, 58, 237, 0.12);
   box-shadow: 0 4px 20px -5px rgba(124, 58, 237, 0.03);
   border-radius: 6px;
@@ -112,7 +143,7 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateY(-2px);
   border-color: rgba(124, 58, 237, 0.25);
   box-shadow: 0 8px 30px -5px rgba(124, 58, 237, 0.07), inset 0 0 15px rgba(37, 131, 235, 0.03);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.6) 100%);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .glass-button {
@@ -134,7 +165,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glass-button-primary {
-  background: linear-gradient(135deg, var(--color-brand-purple), var(--color-brand-blue));
+  background: var(--color-brand-purple);
   border: 1px solid rgba(255, 255, 255, 0.25);
   box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
   color: #FFFFFF;
@@ -144,7 +175,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glass-button-primary:hover {
-  background: linear-gradient(135deg, #8b4bf0, #358ff0);
+  background: #6D28D9;
   box-shadow: 0 6px 25px rgba(37, 131, 235, 0.4);
   transform: translateY(-2px);
 }

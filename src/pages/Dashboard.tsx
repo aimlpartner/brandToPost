@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { WeeklyCampaign } from "../types";
 import { Link, useSearchParams } from "react-router-dom";
-import { Megaphone, ArrowRight, Zap, Sparkles } from "lucide-react";
+import { Megaphone, ArrowRight, Zap, Sparkles, FileText } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
 import { db } from "../firebase";
@@ -62,6 +62,11 @@ export function Dashboard() {
     return () => unsubscribe();
   }, [user, activeProduct]);
 
+  // Split campaigns by category
+  const weeklyCampaigns = campaigns.filter((c) => !c.isBlog && !c.isOneDay);
+  const dailyPosts = campaigns.filter((c) => c.isOneDay && !c.isBlog);
+  const blogs = campaigns.filter((c) => c.isBlog);
+
   return (
     <div className="space-y-4 sm:space-y-8 px-4 sm:px-0">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -94,9 +99,9 @@ export function Dashboard() {
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {/* Tror Assistant Welcome Card */}
-        <div className="tour-welcome-card glass-card p-4 sm:p-6 sm:col-span-2 lg:col-span-3 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden bg-gradient-to-br from-white to-slate-50 border-[#7C3AED]/15 shadow-sm">
+        <div className="tour-welcome-card glass-card p-4 sm:p-6 sm:col-span-2 lg:col-span-3 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden bg-white/95 border-[#7C3AED]/15 shadow-sm">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#7C3AED]/10 blur-[80px] rounded-full pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#2583EB]/10 blur-[60px] rounded-full pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#7C3AED]/10 blur-[60px] rounded-full pointer-events-none" />
 
           <div className="relative shrink-0 z-10 w-32 h-32 md:w-40 md:h-40 rounded-full border border-[#7C3AED]/15 bg-white flex items-center justify-center p-2 shadow-[0_0_30px_rgba(124,58,237,0.15)]">
             <img
@@ -125,27 +130,85 @@ export function Dashboard() {
           </div>
         </div>
 
+        {/* Weekly Campaigns Stat */}
         <div className="tour-campaigns-stat glass-card p-4 sm:p-6 bg-white/95 border-[#7C3AED]/15 hover:border-[#7C3AED]/35 transition-colors">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7C3AED] to-[#2583EB] text-white shadow-sm">
-              <Megaphone className="h-7 w-7 text-white" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#7C3AED] text-white shadow-sm">
+              <Megaphone
+                className="h-7 w-7 text-white"
+                strokeWidth={1.8}
+                fill="currentColor"
+                fillOpacity={0.16}
+              />
             </div>
             <div>
               <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">
-                Campaigns for {activeProduct?.name || "Product"}
+                Weekly Campaigns
               </p>
               {isLoadingCampaigns ? (
                 <div className="h-8 w-12 bg-slate-100 rounded animate-pulse mt-1" />
               ) : (
                 <p className="text-3xl font-bold text-slate-800 font-display mt-1">
-                  {campaigns.length}
+                  {weeklyCampaigns.length}
                 </p>
               )}
             </div>
           </div>
         </div>
 
-        <div className="glass-card p-4 sm:p-6 sm:col-span-1 lg:col-span-2 bg-white/80 border-[#7C3AED]/10 shadow-sm">
+        {/* Blogs & Newsletters Stat */}
+        <div className="glass-card p-4 sm:p-6 bg-white/95 border-[#7C3AED]/15 hover:border-[#7C3AED]/35 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#7C3AED] text-white shadow-sm">
+              <FileText
+                className="h-7 w-7 text-white"
+                strokeWidth={1.8}
+                fill="currentColor"
+                fillOpacity={0.16}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">
+                Blogs & Articles
+              </p>
+              {isLoadingCampaigns ? (
+                <div className="h-8 w-12 bg-slate-100 rounded animate-pulse mt-1" />
+              ) : (
+                <p className="text-3xl font-bold text-slate-800 font-display mt-1">
+                  {blogs.length}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Posts Stat */}
+        <div className="glass-card p-4 sm:p-6 bg-white/95 border-[#7C3AED]/15 hover:border-[#7C3AED]/35 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#7C3AED] text-white shadow-sm">
+              <Zap
+                className="h-7 w-7 text-white"
+                strokeWidth={1.8}
+                fill="currentColor"
+                fillOpacity={0.16}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">
+                Daily Posts
+              </p>
+              {isLoadingCampaigns ? (
+                <div className="h-8 w-12 bg-slate-100 rounded animate-pulse mt-1" />
+              ) : (
+                <p className="text-3xl font-bold text-slate-800 font-display mt-1">
+                  {dailyPosts.length}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-4 sm:p-6 col-span-full bg-white/80 border-[#7C3AED]/10 shadow-sm">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">
             The POST Framework
           </h3>
@@ -189,23 +252,26 @@ export function Dashboard() {
       <div className="tour-recent-campaigns glass-panel overflow-hidden bg-white border-[#7C3AED]/15 shadow-sm">
         <div className="border-b border-slate-100 px-8 py-6 flex items-center justify-between bg-slate-50/50">
           <h3 className="text-lg font-semibold leading-6 text-slate-800 flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-[#7C3AED]" />
+            <Sparkles
+              className="h-5 w-5 text-[#7C3AED]"
+              strokeWidth={1.8}
+              fill="currentColor"
+              fillOpacity={0.16}
+            />
             Recent Campaigns
           </h3>
           <Link
             to="/dashboard/campaigns"
             className="text-sm font-medium text-[#7C3AED] hover:text-[#7C3AED]/80 flex items-center gap-1 transition-colors"
           >
-            View all <ArrowRight className="h-4 w-4" />
+            View all{" "}
+            <ArrowRight className="h-4 w-4" strokeWidth={1.8} />
           </Link>
         </div>
         <div className="divide-y divide-slate-100">
           {isLoadingCampaigns ? (
             Array.from({ length: 3 }).map((_, idx) => (
-              <div
-                key={idx}
-                className="px-8 py-6 animate-pulse"
-              >
+              <div key={idx} className="px-8 py-6 animate-pulse">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 space-y-3">
                     <div className="h-4 bg-slate-100 rounded w-1/4" />
@@ -215,7 +281,7 @@ export function Dashboard() {
                 </div>
               </div>
             ))
-          ) : campaigns.length === 0 ? (
+          ) : weeklyCampaigns.length === 0 ? (
             <div className="px-8 py-20 text-center flex flex-col items-center">
               <img
                 src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
@@ -232,14 +298,14 @@ export function Dashboard() {
               <div className="mt-8">
                 <Link
                   to="/dashboard/dna"
-                  className="glass-button-primary rounded-xl px-6 py-3 text-sm font-semibold inline-flex items-center justify-center"
+                  className="glass-button-primary rounded-xl px-6 py-3 text-sm font-semibold inline-flex items-center justify-center font-bold"
                 >
                   Define Brand Position
                 </Link>
               </div>
             </div>
           ) : (
-            campaigns.slice(0, 5).map((campaign) => (
+            weeklyCampaigns.slice(0, 5).map((campaign) => (
               <Link
                 key={campaign.id}
                 to={`/dashboard/campaigns?id=${campaign.id}`}
@@ -250,11 +316,11 @@ export function Dashboard() {
                     <p className="text-base font-semibold text-slate-800 group-hover:text-[#7C3AED] transition-colors">
                       {campaign.theme}
                     </p>
-                    <p className="text-sm text-slate-500 mt-1.5">
+                    <p className="text-sm text-slate-500 mt-1.5 font-light">
                       {campaign.coreMessage}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <p className="text-xs text-slate-400 mt-3 font-medium">
                       {new Date(campaign.createdAt).toLocaleDateString()}
                     </p>
@@ -268,13 +334,13 @@ export function Dashboard() {
 
       {showTour && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-8 overflow-hidden text-slate-100 shadow-2xl">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-[30px] p-8 overflow-hidden text-slate-100 shadow-2xl">
             {/* Glows */}
             <div className="absolute top-[-20%] left-[-10%] w-60 h-60 bg-[#7C3AED]/20 rounded-full blur-[60px] pointer-events-none" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-48 h-48 bg-[#2583EB]/20 rounded-full blur-[50px] pointer-events-none" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-48 h-48 bg-[#7C3AED]/20 rounded-full blur-[50px] pointer-events-none" />
 
             <div className="relative z-10 flex flex-col items-center text-center space-y-6">
-              <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#2583EB] p-1 shadow-lg shadow-[#7C3AED]/20 relative">
+              <div className="w-28 h-28 rounded-full bg-[#7C3AED] p-1 shadow-lg shadow-[#7C3AED]/20 relative">
                 <div className="w-full h-full rounded-full bg-[#0A0A0F] flex items-center justify-center overflow-hidden">
                   <img
                     src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
@@ -322,7 +388,7 @@ export function Dashboard() {
 
               <button
                 onClick={() => setShowTour(false)}
-                className="w-full py-3.5 bg-gradient-to-r from-[#7C3AED] to-[#2583EB] text-white font-bold rounded-xl shadow-lg hover:shadow-[#7C3AED]/20 active:scale-[0.98] transition-all text-sm uppercase tracking-wider"
+                className="w-full py-3.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold rounded-xl shadow-lg hover:shadow-[#7C3AED]/20 active:scale-[0.98] transition-all text-sm uppercase tracking-wider cursor-pointer"
               >
                 Let's Go!
               </button>

@@ -113,14 +113,12 @@ export function Login() {
   return (
     <div className="min-h-screen flex bg-slate-50 font-sans selection:bg-[#7C3AED] selection:text-white">
       {/* Left side - Visual/Brand Pane (Hidden on mobile) */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-slate-50 to-white/90 border-r border-slate-200/80 p-12 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-slate-50 border-r border-slate-200/80 p-12 flex-col justify-between">
         {/* Abstract animated light orbs */}
         <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-[#7C3AED]/5 rounded-full blur-[120px] animate-[pulse_8s_ease-in-out_infinite]" />
         <div className="absolute bottom-[-10%] right-[-20%] w-[600px] h-[600px] bg-[#2583EB]/5 rounded-full blur-[100px] animate-[pulse_10s_ease-in-out_infinite_reverse]" />
         
-        {/* Background grid pattern */}
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay pointer-events-none" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.015)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_40%,#000_20%,transparent_100%)] pointer-events-none" />
+
 
         {/* Content Top */}
         <motion.div 
@@ -153,7 +151,7 @@ export function Login() {
             className="text-5xl lg:text-7xl font-normal font-display text-slate-800 tracking-tight leading-[1.1] mb-6"
           >
             Design. Build. <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] to-[#2583EB] font-bold">
+            <span className="text-[#7C3AED] font-bold">
               Accelerate.
             </span>
           </motion.h1>

@@ -21,7 +21,8 @@ import {
   Volume2,
   Info,
   Layers,
-  HeartHandshake
+  HeartHandshake,
+  Pencil
 } from "lucide-react";
 import { researchProductDNA, researchFocus, generateCampaign } from "../services/geminiService";
 import { db } from "../firebase";
@@ -29,8 +30,141 @@ import { collection, addDoc, setDoc, doc } from "firebase/firestore";
 import { logSilentError, handleFirestoreError, OperationType } from "../lib/firestore-error";
 import { motion, AnimatePresence } from "motion/react";
 
+// --- SmartField component for onboarding (matches ProductDNA.tsx) ---
+interface SmartFieldProps {
+  label: string;
+  value: string;
+  placeholder?: string;
+  hint?: string;
+  multiline?: boolean;
+  onChange: (val: string) => void;
+  accentColor?: string;
+}
+
+function SmartField({ label, value, placeholder = "—", hint, multiline = false, onChange, accentColor }: SmartFieldProps) {
+  const [editing, setEditing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const autoResize = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  };
+
+  useEffect(() => {
+    if (editing) {
+      autoResize();
+      if (multiline) textareaRef.current?.focus();
+      else inputRef.current?.focus();
+    }
+  }, [editing, multiline]);
+
+  const displayValue = value?.trim();
+
+  return (
+    <div className="group text-left">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className={`text-[10px] font-bold uppercase tracking-wider ${accentColor || "text-slate-450"}`}>
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={() => setEditing(!editing)}
+          className={`flex items-center gap-1 text-[10px] font-semibold transition-colors ${
+            editing ? "text-[#7C3AED]" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          <Pencil className="h-3 w-3" />
+          {editing ? "Done" : "Edit"}
+        </button>
+      </div>
+
+      <div className="h-px bg-slate-100 mb-2" />
+
+      {hint && !editing && (
+        <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">{hint}</p>
+      )}
+
+      {editing ? (
+        multiline ? (
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => { onChange(e.target.value); autoResize(); }}
+            placeholder={placeholder}
+            rows={1}
+            className="w-full bg-slate-50/80 border border-slate-200 focus:border-[#7C3AED] focus:bg-white rounded-lg p-2 text-xs text-slate-800 placeholder-slate-350 outline-none resize-none overflow-hidden leading-relaxed transition-all"
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="w-full bg-slate-50/80 border border-slate-200 focus:border-[#7C3AED] focus:bg-white rounded-lg p-2 text-xs text-slate-800 placeholder-slate-350 outline-none transition-all"
+          />
+        )
+      ) : (
+        <p className={`text-xs leading-relaxed whitespace-pre-wrap ${displayValue ? "text-slate-700 font-medium" : "text-slate-350 italic"}`}>
+          {displayValue || placeholder}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// --- SmartSelect component for onboarding (matches ProductDNA.tsx) ---
+interface SmartSelectProps {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (val: string) => void;
+}
+
+function SmartSelect({ label, value, options, onChange }: SmartSelectProps) {
+  const [editing, setEditing] = useState(false);
+  const display = value;
+
+  return (
+    <div className="text-left">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+        <button
+          type="button"
+          onClick={() => setEditing(!editing)}
+          className={`flex items-center gap-1 text-[10px] font-semibold transition-colors ${
+            editing ? "text-[#7C3AED]" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          <Pencil className="h-3 w-3" />
+          {editing ? "Done" : "Edit"}
+        </button>
+      </div>
+      <div className="h-px bg-slate-100 mb-2" />
+      {editing ? (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-slate-50/80 border border-slate-200 focus:border-[#7C3AED] focus:bg-white rounded-lg p-2 text-xs text-slate-850 outline-none transition-all"
+        >
+          {options.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+      ) : (
+        <p className={`text-xs leading-relaxed ${display ? "text-slate-700 font-medium" : "text-slate-355 italic"}`}>
+          {display || "Not set"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function Onboarding() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { activeProduct, updateProduct } = useProducts();
   const navigate = useNavigate();
 
@@ -191,34 +325,49 @@ export function Onboarding() {
           const encoded = encodeURIComponent(finalUrl);
           const response = await fetch(`https://api.microlink.io?url=${encoded}&screenshot=true&meta=true&palette=true`);
           
-          if (response.ok) {
-            const result = await response.json();
-            microlinkMetadata = result.data;
-            if (result.data?.screenshot?.url) {
-              const snapUrl = result.data.screenshot.url;
-              setScreenshotUrl(snapUrl);
-              setScanLogs((prev) => [...prev, "> Page Snapshot acquired successfully."]);
-              setScanProgress(35);
-
-              // Fetch screenshot base64
-              const res = await fetch(snapUrl);
-              if (res.ok) {
-                const blob = await res.blob();
-                const base64 = await new Promise<string>((resolve) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result as string);
-                  reader.readAsDataURL(blob);
-                });
-                screenshotData = {
-                  data: base64.split(",")[1],
-                  mimeType: blob.type
-                };
-              }
-            }
+          if (!response.ok) {
+            let errMsg = `HTTP status ${response.status}`;
+            try {
+              const errJson = await response.json();
+              if (errJson.message) errMsg = errJson.message;
+            } catch (_) {}
+            throw new Error(`Microlink scan failed: ${errMsg}`);
           }
-        } catch (snapErr) {
-          console.warn("Screenshot capture failed:", snapErr);
-          setScanLogs((prev) => [...prev, "Warning: Snapshot proxy failed, proceeding with description scanner..."]);
+
+          const result = await response.json();
+          if (result.status === "fail") {
+            throw new Error(result.message || "Failed to scan website via Microlink.");
+          }
+
+          microlinkMetadata = result.data;
+          if (result.data?.screenshot?.url) {
+            const snapUrl = result.data.screenshot.url;
+            setScreenshotUrl(snapUrl);
+            setScanLogs((prev) => [...prev, "> Page Snapshot acquired successfully."]);
+            setScanProgress(35);
+
+            // Fetch screenshot base64
+            const res = await fetch(snapUrl);
+            if (!res.ok) {
+              throw new Error(`Failed to download page screenshot from Microlink proxy (status ${res.status})`);
+            }
+            const blob = await res.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = (e) => reject(e);
+              reader.readAsDataURL(blob);
+            });
+            screenshotData = {
+              data: base64.split(",")[1],
+              mimeType: blob.type
+            };
+          } else {
+            throw new Error("No screenshot image was captured by the scraper service.");
+          }
+        } catch (snapErr: any) {
+          console.error("Screenshot capture failed:", snapErr);
+          throw new Error(snapErr.message || snapErr);
         }
       }
 
@@ -556,8 +705,12 @@ export function Onboarding() {
         name: user.displayName || "User",
         role: "User",
         onboarded: true,
-        createdAt: new Date().toISOString()
       };
+      if (userProfile?.createdAt) {
+        profileDoc.createdAt = userProfile.createdAt;
+      } else {
+        profileDoc.createdAt = new Date().toISOString();
+      }
       if (user.email) profileDoc.email = user.email;
       if (user.displayName) profileDoc.displayName = user.displayName;
       if (user.photoURL) profileDoc.photoURL = user.photoURL;
@@ -581,8 +734,12 @@ export function Onboarding() {
         name: user.displayName || "User",
         role: "User",
         onboarded: true,
-        createdAt: new Date().toISOString()
       };
+      if (userProfile?.createdAt) {
+        profileDoc.createdAt = userProfile.createdAt;
+      } else {
+        profileDoc.createdAt = new Date().toISOString();
+      }
       if (user.email) profileDoc.email = user.email;
       if (user.displayName) profileDoc.displayName = user.displayName;
       if (user.photoURL) profileDoc.photoURL = user.photoURL;
@@ -594,30 +751,24 @@ export function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-8 relative selection:bg-[#7C3AED] selection:text-white select-none">
+    <div className="min-h-screen w-full flex flex-col items-center justify-start p-4 sm:p-8 pt-6 sm:pt-10 relative selection:bg-[#7C3AED] selection:text-white select-none">
       {/* Background decoration */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 bg-slate-50">
-        <div className="absolute top-[-10%] right-[10%] w-[55vw] h-[55vw] rounded-[100px] bg-gradient-to-br from-[#7C3AED]/6 via-[#2583EB]/6 to-transparent blur-[120px] animate-blob-1" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[60vw] h-[60vw] rounded-[120px] bg-gradient-to-tr from-[#2583EB]/6 via-[#10B981]/4 to-transparent blur-[130px] animate-blob-2" />
-        
-        {/* Halftone patterns */}
-        <div
-          className="absolute inset-0 opacity-[0.02] mix-blend-multiply"
-          style={{
-            backgroundImage: "radial-gradient(circle at center, #7C3AED 1.5px, transparent 1.5px)",
-            backgroundSize: "24px 24px"
-          }}
-        />
       </div>
 
       <div className="w-full max-w-5xl z-10 flex flex-col items-center">
         {/* Header Branding */}
-        <div className="flex items-center justify-between w-full mb-8">
-          <img
-            src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
-            alt="Logo"
-            className="h-10 object-contain drop-shadow-md select-none pointer-events-none"
-          />
+        <div className="flex items-center justify-between w-full mb-6 sm:mb-8">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+              alt="Logo"
+              className="h-9 object-contain drop-shadow-md select-none pointer-events-none"
+            />
+            <span className="text-xl font-bold font-display text-slate-800 tracking-tight select-none">
+              BrandToPost
+            </span>
+          </div>
         </div>
 
         {error && (
@@ -729,7 +880,7 @@ export function Onboarding() {
                     <button
                       type="submit"
                       disabled={isScanning}
-                      className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2583EB] text-white font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:shadow-[#7C3AED]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm cursor-pointer"
+                      className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:shadow-[#7C3AED]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm cursor-pointer"
                     >
                       {isScanning ? (
                         <>
@@ -822,59 +973,29 @@ export function Onboarding() {
                       <Globe className="w-4 h-4 text-[#7C3AED]" /> Identity & Voice
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          Brand Name
-                        </label>
-                        <input
-                          type="text"
-                          name="name"
-                          value={dna.name}
-                          onChange={handleDnaChange}
-                          className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2 rounded-lg text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          Estimated Stage
-                        </label>
-                        <select
-                          name="stage"
-                          value={dna.stage}
-                          onChange={handleDnaChange}
-                          className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2 rounded-lg text-xs"
-                        >
-                          <option>MVP</option>
-                          <option>Early Growth</option>
-                          <option>Scaling</option>
-                          <option>Enterprise</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                        Tone / Brand Voice
-                      </label>
-                      <input
-                        type="text"
-                        name="tone"
-                        value={dna.tone}
-                        onChange={handleDnaChange}
-                        className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2.5 rounded-lg text-xs"
+                      <SmartField
+                        label="Brand Name"
+                        value={dna.name}
+                        onChange={(val) => setDna({ ...dna, name: val })}
+                      />
+                      <SmartSelect
+                        label="Estimated Stage"
+                        value={dna.stage}
+                        options={["MVP", "Early Growth", "Scaling", "Enterprise"]}
+                        onChange={(val) => setDna({ ...dna, stage: val })}
                       />
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                        Core Value Proposition
-                      </label>
-                      <textarea
-                        name="positioning"
-                        rows={2}
-                        value={dna.positioning}
-                        onChange={handleDnaChange}
-                        className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2.5 rounded-lg text-xs"
-                      />
-                    </div>
+                    <SmartField
+                      label="Tone / Brand Voice"
+                      value={dna.tone}
+                      onChange={(val) => setDna({ ...dna, tone: val })}
+                    />
+                    <SmartField
+                      label="Core Value Proposition"
+                      value={dna.positioning}
+                      multiline
+                      onChange={(val) => setDna({ ...dna, positioning: val })}
+                    />
                   </div>
 
                   {/* Visual Identity Section */}
@@ -883,49 +1004,38 @@ export function Onboarding() {
                       <Palette className="w-4 h-4 text-[#7C3AED]" /> Visual Identity
                     </h3>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                         Primary Brand Colors (HEX)
-                      </label>
+                      </span>
+                      <div className="h-px bg-slate-100 mb-2.5" />
                       <div className="flex items-center gap-3">
                         {dna.visualData.colors.slice(0, 3).map((col: string, idx: number) => (
                           <div key={idx} className="flex flex-col items-center gap-1.5">
                             <div
-                              className="w-10 h-10 rounded-lg border border-slate-200 shadow-inner"
+                              className="w-8 h-8 rounded-lg border border-slate-200 shadow-inner"
                               style={{ backgroundColor: col }}
                             />
                             <input
                               type="text"
                               value={col}
                               onChange={(e) => handleColorChange(idx, e.target.value)}
-                              className="w-[72px] text-center bg-white border border-slate-200 rounded-md text-[10px] text-slate-805 p-1 font-mono"
+                              className="w-[72px] text-center bg-slate-50 border border-slate-200 rounded-md text-[10px] text-slate-800 p-1 font-mono focus:bg-white focus:border-[#7C3AED] outline-none"
                             />
                           </div>
                         ))}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          Primary Font
-                        </label>
-                        <input
-                          type="text"
-                          value={dna.visualData.fonts.primary}
-                          onChange={(e) => handleFontChange("primary", e.target.value)}
-                          className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2 rounded-lg text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          Secondary Font
-                        </label>
-                        <input
-                          type="text"
-                          value={dna.visualData.fonts.secondary}
-                          onChange={(e) => handleFontChange("secondary", e.target.value)}
-                          className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2 rounded-lg text-xs"
-                        />
-                      </div>
+                      <SmartField
+                        label="Primary Font"
+                        value={dna.visualData.fonts.primary}
+                        onChange={(val) => handleFontChange("primary", val)}
+                      />
+                      <SmartField
+                        label="Secondary Font"
+                        value={dna.visualData.fonts.secondary}
+                        onChange={(val) => handleFontChange("secondary", val)}
+                      />
                     </div>
                   </div>
 
@@ -935,54 +1045,32 @@ export function Onboarding() {
                       <Target className="w-4 h-4 text-[#7C3AED]" /> Psychographics & Strategy
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          The Enemy (Status Quo)
-                        </label>
-                        <textarea
-                          name="enemy"
-                          rows={2}
-                          value={dna.enemy}
-                          onChange={handleDnaChange}
-                          className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2 rounded-lg text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          Earned Secret (What others miss)
-                        </label>
-                        <textarea
-                          name="earnedSecret"
-                          rows={2}
-                          value={dna.earnedSecret}
-                          onChange={handleDnaChange}
-                          className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2 rounded-lg text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          'Hell' State (Before product)
-                        </label>
-                        <textarea
-                          name="hellState"
-                          rows={2}
-                          value={dna.hellState}
-                          onChange={handleDnaChange}
-                          className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2 rounded-lg text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                          'Heaven' State (Payoff)
-                        </label>
-                        <textarea
-                          name="heavenState"
-                          rows={2}
-                          value={dna.heavenState}
-                          onChange={handleDnaChange}
-                          className="w-full bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 p-2 rounded-lg text-xs"
-                        />
-                      </div>
+                      <SmartField
+                        label="The Enemy (Status Quo)"
+                        value={dna.enemy}
+                        multiline
+                        onChange={(val) => setDna({ ...dna, enemy: val })}
+                      />
+                      <SmartField
+                        label="Earned Secret (What others miss)"
+                        value={dna.earnedSecret}
+                        multiline
+                        onChange={(val) => setDna({ ...dna, earnedSecret: val })}
+                      />
+                      <SmartField
+                        label="'Hell' State (Before product)"
+                        value={dna.hellState}
+                        multiline
+                        accentColor="text-rose-500"
+                        onChange={(val) => setDna({ ...dna, hellState: val })}
+                      />
+                      <SmartField
+                        label="'Heaven' State (Payoff)"
+                        value={dna.heavenState}
+                        multiline
+                        accentColor="text-emerald-600"
+                        onChange={(val) => setDna({ ...dna, heavenState: val })}
+                      />
                     </div>
                   </div>
 
@@ -1059,7 +1147,7 @@ export function Onboarding() {
                 </button>
                 <button
                   onClick={handleSaveDna}
-                  className="bg-gradient-to-r from-[#7C3AED] to-[#2583EB] text-white font-bold px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 transition-all text-xs cursor-pointer hover:opacity-95"
+                  className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 transition-all text-xs cursor-pointer"
                 >
                   Save & Continue <ArrowRight className="w-4 h-4" />
                 </button>
@@ -1153,7 +1241,7 @@ export function Onboarding() {
                   </button>
                   <button
                     onClick={() => setStep(4)}
-                    className="bg-gradient-to-r from-[#7C3AED] to-[#2583EB] text-white font-bold px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 transition-all text-xs cursor-pointer hover:opacity-95"
+                    className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 transition-all text-xs cursor-pointer"
                   >
                     Next Step <ArrowRight className="w-4 h-4" />
                   </button>
@@ -1307,12 +1395,21 @@ export function Onboarding() {
                     >
                       Previous
                     </button>
-                    <button
-                      type="submit"
-                      className="bg-gradient-to-r from-[#7C3AED] to-[#2583EB] hover:shadow-[#7C3AED]/20 hover:opacity-95 text-white font-bold px-7 py-3 rounded-xl shadow-lg flex items-center gap-2 active:scale-[0.98] transition-all text-xs cursor-pointer"
-                    >
-                      Generate Campaign <ArrowRight className="w-4 h-4 animate-pulse" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleSkipOnboarding}
+                        className="text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-xl px-4 py-2.5 transition-all cursor-pointer"
+                      >
+                        Skip Campaign
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-[#7C3AED] hover:bg-[#6D28D9] hover:shadow-[#7C3AED]/20 text-white font-bold px-7 py-3 rounded-xl shadow-lg flex items-center gap-2 active:scale-[0.98] transition-all text-xs cursor-pointer"
+                      >
+                        Generate Campaign <ArrowRight className="w-4 h-4 animate-pulse" />
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
@@ -1324,7 +1421,7 @@ export function Onboarding() {
             <div className="flex-grow flex flex-col justify-between p-6 sm:p-10 bg-slate-50/50 min-h-[400px]">
               <div className="space-y-6">
                 <div className="flex items-center gap-4 border-b border-slate-200/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#2583EB] flex items-center justify-center shadow-lg relative shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#7C3AED] flex items-center justify-center shadow-lg relative shrink-0">
                     <Loader2 className="w-5 h-5 text-white animate-spin" />
                   </div>
                   <div>
@@ -1454,7 +1551,7 @@ export function Onboarding() {
                 <button
                   onClick={handleApproveCampaign}
                   disabled={isApproving}
-                  className="bg-gradient-to-r from-[#7C3AED] to-[#2583EB] hover:opacity-95 text-white font-bold px-7 py-3 rounded-xl shadow-lg flex items-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs cursor-pointer"
+                  className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold px-7 py-3 rounded-xl shadow-lg flex items-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs cursor-pointer"
                 >
                   {isApproving ? (
                     <>

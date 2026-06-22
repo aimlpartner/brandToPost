@@ -23,7 +23,7 @@ const HeroDashboardMockup = () => (
     {/* Sidebar */}
     <div className="w-16 md:w-56 border-r border-white/10 bg-[#0A0A0F]/80 p-4 flex flex-col gap-6 shrink-0 z-10">
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#7C3AED] to-[#FFFFFF] p-[1px]">
+        <div className="w-8 h-8 rounded-lg bg-[#7C3AED] p-[1px]">
           <div className="w-full h-full bg-[#1C1C22] rounded-[7px] flex items-center justify-center">
             <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-5 h-5 object-contain" />
           </div>
@@ -47,7 +47,7 @@ const HeroDashboardMockup = () => (
     </div>
     
     {/* Main View: Week Schedule */}
-    <div className="flex-1 p-4 md:p-8 relative bg-gradient-to-br from-[#0A0A0F] to-[#1C1C22]/30 overflow-hidden flex flex-col">
+    <div className="flex-1 p-4 md:p-8 relative bg-[#0A0A0F] overflow-hidden flex flex-col">
       <div className="flex justify-between items-end border-b border-white/10 pb-4 mb-6 shrink-0">
         <div>
           <h3 className="text-white font-display font-medium text-lg md:text-xl flex items-center gap-2">
@@ -96,7 +96,7 @@ const HeroDashboardMockup = () => (
          </div>
          {/* Fri */}
          <div className="bg-[#1C1C22]/80 border border-white/10 rounded-xl p-4 flex flex-col relative overflow-hidden group hover:border-[#7C3AED]/50 transition-colors hidden md:flex">
-            <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-3 flex justify-between">Fri, Oct 16 <div className="w-2 h-2 rounded-full bg-gradient-to-tr from-\[#7C3AED\] to-\[#2583EB\]"></div></div>
+            <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-3 flex justify-between">Fri, Oct 16 <div className="w-2 h-2 rounded-full bg-[#7C3AED]"></div></div>
             <div className="w-full h-24 bg-white/5 rounded-lg mb-3 border border-white/10 flex items-center justify-center">
                <div className="w-8 h-8 rounded bg-white/10"></div>
             </div>
@@ -117,7 +117,7 @@ const HeroDashboardMockup = () => (
 const TrorCommandCenterMockup = () => (
   <div className="w-full max-w-2xl mx-auto h-[480px] bg-[#0A0A0F]/90 backdrop-blur-2xl border border-[#2583EB]/30 rounded-2xl shadow-[0_20px_70px_rgba(37,131,235,0.15)] overflow-hidden flex flex-col relative group">
     {/* Dynamic Background Effect */}
-    <div className="absolute inset-0 bg-gradient-to-br from-[#2583EB]/5 to-transparent pointer-events-none"></div>
+    <div className="absolute inset-0 bg-[#2583EB]/[0.02] pointer-events-none"></div>
     
     {/* Header */}
     <div className="h-16 border-b border-white/10 bg-[#1C1C22]/80 flex flex-col sm:flex-row sm:items-center justify-between px-6 shrink-0 relative z-10 gap-2 sm:gap-0 justify-center sm:justify-between py-2 sm:py-0">
@@ -149,7 +149,7 @@ const TrorCommandCenterMockup = () => (
           </div>
           <div className="space-y-2">
             <div className="flex justify-between text-[10px] text-gray-400"><span>Positioning Match</span> <span className="text-[#18F07A] font-medium text-[9px]">100%</span></div>
-            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/10"><motion.div initial={{ width: "0%" }} whileInView={{ width: "100%" }} transition={{ duration: 1.5, ease: "easeOut" }} className="h-full bg-gradient-to-r from-[#7C3AED] via-[#FF7778] to-[#18F07A] shadow-[0_0_10px_rgba(24,240,122,0.5)]"></motion.div></div>
+            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/10"><motion.div initial={{ width: "0%" }} whileInView={{ width: "100%" }} transition={{ duration: 1.5, ease: "easeOut" }} className="h-full bg-[#7C3AED] shadow-[0_0_10px_rgba(24,240,122,0.5)]"></motion.div></div>
           </div>
         </div>
         
@@ -285,7 +285,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3 group shrink-0">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#7C3AED] to-[#FFFFFF] p-[1px] shadow-[0_0_15px_rgba(124,58,237,0.3)]">
+              <div className="w-8 h-8 rounded-lg bg-[#7C3AED] p-[1px] shadow-[0_0_15px_rgba(124,58,237,0.3)]">
                 <div className="w-full h-full bg-[#1C1C22] rounded-[7px] flex items-center justify-center">
                   <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-5 h-5 object-contain" />
                 </div>
@@ -365,7 +365,7 @@ export function LandingPage() {
           </div>
 
           {/* B2P Side */}
-          <div className="bg-gradient-to-b from-[#7C3AED]/20 to-[#1C1C22]/90 border border-[#7C3AED]/30 rounded-3xl p-8 lg:p-10 relative overflow-hidden shadow-[0_0_80px_rgba(124,58,237,0.15)]">
+          <div className="bg-[#1C1C22]/95 border border-[#7C3AED]/30 rounded-3xl p-8 lg:p-10 relative overflow-hidden shadow-[0_0_80px_rgba(124,58,237,0.15)]">
             <div className="absolute top-0 right-0 p-4"><div className="bg-[#7C3AED]/20 text-[#7C3AED] text-xs font-medium px-3 py-1.5 rounded-full border border-[#7C3AED]/30">The Autonomous Way</div></div>
             <h3 className="text-2xl font-medium text-white mb-8 flex items-center gap-3"><Zap className="w-6 h-6 text-[#7C3AED] fill-[#7C3AED]/20"/> The Autonomous Event Horizon</h3>
             <ul className="space-y-6">
@@ -397,7 +397,7 @@ export function LandingPage() {
               <span className="bg-[#FF7778]/10 text-[#FF7778] border border-[#FF7778]/20 text-[10px] uppercase font-medium tracking-widest px-4 py-1.5 rounded-full shadow-sm">The Psychographic Engine</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-light font-display text-white mb-6 leading-tight">
-              Why generic AI copy <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF7778] to-[#7C3AED]">destroys your brand.</span>
+              Why generic AI copy <span className="text-[#FF7778]">destroys your brand.</span>
             </h2>
             <div className="space-y-6 text-gray-400 font-light leading-relaxed">
               <p>
@@ -450,7 +450,7 @@ export function LandingPage() {
             <span className="bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20 text-xs font-medium uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm">The Engine Under The Hood</span>
           </div>
           <h2 className="text-5xl md:text-6xl font-normal font-display text-white mb-6">
-            Execute the <span className="text-transparent bg-clip-text bg-gradient-to-right from-[#7C3AED] via-[#FF7778] to-[#18F07A]">POST Framework</span> automatically.
+            Execute the <span className="text-[#7C3AED]">POST Framework</span> automatically.
           </h2>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto font-medium leading-relaxed">
             We don't do random virality. Our entire agentic system is designed to execute the rigorous POST methodology proven by top B2B and Consumer brands.
@@ -459,10 +459,10 @@ export function LandingPage() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { l: "P", t: "Position", d: "Solidify your narrative. We extract and lock your DNA so every generated output reinforces your actual value prop.", c: "bg-gradient-to-b from-[#7C3AED]/20 to-[#1C1C22]", br: "border-[#7C3AED]/30", icon: <Target className="h-6 w-6 text-[#7C3AED]"/> },
-            { l: "O", t: "Outreach", d: "Distribute natively. Tror understands constraints, formats uniquely for LinkedIn vs Twitter, and deploys contextually.", c: "bg-gradient-to-b from-[#2583EB]/20 to-[#1C1C22]", br: "border-[#2583EB]/30", icon: <Megaphone className="h-6 w-6 text-[#2583EB]"/> },
-            { l: "S", t: "Signal", d: "Inject visual trust. Our engine ties visual data and branding cues directly to the copy, asserting category leadership.", c: "bg-gradient-to-b from-[#FFFFFF]/20 to-[#1C1C22]", br: "border-[#FFFFFF]/30", icon: <Sparkles className="h-6 w-6 text-[#FFFFFF]"/> },
-            { l: "T", t: "Traction", d: "Publish automatically. Approve your scheduled week in 1 click and let BrandToPost turn attention into pipeline.", c: "bg-gradient-to-b from-[#18F07A]/20 to-[#1C1C22]", br: "border-[#18F07A]/30", icon: <TrendingUp className="h-6 w-6 text-[#18F07A]"/> }
+            { l: "P", t: "Position", d: "Solidify your narrative. We extract and lock your DNA so every generated output reinforces your actual value prop.", c: "bg-[#1C1C22]", br: "border-[#7C3AED]/30", icon: <Target className="h-6 w-6 text-[#7C3AED]"/> },
+            { l: "O", t: "Outreach", d: "Distribute natively. Tror understands constraints, formats uniquely for LinkedIn vs Twitter, and deploys contextually.", c: "bg-[#1C1C22]", br: "border-[#2583EB]/30", icon: <Megaphone className="h-6 w-6 text-[#2583EB]"/> },
+            { l: "S", t: "Signal", d: "Inject visual trust. Our engine ties visual data and branding cues directly to the copy, asserting category leadership.", c: "bg-[#1C1C22]", br: "border-[#FFFFFF]/30", icon: <Sparkles className="h-6 w-6 text-[#FFFFFF]"/> },
+            { l: "T", t: "Traction", d: "Publish automatically. Approve your scheduled week in 1 click and let BrandToPost turn attention into pipeline.", c: "bg-[#1C1C22]", br: "border-[#18F07A]/30", icon: <TrendingUp className="h-6 w-6 text-[#18F07A]"/> }
           ].map((item, idx) => (
             <div key={idx} className={`rounded-[2rem] p-8 border ${item.br} ${item.c} shadow-[0_10px_40px_rgba(0,0,0,0.5)] relative overflow-hidden group hover:scale-[1.02] transition-transform`}>
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-[40px] -mr-10 -mt-10 group-hover:bg-white/10 transition-colors"></div>
@@ -492,7 +492,7 @@ export function LandingPage() {
             <span className="bg-[#18F07A]/10 text-[#18F07A] border border-[#18F07A]/20 text-[10px] uppercase font-medium tracking-widest px-4 py-1.5 rounded-full shadow-sm">The Deliverable</span>
           </div>
           <h2 className="text-4xl md:text-5xl font-light font-display text-white mb-6">
-            1 URL in. 1 Month of <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#18F07A] to-[#2583EB]">Pipeline</span> out.
+            1 URL in. 1 Month of <span className="text-[#18F07A]">Pipeline</span> out.
           </h2>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto font-light leading-relaxed">
             We don't sell you "prompts" or "ai writing assistants." Tror’s agents architect, draft, and assemble a complete, multi-platform publishing engine tailored exactly to your user’s pain points.
@@ -508,7 +508,7 @@ export function LandingPage() {
             
             <div className="bg-[#1C1C22]/80 border border-white/5 rounded-xl p-6 relative z-10 shadow-lg">
               <div className="flex gap-4 mb-4">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#2583EB]"></div>
+                <div className="w-10 h-10 rounded-full bg-[#7C3AED]"></div>
                 <div>
                   <div className="w-32 h-2 bg-white/20 rounded mb-2"></div>
                   <div className="w-20 h-2 bg-white/10 rounded"></div>
@@ -554,10 +554,10 @@ export function LandingPage() {
                <h3 className="text-2xl text-white font-light mb-2">High-Fidelity Visual Hooks</h3>
                <p className="text-gray-400 font-light text-sm leading-relaxed">The Designer agent creates branded UI mockups and infographics to stop the scroll. Always aligned with your actual interface and brand parameters.</p>
              </div>
-             <div className="w-full md:w-48 h-32 md:h-48 rounded-xl bg-gradient-to-tr from-[#FF7778]/10 to-[#7C3AED]/10 border border-white/10 flex items-center justify-center shadow-inner relative overflow-hidden">
+             <div className="w-full md:w-48 h-32 md:h-48 rounded-xl bg-[#1C1C22] border border-white/10 flex items-center justify-center shadow-inner relative overflow-hidden">
                 <div className="absolute inset-0 bg-[#0A0A0F] opacity-50"></div>
                 <div className="w-20 h-20 rounded shadow-lg bg-white/10 backdrop-blur-md border border-white/20 relative z-10 flex items-center justify-center">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#18F07A] to-[#2583EB]"></div>
+                  <div className="w-8 h-8 rounded-full bg-[#18F07A]"></div>
                 </div>
              </div>
           </div>
@@ -582,7 +582,7 @@ export function LandingPage() {
         <div className="relative max-w-5xl mx-auto mt-20">
           {/* Tror Node */}
           <div className="flex flex-col items-center relative z-20 mb-8 sm:mb-16">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-[2rem] bg-gradient-to-br from-[#7C3AED] to-[#2583EB] p-[2px] shadow-[0_0_40px_rgba(124,58,237,0.4)] relative">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-[2rem] bg-[#7C3AED] p-[2px] shadow-[0_0_40px_rgba(124,58,237,0.4)] relative">
                <div className="w-full h-full bg-[#1C1C22] rounded-[30px] flex flex-col items-center justify-center p-2 relative overflow-hidden">
                   <div className="absolute inset-0 bg-[#7C3AED]/20 animate-pulse"></div>
                   <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="Tror" className="w-12 h-12 sm:w-14 sm:h-14 rounded-full relative z-10 border border-white/20"/>
@@ -597,7 +597,7 @@ export function LandingPage() {
           {/* Connecting lines for Desktop */}
           <div className="hidden lg:block absolute top-[110px] left-1/2 -translate-x-1/2 w-[75%] h-[80px] border-t-2 border-l-2 border-r-2 border-dashed border-[#7C3AED]/40 rounded-t-3xl z-10">
              {/* Center pulsing line from Tror */}
-             <div className="absolute top-0 left-1/2 w-0.5 h-16 bg-gradient-to-b from-[#7C3AED] to-transparent -translate-x-1/2 -mt-4 animate-pulse"></div>
+             <div className="absolute top-0 left-1/2 w-0.5 h-16 bg-[#7C3AED]/40 -translate-x-1/2 -mt-4 animate-pulse"></div>
           </div>
 
           {/* Agents Grid */}
@@ -605,7 +605,7 @@ export function LandingPage() {
             
             {/* Agent 1 */}
             <div className="glass-card p-8 flex flex-col items-center text-center relative group hover:-translate-y-2 transition-transform duration-300">
-              <div className="hidden lg:block absolute -top-20 left-1/2 w-0.5 h-20 bg-gradient-to-b from-transparent to-[#FF7778]/50 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="hidden lg:block absolute -top-20 left-1/2 w-0.5 h-20 bg-[#FF7778]/40 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="w-16 h-16 rounded-2xl bg-[#1C1C22] border border-[#FF7778]/30 flex items-center justify-center mb-6 relative shadow-[0_0_20px_rgba(255,119,120,0.1)] group-hover:shadow-[0_0_30px_rgba(255,119,120,0.3)] transition-all">
                  <BrainCircuit className="w-8 h-8 text-[#FF7778]" />
                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#FF7778] rounded-full animate-pulse shadow-[0_0_10px_#FF7778]"></div>
@@ -616,7 +616,7 @@ export function LandingPage() {
 
             {/* Agent 2 */}
             <div className="glass-card p-8 flex flex-col items-center text-center relative group hover:-translate-y-2 transition-transform duration-300 transform lg:translate-y-8">
-              <div className="hidden lg:block absolute -top-24 left-1/2 w-0.5 h-24 bg-gradient-to-b from-transparent to-[#2583EB]/50 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="hidden lg:block absolute -top-24 left-1/2 w-0.5 h-24 bg-[#2583EB]/40 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
               {/* Extra connecting line for staggered layout */}
               <div className="hidden lg:block absolute -top-8 left-1/2 w-0.5 h-8 border-l-2 border-dashed border-[#7C3AED]/40 -translate-x-1/2 z-10" />
               
@@ -630,7 +630,7 @@ export function LandingPage() {
 
             {/* Agent 3 */}
             <div className="glass-card p-8 flex flex-col items-center text-center relative group hover:-translate-y-2 transition-transform duration-300 transform lg:translate-y-8">
-              <div className="hidden lg:block absolute -top-24 left-1/2 w-0.5 h-24 bg-gradient-to-b from-transparent to-[#18F07A]/50 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="hidden lg:block absolute -top-24 left-1/2 w-0.5 h-24 bg-[#18F07A]/40 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
               {/* Extra connecting line for staggered layout */}
               <div className="hidden lg:block absolute -top-8 left-1/2 w-0.5 h-8 border-l-2 border-dashed border-[#7C3AED]/40 -translate-x-1/2 z-10" />
               
@@ -644,7 +644,7 @@ export function LandingPage() {
 
             {/* Agent 4 */}
             <div className="glass-card p-8 flex flex-col items-center text-center relative group hover:-translate-y-2 transition-transform duration-300">
-              <div className="hidden lg:block absolute -top-20 left-1/2 w-0.5 h-20 bg-gradient-to-b from-transparent to-[#7C3AED]/50 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="hidden lg:block absolute -top-20 left-1/2 w-0.5 h-20 bg-[#7C3AED]/40 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="w-16 h-16 rounded-2xl bg-[#1C1C22] border border-[#7C3AED]/30 flex items-center justify-center mb-6 relative shadow-[0_0_20px_rgba(124,58,237,0.1)] group-hover:shadow-[0_0_30px_rgba(124,58,237,0.3)] transition-all">
                  <Send className="w-8 h-8 text-[#7C3AED]" />
                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#7C3AED] rounded-full animate-pulse shadow-[0_0_10px_#7C3AED]"></div>
@@ -661,7 +661,7 @@ export function LandingPage() {
       
 
 {/* Feature 2: Tror Generation - REDESIGNED */}
-      <section className="py-24 md:py-32 px-6 lg:px-8 max-w-7xl mx-auto relative z-10 border-t border-white/5 bg-gradient-to-b from-[#1C1C22]/20 to-[#0A0A0F]">
+      <section className="py-24 md:py-32 px-6 lg:px-8 max-w-7xl mx-auto relative z-10 border-t border-white/5 bg-[#0A0A0F]">
         <div className="flex flex-col-reverse lg:flex-row items-center gap-12 lg:gap-20">
           <div className="flex-1 w-full flex justify-center lg:justify-start">
              <TrorCommandCenterMockup />
@@ -691,7 +691,7 @@ export function LandingPage() {
             <span className="bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20 text-[10px] uppercase font-medium tracking-widest px-4 py-1.5 rounded-full shadow-sm">Command Center</span>
           </div>
           <h2 className="text-4xl md:text-5xl font-normal font-display text-white mb-6">
-            Review and deploy with <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7C3AED] to-[#FF7778]">One Click.</span>
+            Review and deploy with <span className="text-[#7C3AED]">One Click.</span>
           </h2>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto font-medium leading-relaxed">
             Your entire 30-day strategy plotted out in an intuitive workspace. Approve the week, edit natively, or let Tror publish on your behalf.
@@ -702,7 +702,7 @@ export function LandingPage() {
 
 {/* CTA Section */}
       <section className="py-32 px-6 lg:px-8 relative overflow-hidden z-10">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0A0A0F] via-transparent to-[#7C3AED]/15 pointer-events-none" />
+        <div className="absolute inset-0 bg-[#7C3AED]/5 pointer-events-none" />
         <div className="max-w-4xl mx-auto text-center relative z-10 bg-[#1C1C22]/80 backdrop-blur-2xl border border-white/10 rounded-[3rem] p-12 md:p-24 shadow-[0_40px_100px_rgba(124,58,237,0.15)] overflow-hidden">
           <div className="absolute inset-0 bg-[#7C3AED]/5 pointer-events-none"></div>
           
@@ -722,7 +722,7 @@ export function LandingPage() {
                 }
               }}
               {...(!isDefaultWhatsAppUrl && whatsappUrl.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
-              className="inline-flex items-center justify-center gap-3 text-white px-10 py-5 rounded-full text-lg font-medium transition-all hover:scale-105 active:scale-95 bg-gradient-to-r from-[#25D366] to-[#00A884] shadow-[0_0_50px_rgba(37,211,102,0.4)] mx-auto cursor-pointer"
+              className="inline-flex items-center justify-center gap-3 text-white px-10 py-5 rounded-full text-lg font-medium transition-all hover:scale-105 active:scale-95 bg-[#00A884] hover:bg-[#008f70] shadow-[0_0_50px_rgba(37,211,102,0.4)] mx-auto cursor-pointer"
             >
               💬 Deploy Tror On WhatsApp Now <ArrowRight className="h-6 w-6" />
             </a>
@@ -755,7 +755,7 @@ export function LandingPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#060608]/90 backdrop-blur-md" onClick={() => setShowSetupModal(false)}></div>
           
-          <div className="relative bg-[#111115] border border-white/10 rounded-3xl w-full max-w-lg p-8 shadow-[0_20px_50px_rgba(0,168,132,0.15)] overflow-hidden animate-in fade-in zoom-in duration-250">
+          <div className="relative bg-[#111115] border border-white/10 rounded-[30px] w-full max-w-lg p-8 shadow-[0_20px_50px_rgba(0,168,132,0.15)] overflow-hidden animate-in fade-in zoom-in duration-250">
             <div className="absolute top-0 right-0 p-4">
               <button 
                 onClick={() => setShowSetupModal(false)}
@@ -807,7 +807,7 @@ export function LandingPage() {
                   <button
                     type="submit"
                     disabled={isLinking}
-                    className="w-full inline-flex items-center justify-center gap-2.5 text-white font-semibold py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#25D366] to-[#00A884] shadow-md transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer font-sans"
+                    className="w-full inline-flex items-center justify-center gap-2.5 text-white font-semibold py-3.5 px-6 rounded-2xl bg-[#00A884] hover:bg-[#008f70] shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none cursor-pointer font-sans"
                   >
                     {isLinking ? (
                       <>

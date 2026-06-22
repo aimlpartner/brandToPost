@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Clock, Play, Pause, Trash2, CalendarClock, CheckCircle2, Brain, Cpu, Zap, Sparkles, Loader2 } from "lucide-react";
-import { cn, formatCopy } from "../lib/utils";
+import { cn, formatCopy, localToUtc, utcToLocal } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { logSilentError } from "../lib/firestore-error";
 import { auth } from "../firebase";
+import { CustomTimePicker } from "../components/CustomTimePicker";
 
 interface QueueItem {
  id: string;
@@ -38,7 +39,7 @@ export function Schedule() {
   useEffect(() => {
     if (!activeProduct) return;
     
-    const fetchData = async () => {
+    const fetchData = async (isInitial = false) => {
       try {
         const token = await auth.currentUser?.getIdToken();
         const headers = {
@@ -49,61 +50,52 @@ export function Schedule() {
         const resSchedule = await fetch(`/api/schedule?productId=${activeProduct.id}`, { headers });
         if (resSchedule.ok) {
           const data = await resSchedule.json();
-          setConfig(data.config);
           setQueue(data.queue);
           
-          const [utcHours, utcMinutes] = data.config.timeUtc.split(':');
-          const d = new Date();
-          d.setUTCHours(parseInt(utcHours, 10));
-          d.setUTCMinutes(parseInt(utcMinutes, 10));
-          const localH = d.getHours().toString().padStart(2, '0');
-          const localM = d.getMinutes().toString().padStart(2, '0');
-          setLocalTime(`${localH}:${localM}`);
+          if (isInitial) {
+            setConfig(data.config);
+            setLocalTime(utcToLocal(data.config.timeUtc));
+          }
         }
 
         // Fetch Automation Config
         const resAuto = await fetch(`/api/automation/config?productId=${activeProduct.id}`, { headers });
         if (resAuto.ok) {
           const autoData = await resAuto.json();
-          setAutoConfig({
-            enabled: autoData.enabled,
-            automateDailyPosts: autoData.automateDailyPosts || false,
-            automateDailyBlogs: autoData.automateDailyBlogs || false,
-            automateWeeklyCampaigns: autoData.automateWeeklyCampaigns || false,
-            automationTimeUtc: autoData.automationTimeUtc || "14:00",
-            automationWeeklyDay: autoData.automationWeeklyDay || "Monday",
-            logs: autoData.logs || []
-          });
+          
+          if (isInitial) {
+            setAutoConfig({
+              enabled: autoData.enabled,
+              automateDailyPosts: autoData.automateDailyPosts || false,
+              automateDailyBlogs: autoData.automateDailyBlogs || false,
+              automateWeeklyCampaigns: autoData.automateWeeklyCampaigns || false,
+              automationTimeUtc: autoData.automationTimeUtc || "14:00",
+              automationWeeklyDay: autoData.automationWeeklyDay || "Monday",
+              logs: autoData.logs || []
+            });
 
-          const [utcHours, utcMinutes] = (autoData.automationTimeUtc || "14:00").split(':');
-          const d = new Date();
-          d.setUTCHours(parseInt(utcHours, 10));
-          d.setUTCMinutes(parseInt(utcMinutes, 10));
-          const localH = d.getHours().toString().padStart(2, '0');
-          const localM = d.getMinutes().toString().padStart(2, '0');
-          setAutoLocalTime(`${localH}:${localM}`);
+            setAutoLocalTime(utcToLocal(autoData.automationTimeUtc || "14:00"));
+          } else {
+            setAutoConfig(prev => ({
+              ...prev,
+              logs: autoData.logs || []
+            }));
+          }
         }
       } catch (err) {
         logSilentError(err as Error, { context: "fetchScheduleAndAutomation" });
       }
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
+    fetchData(true);
+    const interval = setInterval(() => fetchData(false), 10000);
     return () => clearInterval(interval);
   }, [activeProduct]);
 
   const handleSaveTime = async (newLocalTime: string) => {
     if (!activeProduct) return;
     setLocalTime(newLocalTime);
-    const [localH, localM] = newLocalTime.split(':');
-    const d = new Date();
-    d.setHours(parseInt(localH, 10));
-    d.setMinutes(parseInt(localM, 10));
-    
-    const utcHours = d.getUTCHours().toString().padStart(2, '0');
-    const utcMinutes = d.getUTCMinutes().toString().padStart(2, '0');
-    const timeUtc = `${utcHours}:${utcMinutes}`;
+    const timeUtc = localToUtc(newLocalTime);
     
     setIsSaving(true);
     try {
@@ -145,11 +137,13 @@ export function Schedule() {
     const newConfig = { ...autoConfig, ...updates };
     // Automatically enable master status if either daily posts or daily blogs or weekly campaigns is active
     newConfig.enabled = newConfig.automateDailyPosts || newConfig.automateDailyBlogs || newConfig.automateWeeklyCampaigns;
+    
+    const prevConfig = { ...autoConfig };
     setAutoConfig(newConfig);
 
     try {
       const token = await auth.currentUser?.getIdToken();
-      await fetch('/api/automation/config', {
+      const res = await fetch('/api/automation/config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -165,23 +159,19 @@ export function Schedule() {
           automationWeeklyDay: newConfig.automationWeeklyDay
         })
       });
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
     } catch (err) {
       logSilentError(err as Error, { context: "handleSaveAutoConfig" });
+      setAutoConfig(prevConfig);
     }
   };
 
   const handleSaveAutoTime = async (newLocalTime: string) => {
     if (!activeProduct) return;
     setAutoLocalTime(newLocalTime);
-    const [localH, localM] = newLocalTime.split(':');
-    const d = new Date();
-    d.setHours(parseInt(localH, 10));
-    d.setMinutes(parseInt(localM, 10));
-    
-    const utcHours = d.getUTCHours().toString().padStart(2, '0');
-    const utcMinutes = d.getUTCMinutes().toString().padStart(2, '0');
-    const automationTimeUtc = `${utcHours}:${utcMinutes}`;
-    
+    const automationTimeUtc = localToUtc(newLocalTime);
     await handleSaveAutoConfig({ automationTimeUtc });
   };
 
@@ -262,25 +252,24 @@ export function Schedule() {
  <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
  {/* Settings Panel */}
  <div className="md:col-span-1 space-y-6">
- <div className="glass-panel p-6 shadow-sm border border-slate-200">
+ <div className="glass-panel p-6 shadow-sm border border-slate-200 relative z-30">
  <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
  <Clock className="h-5 w-5 text-slate-400" />
  Daily Schedule
  </h3>
  
  <div className="space-y-6">
- <div>
- <label className="block text-sm font-semibold text-slate-700 mb-2">Posting Time (Local)</label>
- <div className="flex items-center gap-3">
- <input
- type="time"
- value={localTime}
- onChange={(e) => handleSaveTime(e.target.value)}
- className="tour-posting-time-input glass-input block w-full py-2 px-3 sm:text-sm border border-slate-200 rounded-lg text-slate-800 bg-white shadow-inner"
- />
- {isSaving && <CheckCircle2 className="h-5 w-5 text-[#7C3AED] animate-pulse" />}
- </div>
- </div>
+  <div>
+  <label className="block text-sm font-semibold text-slate-700 mb-2">Posting Time (Local)</label>
+  <div className="flex items-center gap-3">
+  <CustomTimePicker
+  value={localTime}
+  onChange={handleSaveTime}
+  className="tour-posting-time-input"
+  />
+  {isSaving && <CheckCircle2 className="h-5 w-5 text-[#7C3AED] animate-pulse flex-shrink-0" />}
+  </div>
+  </div>
 
  <div className="pt-4 border-t border-slate-200">
  <div className="flex items-center justify-between">
@@ -308,7 +297,7 @@ export function Schedule() {
  </div>
 
   {/* Founder Agent Automation Settings */}
-  <div className="glass-panel p-6 shadow-sm border border-slate-200 space-y-6 bg-gradient-to-br from-white/80 to-violet-50/10 text-left rounded-xl">
+  <div className="glass-panel p-6 shadow-sm border border-slate-200 space-y-6 bg-white/95 text-left rounded-xl relative z-20">
     <h3 className="text-base font-semibold text-slate-800 mb-2 flex items-center gap-2 font-display">
       <Brain className="h-5 w-5 text-violet-600 font-bold" />
       Founder Agent Automation
@@ -448,12 +437,10 @@ export function Schedule() {
         <div className={cn("pt-4 border-t border-slate-100 space-y-4 animate-in fade-in duration-200", !activeProduct.founderAgentSynthesized && "opacity-60 pointer-events-none")}>
           <div>
             <label className="block text-xs font-semibold text-slate-750 mb-1.5">Automation Generation Time (Local)</label>
-            <input
-              type="time"
+            <CustomTimePicker
               disabled={!activeProduct.founderAgentSynthesized}
               value={autoLocalTime}
-              onChange={(e) => handleSaveAutoTime(e.target.value)}
-              className="glass-input block w-full py-2 px-3 text-xs border border-slate-200 rounded-lg text-slate-800 bg-white shadow-inner disabled:opacity-50 disabled:cursor-not-allowed"
+              onChange={handleSaveAutoTime}
             />
           </div>
 
@@ -505,7 +492,7 @@ export function Schedule() {
     </div>
   </div>
 
- <div className="glass-card p-6 bg-white border border-slate-200 shadow-sm rounded-xl">
+ <div className="glass-card p-6 bg-white border border-slate-200 shadow-sm rounded-xl relative z-10">
  <h4 className="text-sm font-semibold text-slate-800 mb-2">How it works</h4>
  <ul className="text-xs text-slate-500 space-y-2 list-disc pl-4 leading-relaxed font-light">
  <li>Add posts to the queue from the Campaigns page.</li>

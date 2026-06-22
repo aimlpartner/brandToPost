@@ -17,11 +17,14 @@ export function ProtectedRoute() {
 
   const isOnboardingPath = location.pathname === '/onboarding';
 
-  if (userProfile && !userProfile.onboarded) {
+  const localOnboarded = localStorage.getItem(`onboardingCompleted_${user.uid}`) === 'true';
+  const isUserOnboarded = userProfile?.onboarded || localOnboarded;
+
+  if (userProfile && !isUserOnboarded) {
     if (!isOnboardingPath) {
       return <Navigate to="/onboarding" replace />;
     }
-  } else if (userProfile && userProfile.onboarded) {
+  } else if (userProfile && isUserOnboarded) {
     if (isOnboardingPath) {
       return <Navigate to="/dashboard" replace />;
     }

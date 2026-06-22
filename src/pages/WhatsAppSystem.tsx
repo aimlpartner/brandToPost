@@ -540,7 +540,7 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
       <nav className="border-b border-white/5 bg-[#0D0D15]/80 backdrop-blur-md sticky top-0 z-50 py-4">
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#7C3AED] to-[#FFFFFF] p-[1px] shadow-[0_0_15px_rgba(124,58,237,0.3)]">
+            <div className="w-8 h-8 rounded-lg bg-[#7C3AED] p-[1px] shadow-[0_0_15px_rgba(124,58,237,0.3)]">
               <div className="w-full h-full bg-[#1C1C22] rounded-[7px] flex items-center justify-center">
                 <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-5 h-5 object-contain" />
               </div>
@@ -567,7 +567,7 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
             <Zap className="w-3.5 h-3.5 fill-emerald-400/20" /> WhatsApp Customer Acquisition & Local Growth Machine
           </div>
           <h1 className="text-4xl md:text-6xl font-light font-display text-white mb-6 tracking-tight leading-tight">
-            The WhatsApp <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-[#2583EB]">Outreach System</span>
+            The WhatsApp <span className="text-emerald-400">Outreach System</span>
           </h1>
           <p className="text-lg text-slate-400 max-w-3xl leading-relaxed">
             Our automated agentic system lets local businesses or marketing agencies discover clients instantly on Google Maps, screen validity, build WebP compressed social templates, localized regionals, and run autonomous time-gated conversion.
@@ -778,7 +778,7 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
                       {/* Image */}
                       <div className="w-full h-1/2 relative">
                         <img src={customImage} alt="Cover" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#050508] to-transparent"></div>
+                        <div className="absolute inset-0 bg-[#050508]/30"></div>
                       </div>
 
                       {/* Content overlays */}
@@ -985,7 +985,7 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
                   <button
                     onClick={handleGenerateOneDayCampaign}
                     disabled={isGeneratingOneDay}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-emerald-500 to-[#2583EB] hover:brightness-110 active:scale-[0.99] transition-all rounded-xl font-bold text-sm text-black uppercase tracking-wider disabled:opacity-75 disabled:cursor-not-allowed shadow-[0_4px_20px_rgba(16,185,129,0.2)]"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.99] transition-all rounded-xl font-bold text-sm text-black uppercase tracking-wider disabled:opacity-75 disabled:cursor-not-allowed shadow-[0_4px_20px_rgba(16,185,129,0.2)]"
                   >
                     {isGeneratingOneDay ? (
                       <>

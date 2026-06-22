@@ -116,3 +116,33 @@ export async function copyFormattedText(text: string | undefined | null): Promis
   }
 }
 
+export function utcToLocal(utcTime: string): string {
+  if (!utcTime) return "12:00";
+  const [hours, minutes] = utcTime.split(":").map(Number);
+  if (isNaN(hours) || isNaN(minutes)) return "12:00";
+  
+  const totalUtcMinutes = hours * 60 + minutes;
+  const offsetMinutes = new Date().getTimezoneOffset();
+  let totalLocalMinutes = (totalUtcMinutes - offsetMinutes) % 1440;
+  if (totalLocalMinutes < 0) totalLocalMinutes += 1440;
+  
+  const localHours = Math.floor(totalLocalMinutes / 60).toString().padStart(2, "0");
+  const localMinutes = (totalLocalMinutes % 60).toString().padStart(2, "0");
+  return `${localHours}:${localMinutes}`;
+}
+
+export function localToUtc(localTime: string): string {
+  if (!localTime) return "12:00";
+  const [hours, minutes] = localTime.split(":").map(Number);
+  if (isNaN(hours) || isNaN(minutes)) return "12:00";
+  
+  const totalLocalMinutes = hours * 60 + minutes;
+  const offsetMinutes = new Date().getTimezoneOffset();
+  let totalUtcMinutes = (totalLocalMinutes + offsetMinutes) % 1440;
+  if (totalUtcMinutes < 0) totalUtcMinutes += 1440;
+  
+  const utcHours = Math.floor(totalUtcMinutes / 60).toString().padStart(2, "0");
+  const utcMinutes = (totalUtcMinutes % 60).toString().padStart(2, "0");
+  return `${utcHours}:${utcMinutes}`;
+}
+

@@ -218,7 +218,7 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
  {renderVisual()}
  </div>
  ) : (
- <div className="w-full bg-gradient-to-tr from-purple-500 to-pink-500 aspect-square flex items-center justify-center p-8 text-center text-white text-xl font-semibold overflow-y-auto">
+ <div className="w-full bg-[#E1306C] aspect-square flex items-center justify-center p-8 text-center text-white text-xl font-semibold overflow-y-auto">
  {formattedCopy}
  </div>
  )}

@@ -283,7 +283,7 @@ export function GuidedTour() {
         style={getTooltipStyle()}
         className="pointer-events-auto bg-slate-900 border border-[#7C3AED]/25 rounded-2xl p-5 shadow-[0_20px_50px_rgba(124,58,237,0.25)] text-white select-none relative"
       >
-        <div className="absolute -inset-0.5 bg-gradient-to-r from-[#7C3AED] to-[#2583EB] rounded-2xl opacity-10 blur-md pointer-events-none" />
+        <div className="absolute -inset-0.5 bg-[#7C3AED] rounded-2xl opacity-10 blur-md pointer-events-none" />
 
         <button
           onClick={handleClose}
