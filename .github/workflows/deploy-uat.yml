@@ -64,7 +64,7 @@ jobs:
           server-dir: public_html/uat/
 
       - name: Post-deployment commands via SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.0
         continue-on-error: true
         with:
           host: ${{ secrets.SSH_HOST || secrets.FTP_SERVER }}
