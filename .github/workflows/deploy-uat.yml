@@ -45,6 +45,13 @@ jobs:
           cp package.json deploy_temp/
           cp package-lock.json deploy_temp/
           cp .htaccess deploy_temp/
+          # Install production dependencies inside deploy folder so FTP upload is self-contained
+          cd deploy_temp
+          npm install --omit=dev --no-audit --no-fund
+          cd ..
+          # Create Passenger restart trigger with unique timestamp so FTP always re-uploads it
+          mkdir -p deploy_temp/tmp
+          date > deploy_temp/tmp/restart.txt
 
       - name: Sync files via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

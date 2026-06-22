@@ -32,6 +32,7 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
+            <Route path="" element={<LandingPage />} />
             <Route path="/" element={<LandingPage />} />
             <Route path="/landing" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
@@ -81,6 +82,7 @@ export default function App() {
                 <Route path="admin" element={<AdminDashboard />} />
               </Route>
             </Route>
+            <Route path="*" element={<LandingPage />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
