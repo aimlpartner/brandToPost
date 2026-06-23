@@ -149,11 +149,15 @@ function extractJSON(text: string): string {
 
 async function generateContentProxy(model: string, contents: any, config?: any) {
   const token = await auth.currentUser?.getIdToken();
+  const userId = auth.currentUser?.uid;
+  const activeProductId = userId ? localStorage.getItem(`activeProductId_${userId}`) : null;
+
   const response = await fetchWithRetry('/api/ai/generate', {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(activeProductId ? { 'X-Product-Id': activeProductId } : {})
     },
     body: JSON.stringify({ model, contents, config })
   });

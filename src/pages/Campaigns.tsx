@@ -42,6 +42,15 @@ import {
   ChevronLeft,
   Layout,
 } from "lucide-react";
+import {
+  FaLinkedin,
+  FaXTwitter,
+  FaFacebook,
+  FaInstagram,
+  FaTiktok,
+  FaReddit,
+  FaYoutube,
+} from "react-icons/fa6";
 import { cn, formatCopy, copyFormattedText } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -77,6 +86,52 @@ const getVisualDataWithImages = (
     newVd.baseImage = campaignImages[newVd.baseImageId];
   }
   return newVd;
+};
+
+const getPlatformLogo = (platform: string, isActive: boolean = false, className: string = "w-5 h-5") => {
+  const p = platform.toLowerCase();
+  
+  if (isActive) {
+    switch (p) {
+      case "linkedin":
+        return <FaLinkedin className={cn("text-white", className)} />;
+      case "twitter":
+      case "x":
+        return <FaXTwitter className={cn("text-white", className)} />;
+      case "facebook":
+        return <FaFacebook className={cn("text-white", className)} />;
+      case "instagram":
+        return <FaInstagram className={cn("text-white", className)} />;
+      case "tiktok":
+        return <FaTiktok className={cn("text-white", className)} />;
+      case "reddit":
+        return <FaReddit className={cn("text-white", className)} />;
+      case "youtube":
+        return <FaYoutube className={cn("text-white", className)} />;
+      default:
+        return null;
+    }
+  }
+
+  switch (p) {
+    case "linkedin":
+      return <FaLinkedin className={cn("text-[#0A66C2]", className)} />;
+    case "twitter":
+    case "x":
+      return <FaXTwitter className={cn("text-slate-800 dark:text-white", className)} />;
+    case "facebook":
+      return <FaFacebook className={cn("text-[#1877F2]", className)} />;
+    case "instagram":
+      return <FaInstagram className={cn("text-[#E1306C]", className)} />;
+    case "tiktok":
+      return <FaTiktok className={cn("text-slate-900 dark:text-white", className)} />;
+    case "reddit":
+      return <FaReddit className={cn("text-[#FF4500]", className)} />;
+    case "youtube":
+      return <FaYoutube className={cn("text-[#FF0000]", className)} />;
+    default:
+      return null;
+  }
 };
 
 export function Campaigns() {
@@ -2348,6 +2403,9 @@ export function Campaigns() {
                           ));
 
                       if (!hasPostsForPlatform && platform !== "All") return null;
+                      const isActive =
+                        platformFilter === pLowerCase ||
+                        (platform === "All" && platformFilter === null);
 
                       return (
                         <button
@@ -2358,14 +2416,22 @@ export function Campaigns() {
                             )
                           }
                           className={cn(
-                            "px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors",
-                            platformFilter === pLowerCase ||
-                              (platform === "All" && platformFilter === null)
-                              ? "bg-[#7C3AED] text-white shadow-sm"
-                              : "text-slate-500 hover:text-[#7C3AED] hover:bg-[#7C3AED]/4",
+                            "rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center justify-center shadow-sm",
+                            platform === "All" ? "h-8 px-3" : "w-8 h-8",
+                            isActive
+                              ? "bg-[#7C3AED] text-white"
+                              : "bg-white text-slate-500 hover:bg-[#7C3AED]/5 border border-slate-200/60",
                           )}
+                          title={platform}
                         >
-                          {platform}
+                          {platform === "All" ? (
+                            platform
+                          ) : (
+                            <>
+                              {getPlatformLogo(platform, isActive, "w-4 h-4")}
+                              <span className="sr-only">{platform}</span>
+                            </>
+                          )}
                         </button>
                       );
                     })}
@@ -2499,10 +2565,13 @@ export function Campaigns() {
                                   >
                                     <div className="bg-slate-50/80 border-slate-200 px-4 sm:px-5 py-3 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
                                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 min-w-0 flex-1">
-                                        <div className="flex items-center gap-2 shrink-0">
-                                          <span className="font-extrabold text-sm text-slate-800 tracking-wider">
-                                            {pv.platform}
-                                          </span>
+                                        <div className="flex items-center gap-2 shrink-0" title={pv.platform}>
+                                          {getPlatformLogo(pv.platform, false, "w-5 h-5") || (
+                                            <span className="font-extrabold text-sm text-slate-800 tracking-wider">
+                                              {pv.platform}
+                                            </span>
+                                          )}
+                                          <span className="sr-only">{pv.platform}</span>
                                           {pv.improvedViaFeedback && (
                                             <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200/50 flex items-center gap-1 shrink-0">
                                               <Sparkles className="h-2.5 w-2.5" />

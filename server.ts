@@ -241,9 +241,12 @@ async function executeAutoCampaignGeneration(productId: string) {
   if (!founderAgent) {
     throw new Error("Founder Agent doppelganger has not been synthesized yet.");
   }
-  const apiKey = process.env.GEMINI_API_KEY;
+  let apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY environment variable.");
+    apiKey = await getToken(productId, 'gemini_api_key');
+  }
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY environment variable or database token.");
   }
   const ai = new GoogleGenAI({ apiKey });
 
@@ -494,9 +497,12 @@ async function executeAutoDailyPostGeneration(productId: string) {
   if (!founderAgent) {
     throw new Error("Founder Agent doppelganger has not been synthesized yet.");
   }
-  const apiKey = process.env.GEMINI_API_KEY;
+  let apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY environment variable.");
+    apiKey = await getToken(productId, 'gemini_api_key');
+  }
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY environment variable or database token.");
   }
   const ai = new GoogleGenAI({ apiKey });
 
@@ -736,9 +742,12 @@ async function executeAutoDailyBlogGeneration(productId: string) {
   if (!founderAgent) {
     throw new Error("Founder Agent doppelganger has not been synthesized yet.");
   }
-  const apiKey = process.env.GEMINI_API_KEY;
+  let apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY environment variable.");
+    apiKey = await getToken(productId, 'gemini_api_key');
+  }
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY environment variable or database token.");
   }
   const ai = new GoogleGenAI({ apiKey });
 
@@ -1063,6 +1072,7 @@ async function getToken(productId: string, platform: string) {
     if (platform === 'whatsapp_phone_number_id') token = globalWhatsappPhoneIds[productId];
     if (platform === 'whatsapp_webhook_verify_token') token = globalWhatsappVerifyTokens[productId];
     if (platform === 'whatsapp_bot_number') token = globalWhatsappBotNumbers[productId];
+    if (platform === 'gemini_api_key') token = globalGeminiApiKeys[productId];
   }
 
   if (!token && platform === 'instagram') {
@@ -1085,6 +1095,7 @@ async function hasUserToken(productId: string, platform: string): Promise<boolea
     if (platform === 'whatsapp_phone_number_id') token = globalWhatsappPhoneIds[productId];
     if (platform === 'whatsapp_webhook_verify_token') token = globalWhatsappVerifyTokens[productId];
     if (platform === 'whatsapp_bot_number') token = globalWhatsappBotNumbers[productId];
+    if (platform === 'gemini_api_key') token = globalGeminiApiKeys[productId];
   }
   return !!token;
 }
@@ -1101,6 +1112,7 @@ async function setToken(productId: string, platform: string, token: string) {
     if (platform === 'whatsapp_phone_number_id') globalWhatsappPhoneIds[productId] = token;
     if (platform === 'whatsapp_webhook_verify_token') globalWhatsappVerifyTokens[productId] = token;
     if (platform === 'whatsapp_bot_number') globalWhatsappBotNumbers[productId] = token;
+    if (platform === 'gemini_api_key') globalGeminiApiKeys[productId] = token;
   }
 }
 
@@ -1113,6 +1125,7 @@ let globalWhatsappTokens: Record<string, string> = {};
 let globalWhatsappPhoneIds: Record<string, string> = {};
 let globalWhatsappVerifyTokens: Record<string, string> = {};
 let globalWhatsappBotNumbers: Record<string, string> = {};
+let globalGeminiApiKeys: Record<string, string> = {};
 let scheduleConfigs: Record<string, { enabled: boolean, timeUtc: string }> = {};
 let postQueue: Array<{ id: string, text: string, campaignId: string, platform: string, productId: string, day?: string, imageUrl?: string }> = [];
 let lastPostedDates: Record<string, string> = {};
@@ -1926,7 +1939,12 @@ ${htmlContent}
   app.post('/api/ai/generate', requireAuth, routeRateLimiter(15, 60 * 1000), async (req, res) => {
     try {
       const { model, contents, config } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
+      let apiKey = process.env.GEMINI_API_KEY;
+      const productId = (req.headers['x-product-id'] as string) || req.body.productId;
+      
+      if (!apiKey && productId) {
+        apiKey = await getToken(productId, 'gemini_api_key');
+      }
       
       if (!apiKey) {
         return res.status(500).json({ error: 'Server API key not configured. Please set GEMINI_API_KEY in settings.' });
@@ -3006,6 +3024,33 @@ ${htmlContent}
     }
   });
 
+  app.get('/api/config/gemini', requireAuth, async (req, res) => {
+    try {
+      const { productId } = req.query as { productId: string };
+      if (!productId) return res.status(400).json({ error: 'Product ID is required' });
+      
+      const key = await getToken(productId, 'gemini_api_key');
+      res.json({
+        configured: !!key,
+        maskedKey: key ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}` : ""
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/config/gemini', requireAuth, async (req, res) => {
+    try {
+      const { productId, geminiApiKey } = req.body;
+      if (!productId) return res.status(400).json({ error: 'Product ID is required' });
+      
+      await setToken(productId, 'gemini_api_key', geminiApiKey || "");
+      res.json({ success: true, message: 'Gemini API Key saved successfully' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/whatsapp/send', async (req, res) => {
     try {
       const { productId, to, type, text, imageUrl, templateName, languageCode } = req.body;
@@ -3714,10 +3759,13 @@ However, if they ask to make a campaign or send a product photo, and they have n
               }
 
               // Instantiate Google Gen AI Client
-              const geminiKey = process.env.GEMINI_API_KEY;
+              let geminiKey = process.env.GEMINI_API_KEY;
+              if (!geminiKey && matchedProductId) {
+                geminiKey = await getToken(matchedProductId, 'gemini_api_key');
+              }
               if (!geminiKey) {
                 addLog("ERROR: process.env.GEMINI_API_KEY is not configured.");
-                throw new Error("Missing GEMINI_API_KEY environment variable.");
+                throw new Error("Missing GEMINI_API_KEY environment variable or database token.");
               }
               const ai = new GoogleGenAI({
                 apiKey: geminiKey,
