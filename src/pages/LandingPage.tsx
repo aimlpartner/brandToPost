@@ -994,25 +994,174 @@ export function LandingPage() {
           </div>
           <span className="block text-[11px] text-slate-500 mt-6 font-mono uppercase tracking-wider">Instantly onboard your brand profile in under 60 seconds.</span>
         </div>
+      </section>
 
-        {/* Footer */}
-        <footer className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-slate-500 pt-20 mt-10 border-t border-white/5 relative z-10">
-           <div className="flex items-center gap-3">
-             <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden opacity-95">
-                <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" className="w-5 h-5 object-contain" alt="logo"/>
-             </div>
-             <span className="font-bold text-white font-display text-base tracking-tight">BrandToPost</span>
-           </div>
-           
-           <div className="flex gap-8">
-             <span className="hover:text-white transition-colors cursor-pointer">Manifesto</span>
-             <span className="hover:text-white transition-colors cursor-pointer">Twitter</span>
-             <span className="hover:text-white transition-colors cursor-pointer">Privacy Policy</span>
-             <span className="hover:text-white transition-colors cursor-pointer">Terms of Service</span>
-           </div>
-           
-           <p className="font-light font-mono text-[10px]">&copy; {new Date().getFullYear()} BrandToPost Systems. Built by AiMlPartner.</p>
-        </footer>      </section>
+      {/* Light-Themed Footer resting flush at the bottom */}
+      <footer className="w-full bg-[#FAF8F5] pt-16 relative z-10 border-t border-slate-200/60 overflow-hidden flex flex-col justify-between mb-0 pb-0">
+        
+        {/* Top Link Columns */}
+        <div className="max-w-7xl mx-auto w-full px-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10 pb-12 border-b border-slate-200/50">
+          
+          {/* Column 1: Platform */}
+          <div className="flex flex-col gap-3.5">
+            <span className="font-display font-bold text-slate-900 text-xs tracking-wider uppercase">Platform</span>
+            <div className="flex flex-col gap-2.5 text-xs text-slate-500 font-sans font-light">
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Growth Autopilot</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Solo Founder Engine</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Agency Partner Console</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">API Distribution</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">WhatsApp Bot Link</span>
+            </div>
+          </div>
+
+          {/* Column 2: Roster */}
+          <div className="flex flex-col gap-3.5">
+            <span className="font-display font-bold text-slate-900 text-xs tracking-wider uppercase">AI Specialists</span>
+            <div className="flex flex-col gap-2.5 text-xs text-slate-500 font-sans font-light">
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Arthur (Voice Clone)</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Sarah (Research)</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Alex (Copywriting)</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Chloe (Visuals)</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Julian (Graphics)</span>
+            </div>
+          </div>
+
+          {/* Column 3: Resources */}
+          <div className="flex flex-col gap-3.5">
+            <span className="font-display font-bold text-slate-900 text-xs tracking-wider uppercase">Resources</span>
+            <div className="flex flex-col gap-2.5 text-xs text-slate-500 font-sans font-light">
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Manifesto</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Brand Guides</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Social Frameworks</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Case Studies</span>
+            </div>
+          </div>
+
+          {/* Column 4: Company */}
+          <div className="flex flex-col gap-3.5">
+            <span className="font-display font-bold text-slate-900 text-xs tracking-wider uppercase">Company</span>
+            <div className="flex flex-col gap-2.5 text-xs text-slate-500 font-sans font-light">
+              <a href="https://twitter.com" target="_blank" rel="noreferrer" className="hover:text-slate-900 transition-colors">Twitter / X</a>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">About Us</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Privacy Policy</span>
+              <span className="hover:text-slate-900 transition-colors cursor-pointer">Terms of Service</span>
+            </div>
+          </div>
+
+          {/* Column 5: Subscribe */}
+          <div className="flex flex-col gap-3.5 lg:col-span-1 md:col-span-2">
+            <span className="font-display font-bold text-slate-900 text-xs tracking-wider uppercase">Subscribe</span>
+            <p className="text-xs text-slate-500 font-sans font-light leading-relaxed mb-1">
+              Get the weekly dispatch of autonomous growth insights.
+            </p>
+            <form onSubmit={(e) => e.preventDefault()} className="flex flex-col sm:flex-row gap-2">
+              <input 
+                type="email" 
+                placeholder="Enter your email" 
+                className="px-3.5 py-2.5 rounded-lg border border-slate-200 bg-white/70 text-xs font-sans focus:outline-none focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED]/20 w-full text-slate-800 placeholder-slate-400"
+                required
+              />
+              <button 
+                type="submit" 
+                className="px-4 py-2.5 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold uppercase tracking-wider transition-all hover:scale-[1.03] active:scale-[0.97] whitespace-nowrap shadow-sm"
+              >
+                Subscribe
+              </button>
+            </form>
+          </div>
+
+        </div>
+
+        {/* Row 2: Copyright & Meta */}
+        <div className="max-w-7xl mx-auto w-full px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-400 font-sans pt-8">
+          <p className="font-light font-mono text-[9.5px]">
+            &copy; {new Date().getFullYear()} BrandToPost Systems. All rights reserved.
+          </p>
+          <div className="flex gap-8 font-light">
+            <span className="hover:text-slate-600 transition-colors cursor-pointer">Privacy Policy</span>
+            <span className="hover:text-slate-600 transition-colors cursor-pointer">Terms of Service</span>
+          </div>
+          <p className="font-light font-mono text-[9.5px]">Built by AiMlPartner.</p>
+        </div>
+
+        {/* Massive Wordmark Logo Overlay with Color & Firecracker Glowing Border Animation */}
+        <div className="w-full overflow-hidden mt-12 sm:mt-16 select-none pointer-events-none mb-0 pb-0 leading-none block">
+          <svg viewBox="0 0 1600 200" className="w-full h-auto block mb-0 pb-0">
+            <style>{`
+              @keyframes firecracker-flow {
+                0% {
+                  stroke-dashoffset: 2000;
+                }
+                100% {
+                  stroke-dashoffset: 0;
+                }
+              }
+              .animate-firecracker-line {
+                animation: firecracker-flow 14s linear infinite;
+              }
+            `}</style>
+            <defs>
+              <linearGradient id="footerTextGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#7C3AED" stopOpacity="0.85" />
+                <stop offset="45%" stopColor="#C084FC" stopOpacity="0.65" />
+                <stop offset="100%" stopColor="#2583EB" stopOpacity="0.05" />
+              </linearGradient>
+              <linearGradient id="firecrackerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#7C3AED" />
+                <stop offset="35%" stopColor="#C084FC" />
+                <stop offset="70%" stopColor="#2583EB" />
+                <stop offset="100%" stopColor="#7C3AED" />
+              </linearGradient>
+            </defs>
+            
+            {/* Clear, High-Fidelity Brand Logo Icon (Original Vibrant Colors) */}
+            <image
+              href="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+              x="170"
+              y="30"
+              width="140"
+              height="140"
+              style={{
+                opacity: 0.95,
+              }}
+            />
+
+            {/* Giant solid wordmark fading into background */}
+            <text
+              x="330"
+              y="60%"
+              dominantBaseline="middle"
+              className="font-display font-extrabold uppercase tracking-tighter"
+              style={{
+                fontSize: '145px',
+                fill: 'url(#footerTextGradient)',
+                letterSpacing: '-0.04em'
+              }}
+            >
+              brandtopost
+            </text>
+            
+            {/* Traced outline spark line (firecracker spark) */}
+            <text
+              x="330"
+              y="60%"
+              dominantBaseline="middle"
+              className="font-display font-extrabold uppercase tracking-tighter animate-firecracker-line"
+              style={{
+                fontSize: '145px',
+                fill: 'none',
+                stroke: 'url(#firecrackerGradient)',
+                strokeWidth: '1.2px',
+                strokeDasharray: '160 840',
+                letterSpacing: '-0.04em',
+                filter: 'drop-shadow(0 0 8px rgba(124, 58, 237, 0.45))'
+              }}
+            >
+              brandtopost
+            </text>
+          </svg>
+        </div>
+      </footer>
 
       {/* WhatsApp Quick Setup Overlay Modal */}
       {showSetupModal && (
