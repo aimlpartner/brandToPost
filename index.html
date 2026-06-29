@@ -1,124 +1,163 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#0A0A0F" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="BrandToPost" />
-    <link rel="apple-touch-icon" href="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" />
-    <link rel="icon" type="image/png" href="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" />
-    <title>BrandToPost</title>
-    <style>
-      body {
-        margin: 0;
-        background-color: #0A0A0F;
-        font-family: 'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      }
-      .splash-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        width: 100%;
-        background-color: #0A0A0F;
-        position: relative;
-        overflow: hidden;
-      }
-      .splash-logo-wrapper {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-      }
-      .logo-glow {
-        position: absolute;
-        width: 180px;
-        height: 180px;
-        background: radial-gradient(circle, rgba(124, 58, 237, 0.4) 0%, rgba(37, 131, 235, 0.2) 40%, transparent 70%);
-        border-radius: 50%;
-        filter: blur(25px);
-        z-index: 0;
-        animation: glowPulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
-      }
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0A0A0F" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="BrandToPost" />
+  <link rel="apple-touch-icon"
+    href="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" />
+  <link rel="icon" type="image/png"
+    href="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" />
+  <title>BrandToPostUAT</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #0A0A0F;
+      font-family: 'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    }
+
+    .splash-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100%;
+      background-color: #0A0A0F;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .splash-logo-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .logo-glow {
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.4) 0%, rgba(37, 131, 235, 0.2) 40%, transparent 70%);
+      border-radius: 50%;
+      filter: blur(25px);
+      z-index: 0;
+      animation: glowPulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+    }
+
+    .splash-logo {
+      width: 6rem;
+      /* 96px */
+      height: auto;
+      object-fit: contain;
+      position: relative;
+      z-index: 1;
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    @media (min-width: 768px) {
       .splash-logo {
-        width: 6rem; /* 96px */
-        height: auto;
-        object-fit: contain;
-        position: relative;
-        z-index: 1;
-        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        width: 9rem;
+        /* 144px */
       }
-      @media (min-width: 768px) {
-        .splash-logo {
-          width: 9rem; /* 144px */
-        }
-        .logo-glow {
-          width: 240px;
-          height: 240px;
-        }
+
+      .logo-glow {
+        width: 240px;
+        height: 240px;
       }
-      .splash-footer {
-        padding-bottom: 2.5rem; /* 40px */
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        position: relative;
+    }
+
+    .splash-footer {
+      padding-bottom: 2.5rem;
+      /* 40px */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .footer-glow {
+      position: absolute;
+      bottom: 30px;
+      width: 140px;
+      height: 80px;
+      background: radial-gradient(circle, rgba(124, 58, 237, 0.3) 0%, rgba(37, 131, 235, 0.2) 40%, transparent 70%);
+      border-radius: 50%;
+      filter: blur(20px);
+      z-index: 0;
+      animation: glowPulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate-reverse;
+    }
+
+    .splash-from {
+      color: #9CA3AF;
+      font-size: 0.75rem;
+      margin-bottom: 0.5rem;
+      position: relative;
+      z-index: 1;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+    }
+
+    .splash-parent-logo {
+      height: 2.5rem;
+      /* 40px */
+      object-fit: contain;
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
       }
-      .footer-glow {
-        position: absolute;
-        bottom: 30px;
-        width: 140px;
-        height: 80px;
-        background: radial-gradient(circle, rgba(124, 58, 237, 0.3) 0%, rgba(37, 131, 235, 0.2) 40%, transparent 70%);
-        border-radius: 50%;
-        filter: blur(20px);
-        z-index: 0;
-        animation: glowPulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate-reverse;
+
+      50% {
+        opacity: .7;
+        transform: scale(0.97);
       }
-      .splash-from {
-        color: #9CA3AF;
-        font-size: 0.75rem;
-        margin-bottom: 0.5rem;
-        position: relative;
-        z-index: 1;
-        font-weight: 500;
-        letter-spacing: 0.05em;
+    }
+
+    @keyframes glowPulse {
+      0% {
+        opacity: 0.5;
+        transform: scale(0.8) translateZ(0);
       }
-      .splash-parent-logo {
-        height: 2.5rem; /* 40px */
-        object-fit: contain;
-        position: relative;
-        z-index: 1;
+
+      100% {
+        opacity: 1;
+        transform: scale(1.2) translateZ(0);
       }
-      @keyframes pulse {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: .7; transform: scale(0.97); }
-      }
-      @keyframes glowPulse {
-        0% { opacity: 0.5; transform: scale(0.8) translateZ(0); }
-        100% { opacity: 1; transform: scale(1.2) translateZ(0); }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="root">
-      <div class="splash-container">
-        <div class="splash-logo-wrapper">
-          <div class="logo-glow"></div>
-          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="BrandToPost Logo" class="splash-logo" />
-        </div>
-        <div class="splash-footer">
-          <div class="footer-glow"></div>
-          <span class="splash-from">FROM</span>
-          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/WhatsApp_Image_2026-04-28_at_12.18.40_AM-removebg-preview.png" alt="Parent Company Logo" class="splash-parent-logo" />
-        </div>
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root">
+    <div class="splash-container">
+      <div class="splash-logo-wrapper">
+        <div class="logo-glow"></div>
+        <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+          alt="BrandToPost Logo" class="splash-logo" />
+      </div>
+      <div class="splash-footer">
+        <div class="footer-glow"></div>
+        <span class="splash-from">FROM</span>
+        <img
+          src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/WhatsApp_Image_2026-04-28_at_12.18.40_AM-removebg-preview.png"
+          alt="Parent Company Logo" class="splash-parent-logo" />
       </div>
     </div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+  </div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
 
+</html>
