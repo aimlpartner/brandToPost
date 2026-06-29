@@ -1,0 +1,873 @@
+/* =============================================
+   AGENT ART BOOK — LANDSCAPE LAYOUT
+   ============================================= */
+
+/* Section */
+.artbook-section {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px 40px;
+  background: linear-gradient(180deg, #FCFBF9 0%, #F3EEE4 50%, #FCFBF9 100%);
+  border-bottom: 1px solid rgba(168, 162, 150, 0.2);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Subtle grain */
+.artbook-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Header */
+.artbook-header {
+  text-align: center;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 2;
+}
+
+.artbook-header-tag {
+  display: inline-block;
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #7C3AED;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.artbook-header-title {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 300;
+  color: #1c1917;
+  letter-spacing: -0.025em;
+  margin: 0;
+  line-height: 1.2;
+}
+
+/* Stage */
+.artbook-stage {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 1200px;
+  padding: 8px 0 16px;
+}
+
+/* Book shadow */
+.artbook-shadow {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 65%;
+  height: 28px;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.14) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(8px);
+  z-index: 0;
+}
+
+/* Book wrapper */
+.artbook-wrapper {
+  position: relative;
+  z-index: 1;
+  perspective: 2400px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* -----------------------------------------------
+   GENERIC PAGE WRAPPER
+   ----------------------------------------------- */
+.artbook-page-wrap {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* -----------------------------------------------
+   COVER PAGES
+   ----------------------------------------------- */
+.artbook-cover {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 28px 24px;
+}
+
+.artbook-cover-front {
+  background: linear-gradient(155deg, #1a1523 0%, #2d1f4e 40%, #1a1523 100%);
+  border: 1px solid rgba(124, 58, 237, 0.12);
+}
+
+.artbook-cover-back {
+  background: linear-gradient(155deg, #1a1523 0%, #2d1f4e 40%, #1a1523 100%);
+  border: 1px solid rgba(124, 58, 237, 0.12);
+}
+
+.artbook-cover-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #7C3AED, #A78BFA, #7C3AED);
+}
+
+.artbook-cover-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  position: relative;
+  z-index: 2;
+}
+
+.artbook-cover-eyebrow {
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.35em;
+  color: rgba(167, 139, 250, 0.55);
+  font-weight: 600;
+}
+
+.artbook-cover-title {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(26px, 5vw, 40px);
+  font-weight: 200;
+  color: #FFFFFF;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 6px 0;
+}
+
+.artbook-cover-line {
+  width: 50px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.45), transparent);
+  margin: 2px 0;
+}
+
+.artbook-cover-sub {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 300;
+  line-height: 1.5;
+}
+
+.artbook-cover-edition {
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  color: rgba(167, 139, 250, 0.3);
+  margin-top: 12px;
+}
+
+.artbook-cover-badge {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 7px;
+  letter-spacing: 0.15em;
+  color: rgba(167, 139, 250, 0.4);
+  border: 1px solid rgba(167, 139, 250, 0.12);
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+.artbook-cover-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  opacity: 0.75;
+}
+
+.artbook-cover-back-text {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 300;
+  line-height: 1.6;
+  text-align: center;
+  margin: 0;
+}
+
+/* -----------------------------------------------
+   PORTRAIT PAGE (Left — Full-bleed photo)
+   ----------------------------------------------- */
+.artbook-portrait-page {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: #e8e5de;
+}
+
+.artbook-portrait-page img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Large number overlay */
+.artbook-portrait-num {
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 48px;
+  font-weight: 100;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+
+/* Name label at bottom */
+.artbook-portrait-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 24px 18px 14px;
+  background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  pointer-events: none;
+}
+
+.artbook-portrait-name {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  color: #FFFFFF;
+  letter-spacing: -0.01em;
+}
+
+.artbook-portrait-role {
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+/* -----------------------------------------------
+   DETAIL PAGE (Right — Agent info on cream paper)
+   ----------------------------------------------- */
+.artbook-detail-page {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #FEFDFB 0%, #FAF8F3 40%, #F5F1E9 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Paper grain */
+.artbook-detail-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 150px 150px;
+  pointer-events: none;
+}
+
+/* Binding-side shadow */
+.artbook-detail-shadow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.015) 60%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.artbook-detail-content {
+  width: 100%;
+  height: 100%;
+  padding: 22px 22px 16px 30px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+/* Header */
+.artbook-detail-header {
+  margin-bottom: 14px;
+}
+
+.artbook-detail-name {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 500;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.artbook-detail-role {
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin: 4px 0 0;
+}
+
+/* Description */
+.artbook-detail-desc {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 17.5px;
+  color: #0f172a;
+  line-height: 1.65;
+  font-weight: 400;
+  margin: 0 0 28px;
+  display: block;
+  letter-spacing: -0.01em;
+}
+
+.artbook-detail-desc::first-letter {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 3.5em;
+  float: left;
+  line-height: 0.78;
+  font-weight: 700;
+  margin-right: 12px;
+  margin-top: 2px;
+  color: var(--agent-color, #7C3AED);
+}
+
+.artbook-detail-desc::first-line {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* Output card */
+.artbook-detail-output {
+  background: rgba(252, 251, 249, 0.75);
+  border: 1px solid rgba(214, 211, 209, 0.5);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.artbook-detail-output-tag {
+  display: block;
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #78716c;
+  margin-bottom: 6px;
+}
+
+.artbook-detail-output-quote {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 13.5px;
+  color: #1e293b;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-line;
+}
+
+.artbook-detail-output-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 9.5px;
+  color: #78716c;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(214, 211, 209, 0.4);
+}
+
+/* Bottom meta */
+.artbook-detail-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  color: #a8a29e;
+  text-transform: uppercase;
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(214, 211, 209, 0.3);
+}
+
+/* -----------------------------------------------
+   REACT-PAGEFLIP OVERRIDES
+   ----------------------------------------------- */
+.artbook-book .stf__item {
+  background: transparent !important;
+}
+
+.artbook-book .--hard {
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.artbook-book .--soft {
+  overflow: hidden;
+}
+
+/* -----------------------------------------------
+   RESPONSIVE
+   ----------------------------------------------- */
+@media (max-width: 768px) {
+  .artbook-section {
+    padding: 36px 8px 28px;
+  }
+
+  .artbook-header-title {
+    font-size: 1.35rem;
+  }
+
+  .artbook-portrait-num {
+    font-size: 32px;
+    top: 10px;
+    left: 12px;
+  }
+
+  .artbook-portrait-name {
+    font-size: 15px;
+  }
+
+  .artbook-detail-content {
+    padding: 14px 14px 12px 20px;
+  }
+
+  .artbook-detail-name {
+    font-size: 17px;
+  }
+
+  .artbook-detail-desc {
+    font-size: 12.5px;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+  }
+
+  .artbook-detail-desc::first-letter {
+    font-size: 2.2em;
+  }
+
+  .artbook-detail-output {
+    padding: 8px 10px;
+  }
+
+  .artbook-detail-output-quote {
+    font-size: 10px;
+    -webkit-line-clamp: 2;
+  }
+
+  .artbook-cover-title {
+    font-size: 24px;
+  }
+
+  .artbook-nav-arrow {
+    width: 36px;
+    height: 36px;
+  }
+
+  .artbook-nav-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .artbook-nav-prev {
+    left: 2px;
+  }
+
+  .artbook-nav-next {
+    right: 2px;
+  }
+
+  .artbook-controls {
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .artbook-agent-display {
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .artbook-agent-name {
+    font-size: 14px;
+  }
+
+  .artbook-dot {
+    width: 7px;
+    height: 7px;
+  }
+
+  .artbook-page-counter {
+    gap: 3px;
+  }
+
+  .artbook-page-current {
+    font-size: 16px;
+  }
+
+  .artbook-page-total {
+    font-size: 11px;
+  }
+
+  .artbook-hint-inner {
+    font-size: 11px;
+    padding: 8px 16px;
+    gap: 6px;
+  }
+
+  .artbook-hint-icon {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .artbook-detail-content {
+    padding: 10px 10px 8px 16px;
+  }
+
+  .artbook-detail-name {
+    font-size: 15px;
+  }
+
+  .artbook-detail-role {
+    font-size: 8px;
+  }
+
+  .artbook-detail-desc {
+    font-size: 11.5px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
+  .artbook-detail-desc::first-letter {
+    font-size: 2em;
+  }
+
+  .artbook-detail-output-quote {
+    font-size: 9px;
+    -webkit-line-clamp: 2;
+  }
+
+  .artbook-portrait-num {
+    font-size: 24px;
+  }
+
+  .artbook-portrait-name {
+    font-size: 13px;
+  }
+
+  .artbook-portrait-label {
+    padding: 16px 12px 10px;
+  }
+
+  .artbook-nav-arrow {
+    width: 30px;
+    height: 30px;
+  }
+
+  .artbook-nav-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .artbook-header-subtitle {
+    font-size: 11px;
+  }
+
+  .artbook-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .artbook-progress {
+    gap: 5px;
+  }
+}
+
+/* -----------------------------------------------
+   HEADER SUBTITLE
+   ----------------------------------------------- */
+.artbook-header-subtitle {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  color: #a8a29e;
+  font-weight: 300;
+  line-height: 1.5;
+  margin: 6px 0 0;
+  letter-spacing: 0.01em;
+}
+
+/* -----------------------------------------------
+   NAVIGATION ARROWS
+   ----------------------------------------------- */
+.artbook-nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(168, 162, 150, 0.25);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.artbook-nav-arrow:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(124, 58, 237, 0.3);
+  box-shadow: 0 4px 20px rgba(124, 58, 237, 0.1);
+  transform: translateY(-50%) scale(1.08);
+}
+
+.artbook-nav-arrow:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.artbook-nav-disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.artbook-nav-prev {
+  left: 8px;
+}
+
+.artbook-nav-next {
+  right: 8px;
+}
+
+.artbook-nav-icon {
+  width: 20px;
+  height: 20px;
+  color: #44403c;
+  transition: color 0.2s ease;
+}
+
+.artbook-nav-arrow:hover:not(:disabled) .artbook-nav-icon {
+  color: #7C3AED;
+}
+
+/* -----------------------------------------------
+   SCROLL HINT OVERLAY
+   ----------------------------------------------- */
+.artbook-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(28, 25, 23, 0.35);
+  backdrop-filter: blur(2px);
+  border-radius: inherit;
+  animation: artbook-hint-fade-in 0.5s ease forwards;
+  pointer-events: none;
+}
+
+.artbook-hint-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #FFFFFF;
+  letter-spacing: 0.03em;
+  background: rgba(124, 58, 237, 0.85);
+  backdrop-filter: blur(12px);
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  box-shadow: 0 4px 24px rgba(124, 58, 237, 0.25);
+  animation: artbook-hint-pulse 2s ease-in-out infinite;
+}
+
+.artbook-hint-icon {
+  width: 16px;
+  height: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+}
+
+@keyframes artbook-hint-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes artbook-hint-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 4px 24px rgba(124, 58, 237, 0.25); }
+  50% { transform: scale(1.04); box-shadow: 0 6px 32px rgba(124, 58, 237, 0.35); }
+}
+
+/* -----------------------------------------------
+   BOTTOM CONTROLS BAR
+   ----------------------------------------------- */
+.artbook-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1100px;
+  padding: 16px 24px 0;
+  position: relative;
+  z-index: 2;
+  gap: 16px;
+}
+
+/* Agent Name Display */
+.artbook-agent-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.artbook-agent-name {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  color: #1c1917;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition: opacity 0.3s ease;
+}
+
+.artbook-agent-role-tag {
+  font-family: var(--font-display), ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+/* Progress Dots */
+.artbook-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.artbook-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(168, 162, 150, 0.3);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.artbook-dot:hover {
+  background: rgba(124, 58, 237, 0.4);
+  transform: scale(1.3);
+}
+
+.artbook-dot-active {
+  background: #7C3AED;
+  transform: scale(1.35);
+  box-shadow: 0 0 8px rgba(124, 58, 237, 0.3);
+}
+
+/* Page Counter */
+.artbook-page-counter {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-display), ui-monospace, monospace;
+  flex-shrink: 0;
+}
+
+.artbook-page-current {
+  font-size: 20px;
+  font-weight: 300;
+  color: #1c1917;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.artbook-page-sep {
+  font-size: 12px;
+  color: #d6d3d1;
+  font-weight: 300;
+  margin: 0 1px;
+}
+
+.artbook-page-total {
+  font-size: 12px;
+  color: #a8a29e;
+  font-weight: 400;
+}
+

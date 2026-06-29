@@ -261,18 +261,19 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
   return (
    <div className="w-full">
      {getPreview()}
-     {(currentImageUrl || visualType) && (
-       <VisualEditorModal 
-         isOpen={isVisualEditorOpen} 
-         onClose={() => setIsVisualEditorOpen(false)} 
-         imageUrl={currentImageUrl || ''} 
-         originalImageUrl={originalUrl}
-         visualData={visualData}
-         creatives={[]}
-         activeLogo={productLogo}
-         onSave={handleVisualSave}
-       />
-     )}
+      {(currentImageUrl || visualType) && (
+        <VisualEditorModal 
+          isOpen={isVisualEditorOpen} 
+          onClose={() => setIsVisualEditorOpen(false)} 
+          imageUrl={currentImageUrl || ''} 
+          originalImageUrl={originalUrl}
+          visualData={visualData}
+          visualType={visualType}
+          creatives={[]}
+          activeLogo={productLogo}
+          onSave={handleVisualSave}
+        />
+      )}
    </div>
   );
  }
@@ -301,6 +302,7 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
      imageUrl={currentImageUrl || ''} 
      originalImageUrl={originalUrl}
      visualData={visualData}
+     visualType={visualType}
      creatives={[]}
      activeLogo={productLogo}
      onSave={handleVisualSave}

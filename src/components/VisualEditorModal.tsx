@@ -55,12 +55,132 @@ const hexAndOpacityToRgba = (hex: string, opacity: number) => {
    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 };
 
+const normalizeToHexColor = (colorStr: string | null | undefined): string => {
+  if (!colorStr) return "#ffffff";
+  const str = colorStr.trim().toLowerCase();
+  
+  const colorNames: Record<string, string> = {
+    white: "#ffffff",
+    black: "#000000",
+    red: "#ff0000",
+    green: "#00ff00",
+    blue: "#0000ff",
+    yellow: "#ffff00",
+    gray: "#808080",
+    grey: "#808080",
+    silver: "#c0c0c0",
+    maroon: "#800000",
+    olive: "#808000",
+    lime: "#00ff00",
+    aqua: "#00ffff",
+    teal: "#008080",
+    navy: "#000080",
+    fuchsia: "#ff00ff",
+    purple: "#800080",
+    orange: "#ffa500",
+    transparent: "#ffffff"
+  };
+  
+  if (colorNames[str]) return colorNames[str];
+  
+  if (str.startsWith("#")) {
+    if (str.length === 4) {
+      return `#${str[1]}${str[1]}${str[2]}${str[2]}${str[3]}${str[3]}`;
+    }
+    if (str.length === 7) {
+      return str;
+    }
+    if (str.length === 9) {
+      return str.slice(0, 7);
+    }
+  }
+  
+  if (str.startsWith("rgb")) {
+    const parts = str.match(/\d+/g);
+    if (parts && parts.length >= 3) {
+      const r = parseInt(parts[0]).toString(16).padStart(2, '0');
+      const g = parseInt(parts[1]).toString(16).padStart(2, '0');
+      const b = parseInt(parts[2]).toString(16).padStart(2, '0');
+      return `#${r}${g}${b}`;
+    }
+  }
+  
+  return "#ffffff";
+};
+
+const extractPixelSize = (sizeStr: string | null | undefined, fallback: number): number => {
+  if (!sizeStr) return fallback;
+  const cleaned = sizeStr.trim().toLowerCase();
+  
+  const pxMatch = cleaned.match(/(\d+)px/);
+  if (pxMatch) return parseInt(pxMatch[1]);
+  
+  const remMatch = cleaned.match(/([\d.]+)rem/);
+  if (remMatch) return Math.round(parseFloat(remMatch[1]) * 16);
+  
+  const vwMatch = cleaned.match(/([\d.]+)vw/);
+  if (vwMatch) return Math.round(parseFloat(vwMatch[1]) * 10.8);
+  
+  const numMatch = cleaned.match(/[\d.]+/);
+  if (numMatch) return Math.round(parseFloat(numMatch[0]));
+  
+  return fallback;
+};
+
+const getHtmlTextWithLineBreaks = (el: HTMLElement | null): string => {
+  if (!el) return "";
+  try {
+    const tempEl = el.cloneNode(true) as HTMLElement;
+    tempEl.querySelectorAll('br').forEach(br => {
+      br.replaceWith('\n');
+    });
+    return (tempEl.textContent || "").trim();
+  } catch (e) {
+    return (el?.textContent || "").trim();
+  }
+};
+
+const getHtmlCssVal = (html: string | null | undefined, selector: string, prop: string): string | null => {
+  if (!html) return null;
+  try {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const el = tempDiv.querySelector(selector) as HTMLElement;
+    if (el) {
+      const cssText = el.getAttribute('style') || '';
+      const rules = cssText.split(';');
+      for (const rule of rules) {
+        const parts = rule.split(':');
+        if (parts.length >= 2 && parts[0].trim().toLowerCase() === prop.toLowerCase()) {
+          return parts.slice(1).join(':').trim();
+        }
+      }
+    }
+    // Fallback: check the root element
+    const root = tempDiv.firstElementChild as HTMLElement;
+    if (root) {
+      const cssText = root.getAttribute('style') || '';
+      const rules = cssText.split(';');
+      for (const rule of rules) {
+        const parts = rule.split(':');
+        if (parts.length >= 2 && parts[0].trim().toLowerCase() === prop.toLowerCase()) {
+          return parts.slice(1).join(':').trim();
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Error parsing style in getHtmlCssVal", e);
+  }
+  return null;
+};
+
 interface VisualEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   imageUrl: string;
   originalImageUrl?: string;
   visualData?: any;
+  visualType?: string;
   creatives?: Creative[];
   activeLogo?: string;
   onSave: (newImageUrl: string, revertableOriginalUrl: string, newVisualData?: any) => void;
@@ -72,6 +192,7 @@ export function VisualEditorModal({
   imageUrl,
   originalImageUrl,
   visualData,
+  visualType,
   creatives = [],
   activeLogo,
   onSave
@@ -121,59 +242,16 @@ export function VisualEditorModal({
   const [customTitleStyles, setCustomTitleStyles] = useState<React.CSSProperties>(visualData?.editorState?.customTitleStyles || {});
   const [customSubtitleStyles, setCustomSubtitleStyles] = useState<React.CSSProperties>(visualData?.editorState?.customSubtitleStyles || {});
 
-  useEffect(() => {
-    if (!visualData?.editorState?.customTitleStyles && visualData?.customHtml) {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = visualData.customHtml;
-      
-      const parseStyle = (el: HTMLElement | null): React.CSSProperties => {
-        if (!el) return {};
-        const res: any = {};
-        const cssText = el.getAttribute('style') || '';
-        cssText.split(';').forEach(rule => {
-          const [key, ...val] = rule.split(':');
-          if (key && val.length > 0) {
-            const camelKey = key.trim().replace(/-([a-z])/g, (g) => g[1].toUpperCase());
-            if (camelKey && !['position', 'inset', 'top', 'bottom', 'left', 'right', 'fontSize', 'color', 'margin', 'marginBottom'].includes(camelKey)) {
-              res[camelKey] = val.join(':').trim();
-            }
-          }
-        });
-        return res;
-      };
-
-      const h1 = tempDiv.querySelector('h1') || tempDiv.querySelector('h2');
-      if (h1) setCustomTitleStyles(parseStyle(h1));
-      const p = tempDiv.querySelector('p');
-      if (p) setCustomSubtitleStyles(parseStyle(p));
-    }
-  }, [visualData]);
-
-  // Try to parse initial color and size from HTML, else fallback to defaults
-  const getHtmlCssVal = (selector: string, prop: string) => {
-      if (!visualData?.customHtml) return null;
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = visualData.customHtml;
-      const el = tempDiv.querySelector(selector) as HTMLElement;
-      if (!el) return null;
-      const cssText = el.getAttribute('style') || '';
-      const rule = cssText.split(';').find(r => r.trim().startsWith(prop + ':'));
-      if (rule) return rule.split(':')[1].trim();
-      return null;
-  }
-
   const [titleSize, setTitleSize] = useState(() => {
      if (visualData?.editorState?.titleSize) return visualData.editorState.titleSize;
-     const sizeStr = getHtmlCssVal('h1, h2', 'font-size');
-     if (sizeStr && sizeStr.endsWith('px')) return parseInt(sizeStr);
-     return 72;
+     const sizeStr = getHtmlCssVal(visualData?.customHtml, 'h1, h2', 'font-size');
+     return extractPixelSize(sizeStr, 72);
   });
   
   const [subtitleSize, setSubtitleSize] = useState(() => {
      if (visualData?.editorState?.subtitleSize) return visualData.editorState.subtitleSize;
-     const sizeStr = getHtmlCssVal('p', 'font-size');
-     if (sizeStr && sizeStr.endsWith('px')) return parseInt(sizeStr);
-     return 32;
+     const sizeStr = getHtmlCssVal(visualData?.customHtml, 'p', 'font-size');
+     return extractPixelSize(sizeStr, 32);
   });
 
   const [fontFamily, setFontFamily] = useState(() => {
@@ -185,16 +263,14 @@ export function VisualEditorModal({
   
   const [titleColor, setTitleColor] = useState(() => {
      if (visualData?.editorState?.titleColor) return visualData.editorState.titleColor;
-     const col = getHtmlCssVal('h1, h2', 'color');
-     if (col && col.startsWith('#') && col.length === 7) return col;
-     return visualData?.layout?.titleColor || "#ffffff";
+     const col = getHtmlCssVal(visualData?.customHtml, 'h1, h2', 'color');
+     return normalizeToHexColor(col || visualData?.layout?.titleColor || "#ffffff");
   });
   
   const [subtitleColor, setSubtitleColor] = useState(() => {
      if (visualData?.editorState?.subtitleColor) return visualData.editorState.subtitleColor;
-     const col = getHtmlCssVal('p', 'color');
-     if (col && col.startsWith('#') && col.length === 7) return col;
-     return visualData?.layout?.subtitleColor || "#e5e7eb";
+     const col = getHtmlCssVal(visualData?.customHtml, 'p', 'color');
+     return normalizeToHexColor(col || visualData?.layout?.subtitleColor || "#e5e7eb");
   });
   
   const [textAlign, setTextAlign] = useState<"left" | "center" | "right">(visualData?.editorState?.textAlign || visualData?.layout?.textAlign || "left");
@@ -247,21 +323,25 @@ export function VisualEditorModal({
       
       const h1 = div.querySelector('h1') || div.querySelector('h2');
       if (h1 && title) {
-        h1.textContent = title;
+        h1.innerHTML = title.replace(/\n/g, '<br/>');
         h1.style.fontSize = `${titleSize}px`;
         h1.style.color = titleColor;
         h1.style.fontFamily = fontFamily;
         if (textAlign) h1.style.textAlign = textAlign;
+        h1.style.pointerEvents = 'auto';
+        h1.style.cursor = 'move';
       }
 
       const pColl = div.querySelectorAll('p');
       const lastP = pColl.length > 0 ? pColl[pColl.length - 1] : null; 
       if (lastP && subtitle) {
-        lastP.textContent = subtitle;
+        lastP.innerHTML = subtitle.replace(/\n/g, '<br/>');
         lastP.style.fontSize = `${subtitleSize}px`;
         lastP.style.color = subtitleColor;
         lastP.style.fontFamily = fontFamily;
         if (textAlign) lastP.style.textAlign = textAlign;
+        lastP.style.pointerEvents = 'auto';
+        lastP.style.cursor = 'move';
       }
       
       let idx = 0;
@@ -276,6 +356,10 @@ export function VisualEditorModal({
             if (block) {
                 node.textContent = block.current;
             }
+            if (node.parentElement) {
+                node.parentElement.style.pointerEvents = 'auto';
+                node.parentElement.style.cursor = 'move';
+            }
             idx++;
          } else if (node.nodeType === Node.ELEMENT_NODE) {
             const el = node as HTMLElement;
@@ -286,25 +370,13 @@ export function VisualEditorModal({
       };
       div.childNodes.forEach(walk);
       
-      // If we use patchedHtml inside the motion.div, we should remove absolute positioning on the root 
-      // so it flows dynamically within the motion.div's layout limits and moves as we drag.
       const root = div.firstElementChild as HTMLElement;
       if (root) {
-        root.style.position = 'relative';
-        root.style.inset = 'auto';
-        root.style.top = 'auto';
-        root.style.left = 'auto';
-        root.style.bottom = 'auto';
-        root.style.right = 'auto';
-        root.style.width = 'auto';
-        root.style.height = 'auto';
-        root.style.padding = '0px';
-        root.style.margin = '0px';
-        root.style.background = 'transparent';
-        root.style.backgroundColor = 'transparent';
-        if (root.style.justifyContent) {
-           root.style.justifyContent = 'flex-start';
-        }
+        root.style.position = 'absolute';
+        root.style.inset = '0';
+        root.style.width = '1080px';
+        root.style.height = '1080px';
+        root.style.pointerEvents = 'none';
       }
 
       return div.innerHTML;
@@ -359,6 +431,282 @@ export function VisualEditorModal({
 
   const logoX = useMotionValue(getSmartInitialLogoX());
   const logoY = useMotionValue(getSmartInitialLogoY());
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // 1. Background Image
+    const initialBaseBg = visualData?.baseImage || originalImageUrl || imageUrl;
+    setBaseBg(visualData?.editorState?.baseBg || initialBaseBg || "");
+
+    // 2. Scrim
+    setScrimHeight(visualData?.editorState?.scrimHeight ?? 80);
+    setScrimOpacity(visualData?.editorState?.scrimOpacity ?? 0.85);
+    setScrimColor(visualData?.editorState?.scrimColor ?? "#000000");
+
+    // 3. Custom overlay background
+    let bgVal = "";
+    if (visualData?.editorState?.customOverlayBg) {
+      bgVal = visualData.editorState.customOverlayBg;
+    } else if (visualData?.customHtml) {
+      try {
+        const div = document.createElement('div');
+        div.innerHTML = visualData.customHtml;
+        const root = div.firstElementChild as HTMLElement;
+        bgVal = root?.style?.background || root?.style?.backgroundColor || "";
+      } catch (e) {}
+    }
+    setCustomOverlayBg(bgVal);
+
+    // 4. Content (Title, Subtitle, Extra Text Blocks)
+    let parsedTitle = "";
+    let parsedSubtitle = "";
+    if (visualData?.editorState?.title !== undefined) {
+      parsedTitle = visualData.editorState.title;
+    } else if (visualData?.customHtml) {
+      try {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = visualData.customHtml;
+        const h1 = tempDiv.querySelector('h1') || tempDiv.querySelector('h2') as HTMLElement | null;
+        parsedTitle = getHtmlTextWithLineBreaks(h1) || visualData?.headline || "";
+      } catch (e) {}
+    } else {
+      parsedTitle = visualData?.headline || "";
+    }
+    setTitle(parsedTitle);
+
+    if (visualData?.editorState?.subtitle !== undefined) {
+      parsedSubtitle = visualData.editorState.subtitle;
+    } else if (visualData?.customHtml) {
+      try {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = visualData.customHtml;
+        const p = tempDiv.querySelector('p') as HTMLElement | null;
+        parsedSubtitle = getHtmlTextWithLineBreaks(p) || visualData?.subtext || "";
+      } catch (e) {}
+    } else {
+      parsedSubtitle = visualData?.subtext || "";
+    }
+    setSubtitle(parsedSubtitle);
+
+    const parseElementStyles = (el: HTMLElement): React.CSSProperties => {
+      const res: any = {};
+      const cssText = el.getAttribute('style') || '';
+      cssText.split(';').forEach(rule => {
+        const [key, ...val] = rule.split(':');
+        if (key && val.length > 0) {
+          const camelKey = key.trim().replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+          if (camelKey && !['position', 'inset', 'top', 'bottom', 'left', 'right', 'fontSize', 'color', 'margin', 'marginBottom'].includes(camelKey)) {
+            res[camelKey] = val.join(':').trim();
+          }
+        }
+      });
+      return res;
+    };
+
+    // 5. Custom styles parsing from HTML
+    let parsedTitleStyles: React.CSSProperties = {};
+    let parsedSubtitleStyles: React.CSSProperties = {};
+    if (visualData?.editorState?.customTitleStyles) {
+      parsedTitleStyles = visualData.editorState.customTitleStyles;
+    } else if (visualData?.customHtml) {
+      try {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = visualData.customHtml;
+        const h1 = tempDiv.querySelector('h1') || tempDiv.querySelector('h2');
+        if (h1) parsedTitleStyles = parseElementStyles(h1);
+      } catch (e) {}
+    }
+    setCustomTitleStyles(parsedTitleStyles);
+
+    if (visualData?.editorState?.customSubtitleStyles) {
+      parsedSubtitleStyles = visualData.editorState.customSubtitleStyles;
+    } else if (visualData?.customHtml) {
+      try {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = visualData.customHtml;
+        const p = tempDiv.querySelector('p');
+        if (p) parsedSubtitleStyles = parseElementStyles(p);
+      } catch (e) {}
+    }
+    setCustomSubtitleStyles(parsedSubtitleStyles);
+
+    // 6. Font properties
+    const sizeStrH = getHtmlCssVal(visualData?.customHtml, 'h1, h2', 'font-size');
+    setTitleSize(visualData?.editorState?.titleSize ?? extractPixelSize(sizeStrH, 72));
+
+    const sizeStrP = getHtmlCssVal(visualData?.customHtml, 'p', 'font-size');
+    setSubtitleSize(visualData?.editorState?.subtitleSize ?? extractPixelSize(sizeStrP, 32));
+
+    let fFamily = "";
+    if (visualData?.editorState?.fontFamily) {
+      fFamily = visualData.editorState.fontFamily;
+    } else if (visualData?.layout?.fontFamily) {
+      fFamily = visualData.layout.fontFamily;
+    } else if (visualData?.fonts?.primary) {
+      fFamily = visualData.fonts.primary.includes(' ') && !visualData.fonts.primary.includes("'") 
+        ? `'${visualData.fonts.primary}', sans-serif` 
+        : `${visualData.fonts.primary}, sans-serif`;
+    } else {
+      fFamily = "'Inter', system-ui, sans-serif";
+    }
+    setFontFamily(fFamily);
+
+    const colH = getHtmlCssVal(visualData?.customHtml, 'h1, h2', 'color');
+    setTitleColor(visualData?.editorState?.titleColor ?? normalizeToHexColor(colH || visualData?.layout?.titleColor || "#ffffff"));
+
+    const colP = getHtmlCssVal(visualData?.customHtml, 'p', 'color');
+    setSubtitleColor(visualData?.editorState?.subtitleColor ?? normalizeToHexColor(colP || visualData?.layout?.subtitleColor || "#e5e7eb"));
+
+    const parsedAlign = getHtmlCssVal(visualData?.customHtml, 'h1, h2', 'text-align') as "left" | "center" | "right" | null;
+    setTextAlign(visualData?.editorState?.textAlign || parsedAlign || visualData?.layout?.textAlign || "left");
+    setTextWidth(visualData?.editorState?.textWidth ?? 900);
+
+    // 7. Extra text blocks
+    let parsedBlocks: { id: number; current: string }[] = [];
+    if (visualData?.editorState?.extraTextBlocks) {
+      parsedBlocks = visualData.editorState.extraTextBlocks;
+    } else if (visualData?.customHtml) {
+      try {
+        const div = document.createElement('div');
+        div.innerHTML = visualData.customHtml;
+        const blocks: { id: number; current: string }[] = [];
+        let idx = 0;
+        
+        const h1 = div.querySelector('h1') || div.querySelector('h2');
+        const pColl = div.querySelectorAll('p');
+        const lastP = pColl.length > 0 ? pColl[pColl.length - 1] : null; 
+
+        const walk = (node: Node) => {
+           if (node === h1 || node === lastP) {
+               idx++;
+               return;
+           }
+           if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) {
+              blocks.push({ id: idx, current: node.textContent.trim() });
+              idx++;
+           } else if (node.nodeType === Node.ELEMENT_NODE) {
+              const el = node as HTMLElement;
+              if (el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE') {
+                 el.childNodes.forEach(walk);
+              }
+           }
+        };
+        div.childNodes.forEach(walk);
+        parsedBlocks = blocks;
+      } catch(e) {}
+    }
+    setExtraTextBlocks(parsedBlocks);
+
+    // 8. Logo visibility & scaling
+    setShowLogo(visualData?.editorState?.showLogo ?? true);
+    setLogoScale(visualData?.editorState?.logoScale ?? 1);
+
+    // 9. Coordinate Offsets
+    const defaultTextX = visualData?.customHtml ? 0 : 90;
+    const defaultTextY = visualData?.customHtml ? 0 : 700;
+    
+    textX.set(visualData?.editorState?.textX ?? defaultTextX);
+    textY.set(visualData?.editorState?.textY ?? defaultTextY);
+
+    const getSmartLogoX = () => {
+      if (visualData?.editorState?.logoX !== undefined) return visualData.editorState.logoX;
+      
+      let safeVisualType = visualType ? visualType.toLowerCase() : "";
+      const validTypes = ["creative-story", "data-infographic", "powerful-quote", "abstract-announcement", "custom-overlay"];
+      if (safeVisualType && !validTypes.includes(safeVisualType)) {
+        if (safeVisualType.includes("quote")) safeVisualType = "powerful-quote";
+        else if (safeVisualType.includes("data") || safeVisualType.includes("info")) safeVisualType = "data-infographic";
+        else if (safeVisualType.includes("abstract") || safeVisualType.includes("announce")) safeVisualType = "abstract-announcement";
+        else if (safeVisualType.includes("custom")) safeVisualType = "custom-overlay";
+        else safeVisualType = "";
+      }
+
+      let resolvedTextPos = visualData?.layout?.textPosition || 'bottom';
+      if (safeVisualType === 'creative-story') {
+        resolvedTextPos = 'bottom';
+      } else if (safeVisualType === 'abstract-announcement') {
+        resolvedTextPos = 'middle';
+      } else if (safeVisualType === 'powerful-quote') {
+        resolvedTextPos = 'middle';
+      } else if (safeVisualType === 'data-infographic') {
+        resolvedTextPos = 'top';
+      }
+
+      let resolvedLogoPos = visualData?.layout?.logoPosition;
+      if (!resolvedLogoPos) {
+        if (resolvedTextPos === 'bottom') {
+          resolvedLogoPos = 'top-right';
+        } else if (resolvedTextPos === 'top') {
+          resolvedLogoPos = 'bottom-right';
+        } else {
+          resolvedLogoPos = 'bottom-right';
+        }
+      }
+
+      if (resolvedTextPos === 'bottom' && resolvedLogoPos.startsWith('bottom')) {
+        resolvedLogoPos = resolvedLogoPos.replace('bottom', 'top');
+      } else if (resolvedTextPos === 'top' && resolvedLogoPos.startsWith('top')) {
+        resolvedLogoPos = resolvedLogoPos.replace('top', 'bottom');
+      }
+
+      const pos = resolvedLogoPos;
+      if (pos.endsWith('left')) return 80;
+      if (pos.endsWith('center') || pos === 'center') return 490;
+      return 820; 
+    };
+
+    const getSmartLogoY = () => {
+      if (visualData?.editorState?.logoY !== undefined) return visualData.editorState.logoY;
+      
+      let safeVisualType = visualType ? visualType.toLowerCase() : "";
+      const validTypes = ["creative-story", "data-infographic", "powerful-quote", "abstract-announcement", "custom-overlay"];
+      if (safeVisualType && !validTypes.includes(safeVisualType)) {
+        if (safeVisualType.includes("quote")) safeVisualType = "powerful-quote";
+        else if (safeVisualType.includes("data") || safeVisualType.includes("info")) safeVisualType = "data-infographic";
+        else if (safeVisualType.includes("abstract") || safeVisualType.includes("announce")) safeVisualType = "abstract-announcement";
+        else if (safeVisualType.includes("custom")) safeVisualType = "custom-overlay";
+        else safeVisualType = "";
+      }
+
+      let resolvedTextPos = visualData?.layout?.textPosition || 'bottom';
+      if (safeVisualType === 'creative-story') {
+        resolvedTextPos = 'bottom';
+      } else if (safeVisualType === 'abstract-announcement') {
+        resolvedTextPos = 'middle';
+      } else if (safeVisualType === 'powerful-quote') {
+        resolvedTextPos = 'middle';
+      } else if (safeVisualType === 'data-infographic') {
+        resolvedTextPos = 'top';
+      }
+
+      let resolvedLogoPos = visualData?.layout?.logoPosition;
+      if (!resolvedLogoPos) {
+        if (resolvedTextPos === 'bottom') {
+          resolvedLogoPos = 'top-right';
+        } else if (resolvedTextPos === 'top') {
+          resolvedLogoPos = 'bottom-right';
+        } else {
+          resolvedLogoPos = 'bottom-right';
+        }
+      }
+
+      if (resolvedTextPos === 'bottom' && resolvedLogoPos.startsWith('bottom')) {
+        resolvedLogoPos = resolvedLogoPos.replace('bottom', 'top');
+      } else if (resolvedTextPos === 'top' && resolvedLogoPos.startsWith('top')) {
+        resolvedLogoPos = resolvedLogoPos.replace('top', 'bottom');
+      }
+
+      const pos = resolvedLogoPos;
+      if (pos.startsWith('top')) return 80;
+      if (pos.startsWith('middle') || pos === 'center') return 505;
+      return 930; 
+    };
+
+    logoX.set(getSmartLogoX());
+    logoY.set(getSmartLogoY());
+
+  }, [isOpen, visualData, imageUrl, activeLogo, originalImageUrl, visualType]);
 
   // Overall State
   const [isGenerating, setIsGenerating] = useState(false);
@@ -564,27 +912,28 @@ export function VisualEditorModal({
                     <img 
                       src={baseBg} 
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} 
-                      crossOrigin="anonymous" 
+                      crossOrigin={baseBg.startsWith('data:') ? undefined : "anonymous"} 
                       alt="bg" 
                     />
                   )}
-                  
                   {/* Scrim Overlay */}
-                  <div 
-                    style={{ 
-                      position: 'absolute', 
-                      left: 0, 
-                      right: 0, 
-                      bottom: 0, 
-                      height: `${scrimHeight}%`, 
-                      background: `rgba(${parseInt(scrimColor.slice(1,3), 16) || 0},${parseInt(scrimColor.slice(3,5), 16) || 0},${parseInt(scrimColor.slice(5,7), 16) || 0},${scrimOpacity})`, 
-                      zIndex: 1,
-                      pointerEvents: 'none'
-                    }} 
-                  />
-
+                  {!patchedHtml && (
+                    <div 
+                      style={{ 
+                        position: 'absolute', 
+                        left: 0, 
+                        right: 0, 
+                        bottom: 0, 
+                        height: `${scrimHeight}%`, 
+                        background: `rgba(${parseInt(scrimColor.slice(1,3), 16) || 0},${parseInt(scrimColor.slice(3,5), 16) || 0},${parseInt(scrimColor.slice(5,7), 16) || 0},${scrimOpacity})`, 
+                        zIndex: 1,
+                        pointerEvents: 'none'
+                      }} 
+                    />
+                  )}
+                  
                   {/* Custom HTML Extracted Background */}
-                  {customOverlayBg && (
+                  {!patchedHtml && customOverlayBg && (
                     <div 
                       style={{ 
                         position: 'absolute', 
@@ -607,8 +956,10 @@ export function VisualEditorModal({
                       top: 0, 
                       left: 0, 
                       zIndex: 10, 
-                      width: textWidth, 
-                      cursor: 'move', 
+                      width: patchedHtml ? 1080 : textWidth, 
+                      height: patchedHtml ? 1080 : 'auto',
+                      pointerEvents: patchedHtml ? 'none' : 'auto',
+                      cursor: patchedHtml ? 'auto' : 'move',
                       display: 'flex', 
                       flexDirection: 'column', 
                       alignItems: textAlign === 'center' ? 'center' : textAlign === 'right' ? 'flex-end' : 'flex-start',
@@ -617,7 +968,7 @@ export function VisualEditorModal({
                   >
                     {patchedHtml ? (
                       <div 
-                        style={{ width: '100%', position: 'relative', pointerEvents: 'none' }}
+                        style={{ width: '100%', height: '100%', position: 'relative', pointerEvents: 'none' }}
                         dangerouslySetInnerHTML={{ __html: patchedHtml }}
                       />
                     ) : (
@@ -668,10 +1019,10 @@ export function VisualEditorModal({
                     >
                       <img 
                         src={activeLogo} 
-                        crossOrigin="anonymous"
+                        crossOrigin={activeLogo.startsWith('data:') ? undefined : "anonymous"}
                         style={{ 
-                          maxWidth: 300, 
-                          maxHeight: 150, 
+                          maxWidth: 180, 
+                          maxHeight: 70, 
                           transform: `scale(${logoScale})`, 
                           transformOrigin: 'center center', 
                           objectFit: 'contain',
@@ -717,10 +1068,10 @@ export function VisualEditorModal({
                 <div className="space-y-6 animate-in fade-in duration-200">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Content</label>
-                    <input 
+                    <textarea 
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      className="w-full bg-white border border-slate-205 rounded-lg p-3 text-sm text-slate-805 focus:ring-2 focus:ring-[#7C3AED]/20 focus:border-[#7C3AED] outline-none placeholder-slate-400 shadow-sm"
+                      className="w-full bg-white border border-slate-205 rounded-lg p-3 text-sm text-slate-805 h-20 focus:ring-2 focus:ring-[#7C3AED]/20 focus:border-[#7C3AED] outline-none resize-none placeholder-slate-400 shadow-sm"
                       placeholder="Headline text..."
                     />
                     <textarea 

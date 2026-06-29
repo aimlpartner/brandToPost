@@ -1,0 +1,157 @@
+========================================================================
+              BRANDTOPOST COMPLETE SYSTEM ARCHITECTURE & MANUAL
+                     "The Enterprise Autonomous Brand Engine"
+========================================================================
+
+This document serves as the absolute source of truth for the BrandToPost
+application, containing the vision, technical specifications, user workflows, 
+design systems, color palettes, typography, components, and core engine code.
+
+------------------------------------------------------------------------
+1. PRODUCT DNA & CORE VISION
+------------------------------------------------------------------------
+BrandToPost is an end-to-end Enterprise AI Creative Studio and distribution
+engine designed to eliminate the friction between product development and native
+organic post scheduling. Instead of forcing founders, marketers, and teams to
+prompt blank chatbot inputs daily, BrandToPost ingests a raw product URL or 
+context block and automatically extracts brand DNA, builds a multi-channel campaign, 
+generates branded graphic cards, and distributes content natively via direct APIs.
+
+Key Value Pillars:
+* ZERO-PROMPT DISTRIBUTION: Paste a URL, approve the campaign, and watch it deploy.
+* AGENT ORCHESTRATION (TROR): Specialized AI agents handle focused steps of the process:
+  - Arthur: Voice alignment, brand DNA extraction, psychographic mapping.
+  - Sarah: Web researcher, scrapes industry context, targets triggers.
+  - Alex: Multi-platform copywriting agent, drafts posts natively.
+  - Chloe & Julian: Graphics, asset layout, typography card generators.
+  - Max: Publishing specialist, handles native API distribution.
+* ART BOOK PRESENTATION: A premium, minimal, editorial design language that rejects 
+  standard SaaS layouts (no generic card borders, no shadows, no standard dashboards).
+
+------------------------------------------------------------------------
+2. DESIGN SYSTEM & VISUAL SPECS
+------------------------------------------------------------------------
+The design system of BrandToPost is inspired by high-end luxury catalogs, art gallery
+exhibits, and professional print journals. It relies on clean dividers, massive display
+typography, generous whitespace, and a high contrast between dark focus areas and light
+editorial canvases.
+
+THEME SPECIFICATIONS:
+* Overall Aesthetic: "Editorial Luxury Tech" (Glassmorphism, thin rules, vast paddings)
+* Primary Background (Light Canvas): #FAF9F6 (Warm off-white, soft plaster color)
+* Primary Background (Dark Canvas): #08080C (Deep absolute black with purple hues)
+* Card Backgrounds:
+  - Light Theme: White (#FFFFFF) with 5% alpha border rules.
+  - Dark Theme: Translucent Glass (rgba(255, 255, 255, 0.02)) with backdrop-blur.
+* Divider Rules:
+  - Light Theme: border-slate-900/10 or border-slate-200/60
+  - Dark Theme: border-white/5 or border-white/10
+
+TYPOGRAPHY & FONTS:
+* Heading Font: "Outfit" (Google Fonts)
+  - Characterized by clean, modern, slightly rounded geometric structures.
+  - Applied using `.font-display` class.
+  - Used for large display titles (`text-4xl` up to `text-7xl` or `text-8xl`), thin weight (`font-light`), and italic highlights.
+* Body Sans Font: "Inter" (Google Fonts)
+  - Sleek, highly legible, optimized for screen readability.
+  - Used for standard paragraphs, descriptions, and user inputs.
+* Technical/Monospace Font: "Space Grotesk" or standard system monospace
+  - Used for tags, badges, step counts, console logs, and system metrics.
+
+COLOR TOKENS & HEX CODES:
+* Warm Off-White (Canvas): #FAF9F6
+* Deep Slate Black (Dark Text/Dark Canvas): #08080C
+* Primary Brand Purple (Voice Highlight): #7C3AED
+* Light Brand Purple (Glows/Gradients): #C084FC
+* Success Brand Green (Metrics/Verified): #10B981
+* Process Brand Blue (Research/Data): #2583EB
+* Warning Brand Pink (Constraints/Errors): #F43F5E
+* Subtle Slate Gray (Muted Text/Secondary): #64748B
+* Border Outlines: rgba(226, 232, 240, 0.6) (Light) / rgba(255, 255, 255, 0.05) (Dark)
+
+------------------------------------------------------------------------
+3. DETAILED PAGE-BY-PAGE WORKFLOWS
+------------------------------------------------------------------------
+
+A. THE LANDING PAGE (src/pages/LandingPage.tsx)
+The landing page introduces the product using a scrolling art-gallery structure:
+* SECTION 1: HERO DISPLAY (Dark Theme)
+  - A widescreen, dark-themed hero. Large display header: "The Autonomous Brand Engine."
+  - Animated glowing background blobs (`animate-blob-1` & `animate-blob-2`) using purple/blue gradients.
+  - Minimal action buttons: "Start Trial" (solid purple) and "Talk to Sales" (border-white).
+* SECTION 2: THE AGENT FLIPBOOK (Interactive Carousel)
+  - Fully dynamic flipbook container. Features the 6 AI agents: Arthur, Sarah, Alex, Chloe, Julian, and Max.
+  - Implements custom CSS scrolling, keyboard arrows, and step indicators.
+  - Renders interactive bio metrics, mock logs, and voice settings.
+* SECTION 3: THE METRICS BOARD
+  - Typographic showcase displaying live, count-up growth statistics:
+    - 94.2% Organic reach improvement.
+    - 4.2h Creative output speed reduction.
+    - 3.2M Impressions generated.
+  - Uses ScrollObservers to trigger count-up animations dynamically.
+* SECTION 4: THE MANUAL VS AUTONOMOUS CONTRAST (Light Theme - Redesigned)
+  - Warm off-white canvas displaying a side-by-side visual comparison of:
+    - chat.openai.com: ChatGPT mock browser screen showing the prompter's struggle.
+    - brandtopost.com/engine: B2P engine screen showing URL input branching into social previews.
+* SECTION 5: MEET TROR ORCHESTRATOR (Dark Theme)
+  - Visual description of TROR, the central manager orchestrating the other agents.
+  - Renders dynamic console log trails simulating active processes.
+* SECTION 6: THE CAMPAIGN STUDIO BENTO GRID
+  - Interactive grid displaying campaign components: Timeline Calendar, Multi-Platform Copy previews, and Branded Visual Overlays.
+* SECTION 7: CORE CAMPAIGN FLOW
+  - Simple 3-column process grid (Paste URL -> Validate Brand DNA -> Auto-Publish).
+
+B. ONBOARDING FLOW (src/pages/Onboarding.tsx)
+The configuration wizard where users align the AI with their brand:
+* STEP 1: BASIC METRICS (Product details, name, logo upload, color palette rules).
+* STEP 2: STRATEGIC TARGETS (Ideal target customer, core messaging pillars, proof points).
+* STEP 3: PSYCHOGRAPHIC ANALYSIS
+  - Define the "Hell State" (buyer's pain before the product).
+  - Define the "Heaven State" (buyer's status after success).
+  - List of primary buyer objections and objections handling keys.
+  - "Earned Secret" & "Vocabulary Rules" (specific buzzwords to blacklist/whitelist).
+* STEP 4: AGENT ASSIGNMENT
+  - Visual toggle triggers mapping agent profiles to target channels.
+
+C. SETTINGS DASHBOARD (src/pages/Settings.tsx)
+Management console for live campaigns and accounts:
+* BRAND DNA SETTINGS: Edit positioning, ICPs, whitelisted vocabulary, and image assets.
+* PUBLISHING INTEGRATIONS: Direct API connections for LinkedIn, X (Twitter), Instagram.
+* TEAM & COLLABORATION: Manage review links and client feedback configurations.
+
+------------------------------------------------------------------------
+4. ACTIVE AGENTS DEFINITIONS & PROFILES
+------------------------------------------------------------------------
+
+1. ARTHUR (Brand Architect Agent)
+   - Profile: "The strategic brain." Arthur reads raw product details, analyzes URLs, 
+     objections, and locks down the brand voice guideline file.
+   - Outputs: Strategic DNA manuals, whitelist vocabulary rules, core positioning hooks.
+
+2. SARAH (Market Researcher Agent)
+   - Profile: "The intelligence gathering grid." Sarah scrapes web urls, reads competitor 
+     updates, and monitors active industry topics.
+   - Outputs: Industry context decks, trend logs, marketing triggers.
+
+3. ALEX (Platform Copywriter Agent)
+   - Profile: "The native translator." Alex takes DNA rules and writes native posts.
+   - Outputs: Paragraph layouts for LinkedIn, thread scripts for X, stories for Reddit.
+
+4. CHLOE & JULIAN (Creative Overlay Directors)
+   - Profile: "The visual overlay agents." They isolate product graphics, remove backgrounds, 
+     place products into luxurious environments, and apply stylized typography.
+   - Outputs: Data-infographics, powerful quote visual assets.
+
+5. MAX (Publishing Coordinator Agent)
+   - Profile: "The network operator." Max schedules and executes publishing scripts natively.
+   - Outputs: Direct API post requests, live publication schedules, tracking logs.
+
+6. TROR (The Master Orchestrator Agent)
+   - Profile: "The central nervous system." TROR routes inputs to Arthur, passes research to 
+     Sarah, assigns copy tasks to Alex, and coordinates Chloe & Julian for graphics.
+   - Outputs: Orchestration loops, active pipeline telemetry logs.
+
+========================================================================
+This complete master architecture makes BrandToPost the first autonomous 
+brand engine on the market, completely bypassing the prompter's card boxes.
+========================================================================
