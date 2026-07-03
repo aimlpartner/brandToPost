@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth, googleProvider, facebookProvider, appleProvider } from '../firebase';
-import { doc, onSnapshot, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { logSilentError } from '../lib/firestore-error';
 
 interface AuthProfile {
