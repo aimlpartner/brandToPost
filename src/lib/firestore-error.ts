@@ -72,6 +72,17 @@ export function logSilentError(error: Error | string, context: Record<string, an
   
   console.error('Silent Error: ', errorMessage, context);
   
+  // Filter out client-side network fetch failures to prevent database spam
+  const lowerMsg = errorMessage.toLowerCase();
+  if (
+    lowerMsg.includes('failed to fetch') || 
+    lowerMsg.includes('load failed') || 
+    lowerMsg.includes('networkerror') ||
+    lowerMsg.includes('network error')
+  ) {
+    return;
+  }
+  
   if (auth.currentUser) {
     const errorData: any = {
       error: errorMessage,

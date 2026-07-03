@@ -246,3 +246,291 @@ export const generateCampaignPDF = async (campaign: WeeklyCampaign, product: Pro
 
   return doc;
 };
+
+export const generateDNAPDF = async (product: ProductDNA): Promise<jsPDF> => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  let y = margin;
+
+  // Cover Page
+  doc.setFillColor(42, 36, 32); // Dark elegant gray/brown
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(36);
+  doc.setFont("helvetica", "bold");
+  doc.text("Product DNA Research", pageWidth / 2, pageHeight / 3, { align: 'center' });
+
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "normal");
+  doc.text(product.name, pageWidth / 2, pageHeight / 3 + 20, { align: 'center' });
+
+  if (product.website) {
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(200, 189, 178);
+    doc.text(product.website, pageWidth / 2, pageHeight / 3 + 35, { align: 'center' });
+  }
+
+  // Content Pages
+  doc.addPage();
+  y = margin + 10;
+
+  const addHeader = (title: string) => {
+    doc.setFontSize(20);
+    doc.setTextColor(74, 59, 50);
+    doc.setFont("helvetica", "bold");
+    doc.text(title, margin, y);
+    doc.setFillColor(255, 191, 168);
+    doc.rect(margin, y + 3, 40, 2, 'F');
+    y += 15;
+  };
+
+  const addField = (label: string, value?: string) => {
+    if (!value) return;
+    checkPageBreak(25);
+    doc.setFontSize(12);
+    doc.setTextColor(107, 91, 82);
+    doc.setFont("helvetica", "bold");
+    doc.text(label, margin, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    const valueLines = doc.splitTextToSize(value, pageWidth - margin * 2);
+    doc.text(valueLines, margin, y);
+    y += valueLines.length * 6 + 8;
+  };
+
+  const checkPageBreak = (neededHeight: number) => {
+    if (y + neededHeight > pageHeight - margin - 10) {
+      doc.setFillColor(255, 191, 168);
+      doc.rect(0, pageHeight - 5, pageWidth, 5, 'F');
+      doc.addPage();
+      y = margin + 10;
+    }
+  };
+
+  addHeader("Brand Positioning & Audience");
+  addField("Value Proposition & Positioning", product.positioning);
+  addField("Target Audience Description", product.audience);
+  addField("Tone of Voice Guidelines", product.tone);
+  if (product.visualStyle) {
+    addField("Visual Brand Vibe", product.visualStyle);
+  }
+
+  // Strategic variables page
+  checkPageBreak(50);
+  addHeader("Deep Strategic DNA");
+  addField("The Brand's Enemy / Competitor Weakness", product.enemy);
+  addField("Earned Secret / Unique Insights", product.earnedSecret);
+  addField("Founder Origin Story", product.originStory);
+  addField("Customer Hell State (Pain Points)", product.hellState);
+  addField("Customer Heaven State (Desired Outcome)", product.heavenState);
+  addField("Core Objections Handled", product.objections);
+  addField("Unique Mechanism (How it works)", product.uniqueMechanism);
+  addField("Social Proof Points / Credibility", product.proofPoints);
+
+  // Vocabulary Page
+  if (product.vocabularyAlways || product.vocabularyNever) {
+    checkPageBreak(50);
+    addHeader("Brand Vocabulary Guidelines");
+    addField("Keywords / Phrases to ALWAYS Use", product.vocabularyAlways);
+    addField("Keywords / Phrases to NEVER Use", product.vocabularyNever);
+  }
+
+  // Content Pillars page
+  if (product.contentPillars && product.contentPillars.length > 0) {
+    checkPageBreak(50);
+    addHeader("Content Pillars");
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    product.contentPillars.forEach((pillar) => {
+      checkPageBreak(12);
+      doc.text(`• ${pillar}`, margin, y);
+      y += 8;
+    });
+    y += 5;
+  }
+
+  // Target ICPs page
+  if (product.targetIcps && product.targetIcps.length > 0) {
+    checkPageBreak(50);
+    addHeader("Target Ideal Customer Profiles (ICPs)");
+    product.targetIcps.forEach((icp, i) => {
+      checkPageBreak(30);
+      doc.setFontSize(14);
+      doc.setTextColor(74, 59, 50);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${i + 1}. ${icp.name}`, margin, y);
+      y += 8;
+      
+      doc.setFontSize(12);
+      doc.setTextColor(107, 91, 82);
+      doc.text("Key Pain Points:", margin + 5, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      
+      icp.painPoints.forEach(pt => {
+        checkPageBreak(10);
+        const lines = doc.splitTextToSize(`- ${pt}`, pageWidth - margin * 2 - 10);
+        doc.text(lines, margin + 10, y);
+        y += lines.length * 6 + 2;
+      });
+      y += 6;
+    });
+  }
+
+  // Add final page accent border
+  doc.setFillColor(255, 191, 168);
+  doc.rect(0, pageHeight - 5, pageWidth, 5, 'F');
+
+  return doc;
+};
+
+export const generateFounderAgentPDF = async (product: ProductDNA): Promise<jsPDF> => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  let y = margin;
+
+  // Cover Page
+  doc.setFillColor(74, 59, 50); // Dark executive brown/gray
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(36);
+  doc.setFont("helvetica", "bold");
+  doc.text("Founder Agent Profile", pageWidth / 2, pageHeight / 3, { align: 'center' });
+
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "normal");
+  const personaName = product.founderAgentSynthesized?.personaName || "Founder Doppelganger";
+  doc.text(`Doppelganger: ${personaName}`, pageWidth / 2, pageHeight / 3 + 20, { align: 'center' });
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(200, 189, 178);
+  doc.text(`Generated for workspace: ${product.name}`, pageWidth / 2, pageHeight / 3 + 35, { align: 'center' });
+
+  // Content Pages
+  doc.addPage();
+  y = margin + 10;
+
+  const addHeader = (title: string) => {
+    doc.setFontSize(20);
+    doc.setTextColor(74, 59, 50);
+    doc.setFont("helvetica", "bold");
+    doc.text(title, margin, y);
+    doc.setFillColor(255, 191, 168);
+    doc.rect(margin, y + 3, 40, 2, 'F');
+    y += 15;
+  };
+
+  const checkPageBreak = (neededHeight: number) => {
+    if (y + neededHeight > pageHeight - margin - 10) {
+      doc.setFillColor(255, 191, 168);
+      doc.rect(0, pageHeight - 5, pageWidth, 5, 'F');
+      doc.addPage();
+      y = margin + 10;
+    }
+  };
+
+  addHeader("Synthesized Personality & Behavior");
+
+  // Voice description
+  if (product.founderVoiceDescription) {
+    checkPageBreak(30);
+    doc.setFontSize(12);
+    doc.setTextColor(107, 91, 82);
+    doc.setFont("helvetica", "bold");
+    doc.text("Voice Description Input:", margin, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    const voiceLines = doc.splitTextToSize(product.founderVoiceDescription, pageWidth - margin * 2);
+    doc.text(voiceLines, margin, y);
+    y += voiceLines.length * 6 + 10;
+  }
+
+  const agent = product.founderAgentSynthesized;
+  if (agent) {
+    // Behavioral Traits
+    if (agent.behavioralTraits && agent.behavioralTraits.length > 0) {
+      checkPageBreak(40);
+      doc.setFontSize(14);
+      doc.setTextColor(74, 59, 50);
+      doc.setFont("helvetica", "bold");
+      doc.text("Key Behavioral Traits", margin, y);
+      y += 8;
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      agent.behavioralTraits.forEach(trait => {
+        checkPageBreak(12);
+        const traitLines = doc.splitTextToSize(`• ${trait}`, pageWidth - margin * 2 - 5);
+        doc.text(traitLines, margin, y);
+        y += traitLines.length * 6 + 2;
+      });
+      y += 6;
+    }
+
+    // Communication Style
+    if (agent.communicationStyle && agent.communicationStyle.length > 0) {
+      checkPageBreak(40);
+      addHeader("Communication Style & Tone");
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      agent.communicationStyle.forEach(style => {
+        checkPageBreak(12);
+        const styleLines = doc.splitTextToSize(`• ${style}`, pageWidth - margin * 2 - 5);
+        doc.text(styleLines, margin, y);
+        y += styleLines.length * 6 + 2;
+      });
+      y += 6;
+    }
+
+    // Core Values
+    if (agent.coreValues && agent.coreValues.length > 0) {
+      checkPageBreak(40);
+      addHeader("Core Business Values");
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      agent.coreValues.forEach(val => {
+        checkPageBreak(12);
+        const valLines = doc.splitTextToSize(`• ${val}`, pageWidth - margin * 2 - 5);
+        doc.text(valLines, margin, y);
+        y += valLines.length * 6 + 2;
+      });
+      y += 6;
+    }
+
+    // Decision Heuristics
+    if (agent.decisionHeuristics && agent.decisionHeuristics.length > 0) {
+      checkPageBreak(40);
+      addHeader("Decision Heuristics & Automation Principles");
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      agent.decisionHeuristics.forEach(h => {
+        checkPageBreak(12);
+        const hLines = doc.splitTextToSize(`• ${h}`, pageWidth - margin * 2 - 5);
+        doc.text(hLines, margin, y);
+        y += hLines.length * 6 + 2;
+      });
+      y += 6;
+    }
+  }
+
+  // Add final page accent border
+  doc.setFillColor(255, 191, 168);
+  doc.rect(0, pageHeight - 5, pageWidth, 5, 'F');
+
+  return doc;
+};

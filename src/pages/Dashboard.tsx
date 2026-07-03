@@ -10,9 +10,7 @@ import { handleFirestoreError, OperationType } from "../lib/firestore-error";
 
 export function Dashboard() {
   const { user } = useAuth();
-  const { activeProduct, products, setActiveProductId } = useProducts();
-  const [campaigns, setCampaigns] = useState<WeeklyCampaign[]>([]);
-  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
+  const { activeProduct, products, setActiveProductId, campaigns: allCampaigns, isLoadingCampaigns } = useProducts();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTour, setShowTour] = useState(false);
 
@@ -25,42 +23,10 @@ export function Dashboard() {
     }
   }, [searchParams, setSearchParams]);
 
-  useEffect(() => {
-    if (!user || !activeProduct) {
-      setCampaigns([]);
-      setIsLoadingCampaigns(false);
-      return;
-    }
-
-    setIsLoadingCampaigns(true);
-
-    const q = query(
-      collection(db, "campaigns"),
-      where("userId", "==", user.uid),
-      where("productId", "==", activeProduct.id)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedCampaigns = snapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as WeeklyCampaign)
-        );
-        fetchedCampaigns.sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        setCampaigns(fetchedCampaigns);
-        setIsLoadingCampaigns(false);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.GET, "campaigns");
-        setIsLoadingCampaigns(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user, activeProduct]);
+  // Filter campaigns for the currently active product in memory (instant 0ms switch)
+  const campaigns = activeProduct 
+    ? allCampaigns.filter(c => c.productId === activeProduct.id) 
+    : [];
 
   // Split campaigns by category
   const weeklyCampaigns = campaigns.filter((c) => !c.isBlog && !c.isOneDay);

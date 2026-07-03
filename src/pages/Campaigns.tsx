@@ -137,10 +137,11 @@ const getPlatformLogo = (platform: string, isActive: boolean = false, className:
 export function Campaigns() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { activeProduct, setActiveProductId } = useProducts();
+  const { activeProduct, setActiveProductId, campaigns: allCampaigns, isLoadingCampaigns, setCampaigns } = useProducts();
   const { user } = useAuth();
-  const [campaigns, setCampaigns] = useState<WeeklyCampaign[]>([]);
-  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
+  const campaigns = activeProduct 
+    ? allCampaigns.filter(c => c.productId === activeProduct.id) 
+    : [];
   const [campaignImages, setCampaignImages] = useState<Record<string, string>>(
     {},
   );
@@ -836,112 +837,7 @@ export function Campaigns() {
     return () => clearInterval(interval);
   }, [selectedCampaign, feedbacks, isGenerating, user]);
 
-  useEffect(() => {
-    if (!user) {
-      const saved = localStorage.getItem("campaigns");
-      if (saved) {
-        try {
-          const parsed: WeeklyCampaign[] = JSON.parse(saved);
-          parsed.sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-          );
-          setCampaigns(parsed);
-          if (activeProduct) {
-            const productCampaigns = parsed.filter(
-              (c) => c.productId === activeProduct.id,
-            );
-            if (productCampaigns.length > 0) {
-              setSelectedCampaign((prev) => {
-                if (prev && productCampaigns.find((c) => c.id === prev.id)) {
-                  return prev;
-                }
-                return productCampaigns[0];
-              });
-            } else {
-              setSelectedCampaign(null);
-            }
-          }
-        } catch (e) {
-          logSilentError(e as Error, { context: "parseLocalCampaigns" });
-          setCampaigns([]);
-          setSelectedCampaign(null);
-        } finally {
-          setIsLoadingCampaigns(false);
-        }
-      } else {
-        setCampaigns([]);
-        setSelectedCampaign(null);
-        setIsLoadingCampaigns(false);
-      }
-      return;
-    }
-
-    const q = query(
-      collection(db, "campaigns"),
-      where("userId", "==", user.uid),
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      async (snapshot) => {
-        const fetchedCampaigns = snapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() }) as WeeklyCampaign,
-        );
-
-        // Migration logic
-        if (fetchedCampaigns.length === 0) {
-          const saved = localStorage.getItem("campaigns");
-          if (saved) {
-            try {
-              const parsed: WeeklyCampaign[] = JSON.parse(saved);
-              for (const c of parsed) {
-                const newId =
-                  typeof crypto !== "undefined" && crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : Math.random().toString(36).substring(2, 15);
-                try {
-                  await setDoc(doc(db, "campaigns", newId), {
-                    ...c,
-                    id: newId,
-                    userId: user.uid,
-                  });
-                } catch (error) {
-                  handleFirestoreError(
-                    error,
-                    OperationType.WRITE,
-                    `campaigns/${newId}`,
-                  );
-                }
-              }
-              localStorage.removeItem("campaigns");
-              setIsLoadingCampaigns(false);
-              return;
-            } catch (e) {
-              logSilentError(e as Error, { context: "migrateLocalCampaigns" });
-              localStorage.removeItem("campaigns");
-              setIsLoadingCampaigns(false);
-            }
-          } else {
-            setIsLoadingCampaigns(false);
-          }
-        }
-
-        // Sort by createdAt descending
-        fetchedCampaigns.sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        );
-        setCampaigns(fetchedCampaigns);
-        setIsLoadingCampaigns(false);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.GET, "campaigns");
-        setIsLoadingCampaigns(false);
-      },
-    );
-
-    return () => unsubscribe();
-  }, [user, activeProduct]);
+  // Cleaned up redundant network fetching on mount to allow 0ms page rendering transition
 
   useEffect(() => {
     if (activeProduct) {
@@ -1529,6 +1425,24 @@ export function Campaigns() {
             if (!emailRes.ok) {
               const emailData = await emailRes.json();
               console.warn(`Campaign saved and closed, but background PDF email failed: ${emailData.error}`);
+            }
+
+            // Check and trigger first campaign success email
+            try {
+              const { doc, getDoc, updateDoc } = await import("firebase/firestore");
+              const userRef = doc(db, "users", user.uid);
+              const userSnap = await getDoc(userRef);
+              if (userSnap.exists()) {
+                const userData = userSnap.data();
+                if (!userData.firstCampaignEmailSent) {
+                  // Optimistically update flag to prevent duplicate calls
+                  await updateDoc(userRef, { firstCampaignEmailSent: true });
+                  const { triggerBrandedEmail } = await import("../lib/emailTriggers");
+                  await triggerBrandedEmail("first_campaign", user.email, { theme: campaignToSave.theme });
+                }
+              }
+            } catch (fcErr) {
+              logSilentError(fcErr as Error, { context: "firstCampaignEmailTrigger" });
             }
           } catch (emailErr) {
             logSilentError(emailErr as Error, { context: "sendEmailShare" });

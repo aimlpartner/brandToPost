@@ -42,14 +42,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (currentUser) {
         setUser(currentUser);
+
+        // Update lastActive timestamp on session load
+        const userRef = doc(db, 'users', currentUser.uid);
+        updateDoc(userRef, { lastActive: new Date().toISOString() }).catch(() => {
+          // If the profile document doesn't exist yet, it will fail, which is handled
+          // by initial setDoc creation below.
+        });
+
         // Listen to Firestore user profile document
         unsubscribeProfile = onSnapshot(doc(db, 'users', currentUser.uid), async (docSnap) => {
           if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as AuthProfile);
+            const data = docSnap.data();
+            setUserProfile(data as AuthProfile);
             setLoading(false);
+
+            // Trigger Welcome email if it hasn't been sent yet
+            if (!data.signupEmailSent && currentUser.email) {
+              // Optimistically update flag to prevent duplicate calls
+              await updateDoc(userRef, { signupEmailSent: true });
+              const { triggerBrandedEmail } = await import('../lib/emailTriggers');
+              triggerBrandedEmail('signup', currentUser.email, {
+                name: data.name || currentUser.displayName || currentUser.email.split('@')[0]
+              });
+            }
           } else {
             setUserProfile({ name: '', role: '', onboarded: false });
             setLoading(false);
+            
+            // Initialize default profile document for new signup
+            setDoc(userRef, {
+              email: currentUser.email || '',
+              name: currentUser.displayName || '',
+              role: '',
+              onboarded: false,
+              createdAt: new Date().toISOString(),
+              lastActive: new Date().toISOString(),
+              signupEmailSent: false
+            }, { merge: true }).catch(err => {
+              logSilentError(err, { context: "initUserProfile", userId: currentUser.uid });
+            });
           }
         }, (err) => {
           logSilentError(err, { context: "loadUserProfile", userId: currentUser.uid });
@@ -164,6 +196,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profileDoc.createdAt = new Date().toISOString();
       }
       await setDoc(userRef, profileDoc, { merge: true });
+
+      // Trigger Onboarding Completed Welcome Email
+      if (user.email) {
+        try {
+          const { triggerBrandedEmail } = await import('../lib/emailTriggers');
+          await triggerBrandedEmail('onboarding_complete', user.email, { name: profileData.name });
+        } catch (emailErr) {
+          logSilentError(emailErr as Error, { context: "completeOnboardingEmail", userId: user.uid });
+        }
+      }
     } catch (error) {
       logSilentError(error as Error, { context: "completeOnboarding", userId: user.uid });
       throw error;

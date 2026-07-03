@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ProductDNA } from '../types';
+import { ProductDNA, WeeklyCampaign } from '../types';
 import { useAuth } from './AuthContext';
 import { db } from '../firebase';
 import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
@@ -14,6 +14,9 @@ interface ProductContextType {
   updateProduct: (id: string, data: Partial<ProductDNA>) => void;
   deleteProduct: (id: string) => void;
   isLoaded: boolean;
+  campaigns: WeeklyCampaign[];
+  isLoadingCampaigns: boolean;
+  setCampaigns: React.Dispatch<React.SetStateAction<WeeklyCampaign[]>>;
 }
 
 export const ProductContext = createContext<ProductContextType | null>(null);
@@ -23,6 +26,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<ProductDNA[]>([]);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [campaigns, setCampaigns] = useState<WeeklyCampaign[]>([]);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
 
   useEffect(() => {
     if (loading) return;
@@ -110,6 +115,43 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
 
     return () => unsubscribe();
   }, [user, loading, userProfile]);
+
+  // Query and cache all campaigns for the logged-in user to eliminate individual tab loading skeletons
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      const stored = localStorage.getItem('campaigns');
+      if (stored) {
+        try {
+          const parsed: WeeklyCampaign[] = JSON.parse(stored);
+          parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setCampaigns(parsed);
+        } catch (e) {
+          logSilentError(e as Error, { context: "parseLocalCampaignsContext" });
+          setCampaigns([]);
+        }
+      } else {
+        setCampaigns([]);
+      }
+      setIsLoadingCampaigns(false);
+      return;
+    }
+
+    setIsLoadingCampaigns(true);
+    const q = query(collection(db, 'campaigns'), where('userId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedCampaigns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklyCampaign));
+      fetchedCampaigns.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setCampaigns(fetchedCampaigns);
+      setIsLoadingCampaigns(false);
+    }, (error) => {
+      logSilentError(error, { context: "fetchGlobalCampaignsContext" });
+      setIsLoadingCampaigns(false);
+    });
+
+    return () => unsubscribe();
+  }, [user, loading]);
 
   const addProduct = async (name: string) => {
     const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
@@ -221,7 +263,10 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       addProduct, 
       updateProduct, 
       deleteProduct,
-      isLoaded 
+      isLoaded,
+      campaigns,
+      isLoadingCampaigns,
+      setCampaigns
     }}>
       {children}
     </ProductContext.Provider>

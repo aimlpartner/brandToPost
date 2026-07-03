@@ -11,7 +11,8 @@ import {
 import { 
  Loader2, ShieldAlert, Activity, Database, DollarSign, Bug, AlertCircle, Trash2,
  MessageSquare, Plus, Search, Sparkles, RefreshCw, Clock, ShieldCheck, 
- CheckCircle, CheckCircle2, Smartphone, Send, Languages, Zap, Heart, Filter, Laptop
+ CheckCircle, CheckCircle2, Smartphone, Send, Languages, Zap, Heart, Filter, Laptop,
+ Users
 } from 'lucide-react';
 import { logSilentError } from '../lib/firestore-error';
 
@@ -41,7 +42,7 @@ interface ErrorLog {
  authInfo?: any;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+const COLORS = ['#7C3AED', '#2583EB', '#10B981', '#FF7778', '#C084FC'];
 
 // Estimated costs per 1M tokens (as of typical Gemini pricing, adjust as needed)
 const PRICING = {
@@ -50,20 +51,29 @@ const PRICING = {
   'gemini-2.5-flash-preview': { prompt: 0.30, candidate: 2.50 },
   'gemini-3.1-flash-preview': { prompt: 0.30, candidate: 2.50 },
   'gemini-3.5-flash': { prompt: 0.30, candidate: 2.50 },
-  'gemini-3.1-flash-image-preview': { prompt: 0, candidate: 0, perImage: 0.03 } // $0.03 per image
+  'gemini-3.1-flash-image-preview': { prompt: 0, candidate: 0, perImage: 0.03 }, // $0.03 per image
+  'puppeteer-layout-render': { prompt: 0, candidate: 0, perImage: 0.015 }, // $0.015 per render run
+  'puppeteer-web-scrape': { prompt: 0, candidate: 0, perImage: 0.015 } // $0.015 per web scrape run
 };
 
 const USD_TO_INR = 83.50; // Exchange rate for INR conversion
 
 export default function AdminDashboard() {
  const { user } = useAuth();
- const [activeTab, setActiveTab] = useState<'tokens' | 'errors' | 'whatsapp'>('whatsapp');
+ const [activeTab, setActiveTab] = useState<'tokens' | 'errors' | 'whatsapp' | 'users'>('users');
  const [logs, setLogs] = useState<TokenLog[]>([]);
  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
+ const [users, setUsers] = useState<any[]>([]);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
  const [isDeleting, setIsDeleting] = useState(false);
  const [deleteFilter, setDeleteFilter] = useState<number | null>(null);
+
+ // Users filtering state
+ const [userSearchQuery, setUserSearchQuery] = useState('');
+ const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
+ const [userOnboardingFilter, setUserOnboardingFilter] = useState<'all' | 'onboarded' | 'pending'>('all');
+ const [userFetchError, setUserFetchError] = useState<string | null>(null);
 
  // WhatsApp System States
  const [leads, setLeads] = useState<any[]>([]);
@@ -142,39 +152,61 @@ export default function AdminDashboard() {
  }
  };
 
- useEffect(() => {
- if (!isAdmin) return;
-
- const fetchData = async () => {
- try {
- // Fetch Token Logs
- const qTokens = query(collection(db, 'token_usage'), orderBy('timestamp', 'desc'), limit(500));
- const tokenSnapshot = await getDocs(qTokens);
- const fetchedTokenLogs: TokenLog[] = [];
- tokenSnapshot.forEach((doc) => {
- fetchedTokenLogs.push({ id: doc.id, ...doc.data() } as TokenLog);
- });
- setLogs(fetchedTokenLogs);
-
- // Fetch Error Logs
- const qErrors = query(collection(db, 'error_logs'), orderBy('timestamp', 'desc'), limit(100));
- const errorSnapshot = await getDocs(qErrors);
- const fetchedErrorLogs: ErrorLog[] = [];
- errorSnapshot.forEach((doc) => {
- fetchedErrorLogs.push({ id: doc.id, ...doc.data() } as ErrorLog);
- });
- setErrorLogs(fetchedErrorLogs);
-
- } catch (err: any) {
- logSilentError(err as Error, { context: "fetchAdminData" });
- setError(err.message || "Failed to load admin data.");
- } finally {
- setLoading(false);
- }
- };
-
- fetchData();
- }, [isAdmin]);
+  useEffect(() => {
+  if (!isAdmin) return;
+ 
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    setUserFetchError(null);
+    
+    // 1. Fetch Token Logs
+    try {
+      const qTokens = query(collection(db, 'token_usage'), orderBy('timestamp', 'desc'), limit(1000));
+      const tokenSnapshot = await getDocs(qTokens);
+      const fetchedTokenLogs: TokenLog[] = [];
+      tokenSnapshot.forEach((doc) => {
+        fetchedTokenLogs.push({ id: doc.id, ...doc.data() } as TokenLog);
+      });
+      setLogs(fetchedTokenLogs);
+    } catch (err: any) {
+      console.error("Failed to fetch token usage logs:", err);
+      logSilentError(err as Error, { context: "fetchTokenUsageLogs" });
+    }
+ 
+    // 2. Fetch Error Logs
+    try {
+      const qErrors = query(collection(db, 'error_logs'), orderBy('timestamp', 'desc'), limit(200));
+      const errorSnapshot = await getDocs(qErrors);
+      const fetchedErrorLogs: ErrorLog[] = [];
+      errorSnapshot.forEach((doc) => {
+        fetchedErrorLogs.push({ id: doc.id, ...doc.data() } as ErrorLog);
+      });
+      setErrorLogs(fetchedErrorLogs);
+    } catch (err: any) {
+      console.error("Failed to fetch error logs:", err);
+      logSilentError(err as Error, { context: "fetchErrorLogs" });
+    }
+  
+    // 3. Fetch Users
+    try {
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const fetchedUsers: any[] = [];
+      usersSnapshot.forEach((doc) => {
+        fetchedUsers.push({ id: doc.id, ...doc.data() });
+      });
+      setUsers(fetchedUsers);
+    } catch (err: any) {
+      console.error("Failed to fetch users profiles:", err);
+      logSilentError(err as Error, { context: "fetchUsersProfiles" });
+      setUserFetchError(err.message || "Failed to fetch users");
+    }
+    
+    setLoading(false);
+  };
+ 
+  fetchData();
+  }, [isAdmin]);
 
   // WhatsApp System Hooks and actions
   useEffect(() => {
@@ -359,8 +391,11 @@ export default function AdminDashboard() {
   const timelineData: Record<string, { date: string, tokens: number, cost: number }> = {};
 
   logs.forEach(log => {
-    if (log.model === 'gemini-3.1-flash-image-preview') {
-      totalImages += log.totalTokenCount; // We logged 1 token = 1 image
+    const isPerImageModel = log.model === 'gemini-3.1-flash-image-preview' || log.model.startsWith('puppeteer-');
+    if (isPerImageModel) {
+      if (log.model === 'gemini-3.1-flash-image-preview') {
+        totalImages += log.totalTokenCount; // We logged 1 token = 1 image
+      }
     } else {
       totalTokens += log.totalTokenCount;
     }
@@ -369,7 +404,7 @@ export default function AdminDashboard() {
     let cost = 0;
     const rates = PRICING[log.model as keyof typeof PRICING] as any;
     if (rates) {
-      if (log.model === 'gemini-3.1-flash-image-preview' && rates.perImage) {
+      if (rates.perImage) {
         cost = log.totalTokenCount * rates.perImage;
       } else {
         cost = (log.promptTokenCount / 1000000) * rates.prompt + (log.candidatesTokenCount / 1000000) * rates.candidate;
@@ -378,12 +413,12 @@ export default function AdminDashboard() {
     totalEstimatedCostUSD += cost;
 
     // Operation stats
-    const statValue = log.model === 'gemini-3.1-flash-image-preview' ? log.totalTokenCount : log.totalTokenCount;
+    const statValue = log.totalTokenCount;
     operationStats[log.operationType] = (operationStats[log.operationType] || 0) + statValue;
     operationCosts[log.operationType] = (operationCosts[log.operationType] || 0) + cost;
     operationCounts[log.operationType] = (operationCounts[log.operationType] || 0) + 1;
     
-    if (log.model !== 'gemini-3.1-flash-image-preview') {
+    if (!isPerImageModel) {
       operationPromptTokens[log.operationType] = (operationPromptTokens[log.operationType] || 0) + (log.promptTokenCount || 0);
       operationCandidateTokens[log.operationType] = (operationCandidateTokens[log.operationType] || 0) + (log.candidatesTokenCount || 0);
     } else {
@@ -399,7 +434,7 @@ export default function AdminDashboard() {
     if (!timelineData[date]) {
       timelineData[date] = { date, tokens: 0, cost: 0 };
     }
-    if (log.model !== 'gemini-3.1-flash-image-preview') {
+    if (!isPerImageModel) {
       timelineData[date].tokens += log.totalTokenCount;
     }
     timelineData[date].cost += cost;
@@ -413,7 +448,9 @@ export default function AdminDashboard() {
       regeneratePostWithFeedback: "Post Revision & Feedback",
       generateImage: "AI Image Generation",
       generateOneDayStoryImage: "Story Visual Generation",
-      generateFieldSuggestions: "Field Auto-Suggestions"
+      generateFieldSuggestions: "Field Auto-Suggestions",
+      puppeteer_overlay_render: "Puppeteer Overlay Flattening",
+      puppeteer_web_scrape: "Puppeteer Brand DNA Scraping"
     };
     return map[op] || op;
   };
@@ -443,724 +480,1033 @@ export default function AdminDashboard() {
   const modelChartData = Object.entries(modelStats).map(([name, value]) => ({ name, value }));
   const timelineChartData = Object.values(timelineData).reverse(); // Oldest to newest
 
- return (
- <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
- <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
- <div>
- <h1 className="text-3xl font-bold text-white font-display">Admin Dashboard</h1>
- <p className="text-gray-300 mt-2">System monitoring and analytics</p>
- </div>
- 
- <div className="flex bg-[#1C1C22]/50 p-1 rounded-xl ring-1 ring-black/5 w-fit overflow-x-auto gap-1">
-	<button
-	onClick={() => setActiveTab('whatsapp')}
-	className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-	activeTab === 'whatsapp' 
-	? 'bg-[#1C1C22] text-[#10B981] shadow-sm ring-1 ring-black/5' 
-	: 'text-gray-300 hover:text-white hover:bg-[#1C1C22]/50 border-[#7C3AED]/20'
-	}`}
-	>
-	<MessageSquare className="h-4 w-4" />
-	WhatsApp Outreach Sieve
-	{leads.length > 0 && (
-	<span className="ml-1.5 bg-emerald-500/10 text-emerald-400 py-0.5 px-2 rounded-full text-xs font-bold font-mono">
-	{leads.length}
-	</span>
-	)}
-	</button>
- <button
- onClick={() => setActiveTab('tokens')}
- className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
- activeTab === 'tokens' 
- ? 'bg-[#1C1C22] text-white shadow-sm ring-1 ring-black/5' 
- : 'text-gray-300 hover:text-white hover:bg-[#1C1C22]/50 border-[#7C3AED]/20'
- }`}
- >
- <Database className="h-4 w-4" />
- Token Usage
- </button>
- <button
- onClick={() => setActiveTab('errors')}
- className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
- activeTab === 'errors' 
- ? 'bg-[#1C1C22] text-red-600 shadow-sm ring-1 ring-black/5' 
- : 'text-gray-300 hover:text-red-600 hover:bg-[#1C1C22]/50 border-[#7C3AED]/20'
- }`}
- >
- <Bug className="h-4 w-4" />
- Error Logs
- {errorLogs.length > 0 && (
- <span className="ml-1.5 bg-red-500/10 text-red-500 py-0.5 px-2 rounded-full text-xs font-bold">
- {errorLogs.length}
- </span>
- )}
- </button>
- </div>
- </div>
-
-  {activeTab === 'whatsapp' && (
-    <div className="space-y-8 animate-in fade-in duration-300">
-      {/* KPI Counters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#12121E] border border-white/5 rounded-2xl p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-450">
-            <MessageSquare className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 font-sans">Total Leads Ingested</div>
-            <div className="text-2xl font-bold text-white">{leads.length}</div>
-          </div>
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-800 font-display">Admin Dashboard</h1>
+          <p className="text-slate-500 mt-2">System monitoring and analytics</p>
         </div>
-        <div className="bg-[#12121E] border border-white/5 rounded-2xl p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-405">
-            <Send className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 font-mono">Outreach Deliveries</div>
-            <div className="text-2xl font-bold text-white">
-              {leads.filter(l => l.status === 'OUTREACH_SENT').length}
-            </div>
-          </div>
-        </div>
-        <div className="bg-[#12121E] border border-white/5 rounded-2xl p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center text-yellow-450">
-            <Sparkles className="w-5 h-5 font-bold" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-450 font-sans">Customer Responses</div>
-            <div className="text-2xl font-bold text-white font-mono">
-              {leads.filter(l => l.status === 'INTERACTED').length}
-            </div>
-          </div>
-        </div>
-        <div className="bg-[#12121E] border border-white/5 rounded-2xl p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-red-400/10 flex items-center justify-center text-red-500">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-405 font-sans font-medium">Pruned & Deactivated</div>
-            <div className="text-2xl font-bold text-white font-mono">
-              {leads.filter(l => l.status === 'DEACTIVATED_UNENGAGED').length}
-            </div>
-          </div>
+        
+        <div className="flex bg-slate-100/70 border border-slate-200/50 p-1 rounded-xl w-fit overflow-x-auto gap-1">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'users' 
+                ? 'bg-white text-[#7C3AED] shadow-sm border border-slate-200/50 font-semibold' 
+                : 'text-slate-550 hover:text-slate-800 hover:bg-white/40'
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            Users
+            {users.length > 0 && (
+              <span className="ml-1.5 bg-purple-50 text-purple-650 border border-purple-100 py-0.5 px-2 rounded-full text-xs font-bold font-mono">
+                {users.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('whatsapp')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'whatsapp' 
+                ? 'bg-white text-[#7C3AED] shadow-sm border border-slate-200/50 font-semibold' 
+                : 'text-slate-550 hover:text-slate-800 hover:bg-white/40'
+            }`}
+          >
+            <MessageSquare className="h-4 w-4" />
+            WhatsApp Outreach Sieve
+            {leads.length > 0 && (
+              <span className="ml-1.5 bg-emerald-50 text-emerald-600 border border-emerald-100 py-0.5 px-2 rounded-full text-xs font-bold font-mono">
+                {leads.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('tokens')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'tokens' 
+                ? 'bg-white text-[#7C3AED] shadow-sm border border-slate-200/50 font-semibold' 
+                : 'text-slate-550 hover:text-slate-800 hover:bg-white/40'
+            }`}
+          >
+            <Database className="h-4 w-4" />
+            Token Usage
+          </button>
+          <button
+            onClick={() => setActiveTab('errors')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'errors' 
+                ? 'bg-white text-red-600 shadow-sm border border-slate-200/50 font-semibold' 
+                : 'text-slate-550 hover:text-red-600 hover:bg-white/40'
+            }`}
+          >
+            <Bug className="h-4 w-4" />
+            Error Logs
+            {errorLogs.length > 0 && (
+              <span className="ml-1.5 bg-red-50 text-red-600 border border-red-100 py-0.5 px-2 rounded-full text-xs font-bold">
+                {errorLogs.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Grid: Map Sieve + Leads List */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Scraper / Sieve Simulation */}
-        <div className="space-y-6">
-          <div className="bg-[#12121E] border border-white/5 rounded-3xl p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 font-display">
-              <Zap className="text-emerald-400 w-5 h-5 fill-emerald-400/10" /> Map Sieve & Pipeline Simulator
-            </h3>
-            <p className="text-xs text-slate-300 leading-relaxed mb-4">
-              Simulate scraping Google Places listings, filter landlines, compress cover images to WebP &lt; 1MB, and save to your Cloud Firestore records.
+      {activeTab === 'users' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {userFetchError && (
+            <div className="p-4 bg-amber-50/80 border border-amber-200/80 rounded-xl text-amber-800 text-xs font-semibold leading-relaxed">
+              <span className="font-bold block mb-1">Firestore Access Warning:</span>
+              {userFetchError}. Please make sure you have deployed the latest security rules in <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">firestore.rules</code> (run <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">firebase deploy --only firestore:rules</code>).
+            </div>
+          )}
+          {/* KPI Counters */}
+          {(() => {
+            // Precompute stats
+            let onlineCount = 0;
+            let totalExhaustedINR = 0;
+
+            const usersWithStats = users.map(userItem => {
+              // Calculate cost per user
+              let userCostUSD = 0;
+              logs.forEach(log => {
+                if (log.userId === userItem.id) {
+                  let cost = 0;
+                  const rates = PRICING[log.model as keyof typeof PRICING] as any;
+                  if (rates) {
+                    if (rates.perImage) {
+                      cost = log.totalTokenCount * rates.perImage;
+                    } else {
+                      cost = (log.promptTokenCount / 1000000) * rates.prompt + (log.candidatesTokenCount / 1000000) * rates.candidate;
+                    }
+                  }
+                  userCostUSD += cost;
+                }
+              });
+              const userCostINR = userCostUSD * USD_TO_INR;
+              totalExhaustedINR += userCostINR;
+
+              // Calculate online status
+              let lastActivityMs = 0;
+              logs.forEach(log => {
+                if (log.userId === userItem.id) {
+                  const ms = new Date(log.timestamp).getTime();
+                  if (ms > lastActivityMs) lastActivityMs = ms;
+                }
+              });
+              errorLogs.forEach(log => {
+                if (log.userId === userItem.id) {
+                  const ms = new Date(log.timestamp).getTime();
+                  if (ms > lastActivityMs) lastActivityMs = ms;
+                }
+              });
+
+              const isOnline = lastActivityMs > 0 && (Date.now() - lastActivityMs) < 15 * 60 * 1000;
+              if (isOnline) onlineCount++;
+
+              return {
+                ...userItem,
+                costINR: userCostINR,
+                lastActivityMs,
+                isOnline
+              };
+            });
+
+            // Filter users
+            const filteredUsers = usersWithStats.filter(u => {
+              // Search query filter
+              if (userSearchQuery) {
+                const query = userSearchQuery.toLowerCase();
+                const matchesName = u.name?.toLowerCase().includes(query) || u.displayName?.toLowerCase().includes(query);
+                const matchesEmail = u.email?.toLowerCase().includes(query);
+                if (!matchesName && !matchesEmail) return false;
+              }
+
+              // Status filter
+              if (userStatusFilter === 'online' && !u.isOnline) return false;
+              if (userStatusFilter === 'offline' && u.isOnline) return false;
+
+              // Onboarding filter
+              if (userOnboardingFilter === 'onboarded' && !u.onboarded) return false;
+              if (userOnboardingFilter === 'pending' && u.onboarded) return false;
+
+              return true;
+            });
+
+            const avgExhaustedINR = users.length > 0 ? totalExhaustedINR / users.length : 0;
+
+            const getRelativeTimeString = (ms: number) => {
+              if (ms === 0) return "Never active";
+              const diffMs = Date.now() - ms;
+              const diffMins = Math.floor(diffMs / (60 * 1000));
+              const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
+              const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+
+              if (diffMins < 1) return "Just now";
+              if (diffMins < 60) return `${diffMins}m ago`;
+              if (diffHours < 24) return `${diffHours}h ago`;
+              return `${diffDays}d ago`;
+            };
+
+            const getInitials = (nameStr: string) => {
+              if (!nameStr) return "?";
+              const parts = nameStr.split(" ").filter(p => p.trim() !== "");
+              if (parts.length === 0) return "?";
+              if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+              return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+            };
+
+            return (
+              <>
+                {/* KPI Counters Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="glass-card p-5 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-purple-50 text-[#7C3AED] flex items-center justify-center border border-purple-100">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500 font-sans">Total Registered Users</div>
+                      <div className="text-2xl font-bold text-slate-800">{users.length}</div>
+                    </div>
+                  </div>
+                  <div className="glass-card p-5 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 relative">
+                      <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500 font-sans">Active Online Users</div>
+                      <div className="text-2xl font-bold text-slate-800">{onlineCount}</div>
+                    </div>
+                  </div>
+                  <div className="glass-card p-5 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-650 flex items-center justify-center border border-amber-100">
+                      <span className="text-amber-600 font-bold text-xl">₹</span>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500 font-sans">Total Budget Spent</div>
+                      <div className="text-2xl font-bold text-emerald-700">₹{totalExhaustedINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                  </div>
+                  <div className="glass-card p-5 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                      <RefreshCw className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500 font-sans">Avg Cost / User</div>
+                      <div className="text-2xl font-bold text-slate-800">₹{avgExhaustedINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Control bar */}
+                <div className="glass-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="relative flex-grow max-w-md">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      placeholder="Search users by name or email..."
+                      className="glass-input pl-10 pr-4 py-2 text-sm text-slate-800 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] outline-none"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status:</span>
+                      <select
+                        value={userStatusFilter}
+                        onChange={(e) => setUserStatusFilter(e.target.value as any)}
+                        className="glass-input text-xs py-1.5 px-3 border border-slate-200 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] text-slate-800 outline-none w-[120px]"
+                      >
+                        <option value="all">All</option>
+                        <option value="online">Online</option>
+                        <option value="offline">Offline</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Onboarding:</span>
+                      <select
+                        value={userOnboardingFilter}
+                        onChange={(e) => setUserOnboardingFilter(e.target.value as any)}
+                        className="glass-input text-xs py-1.5 px-3 border border-slate-200 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] text-slate-800 outline-none w-[150px]"
+                      >
+                        <option value="all">All</option>
+                        <option value="onboarded">Onboarded</option>
+                        <option value="pending">Pending</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Users Table */}
+                <div className="glass-card p-6 overflow-hidden flex flex-col">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-slate-700 font-sans">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[11px] font-mono text-slate-400 uppercase">
+                          <th className="py-3 px-2">User Profile</th>
+                          <th className="py-3 px-2">Contact & Role</th>
+                          <th className="py-3 px-2">Onboarded</th>
+                          <th className="py-3 px-2">Real-time status</th>
+                          <th className="py-3 px-2 text-right">Rupees Exhausted</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-650">
+                        {filteredUsers.map((u) => {
+                          const userName = u.displayName || u.name || "Anonymous User";
+                          const initials = getInitials(userName);
+                          return (
+                            <tr key={u.id} className="hover:bg-slate-50/50 transition-colors text-xs font-light">
+                              <td className="py-3 px-2">
+                                <div className="flex items-center gap-3">
+                                  {u.photoURL ? (
+                                    <img
+                                      src={u.photoURL}
+                                      alt={userName}
+                                      className="h-9 w-9 rounded-full object-cover border border-slate-200"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <div className="h-9 w-9 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs border border-slate-200 select-none">
+                                      {initials}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <div className="font-bold text-slate-800">{userName}</div>
+                                    <div className="text-[10px] text-slate-450 mt-0.5">ID: {u.id.substring(0, 8)}...</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3 px-2">
+                                <div className="text-slate-655 font-mono">{u.email || "No Email"}</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${
+                                    u.role === 'Admin' ? 'bg-purple-50 text-purple-650 border border-purple-100' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                  }`}>
+                                    {u.role || 'User'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-2">
+                                {u.onboarded ? (
+                                  <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Complete
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                                    <Clock className="w-3.5 h-3.5 animate-pulse" /> Pending
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-2">
+                                <div className="flex items-center gap-2">
+                                  {u.isOnline ? (
+                                    <>
+                                      <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                      </span>
+                                      <span className="font-semibold text-emerald-705">Online</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="inline-flex rounded-full h-2 w-2 bg-slate-350"></span>
+                                      <span className="text-slate-450">Offline ({getRelativeTimeString(u.lastActivityMs)})</span>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 px-2 text-right font-semibold font-mono text-emerald-750 text-sm">
+                                ₹{u.costINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {filteredUsers.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="py-12 text-center text-slate-455 font-light">
+                              No users match the search and filter criteria.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {activeTab === 'whatsapp' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* KPI Counters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="glass-card p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 font-sans">Total Leads Ingested</div>
+                <div className="text-2xl font-bold text-slate-800">{leads.length}</div>
+              </div>
+            </div>
+            <div className="glass-card p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                <Send className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 font-sans">Outreach Deliveries</div>
+                <div className="text-2xl font-bold text-slate-800">
+                  {leads.filter(l => l.status === 'OUTREACH_SENT').length}
+                </div>
+              </div>
+            </div>
+            <div className="glass-card p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
+                <Sparkles className="w-5 h-5 font-bold" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 font-sans">Customer Responses</div>
+                <div className="text-2xl font-bold text-slate-800">
+                  {leads.filter(l => l.status === 'INTERACTED').length}
+                </div>
+              </div>
+            </div>
+            <div className="glass-card p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-red-50 text-red-650 flex items-center justify-center border border-red-100">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 font-sans font-medium">Pruned & Deactivated</div>
+                <div className="text-2xl font-bold text-slate-800">
+                  {leads.filter(l => l.status === 'DEACTIVATED_UNENGAGED').length}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Grid: Map Sieve + Leads List */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Scraper / Sieve Simulation */}
+            <div className="space-y-6">
+              <div className="glass-card p-6">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 font-display">
+                  <Zap className="text-emerald-500 w-5 h-5 fill-emerald-500/10" /> Map Sieve & Pipeline Simulator
+                </h3>
+                <p className="text-xs text-slate-550 leading-relaxed mb-4 font-light">
+                  Simulate scraping Google Places listings, filter landlines, compress cover images to WebP &lt; 1MB, and save to your Cloud Firestore records.
+                </p>
+
+                <div className="space-y-4 font-sans text-xs">
+                  <div>
+                    <label className="block text-xs uppercase text-slate-500 font-semibold mb-1.5 font-sans">Target Niche</label>
+                    <select 
+                      value={sieveNiche}
+                      onChange={(e) => setSieveNiche(e.target.value)}
+                      className="glass-input px-3 py-2 text-sm text-slate-800 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] outline-none"
+                    >
+                      <option value="Clinics & Surgical Stores">🏥 Clinics & Surgical Stores</option>
+                      <option value="Chemist & Medicos">💊 Chemist Shop</option>
+                      <option value="Ayurvedic Wellness">🌿 Ayurvedic Stores</option>
+                      <option value="Organic Superfoods">🥗 Organic Groceries</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase text-slate-500 font-semibold mb-1.5 font-sans">Local Address Area</label>
+                    <input 
+                      type="text"
+                      value={sieveLocation}
+                      onChange={(e) => setSieveLocation(e.target.value)}
+                      placeholder="e.g. South Delhi"
+                      className="glass-input px-3 py-2 text-sm text-slate-800 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] outline-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleRunMapsSieve}
+                    disabled={runningMapSieve}
+                    className="w-full py-3 bg-[#10B981] hover:bg-emerald-600 font-bold text-sm text-white rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-sm border border-emerald-500/20"
+                  >
+                    {runningMapSieve ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-white" /> Gathering Places API...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 text-white" /> Trigger Automated Sieve Scan
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="glass-card p-6">
+                <h3 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2 font-display">
+                  <ShieldCheck className="text-blue-500 w-5 h-5" /> TTL Automatic Deactivation
+                </h3>
+                <p className="text-xs text-slate-550 leading-relaxed font-light font-sans">
+                  Leads in the collection have a 72-hour TTL (Time-To-Live) window. If the merchant fails to respond within this countdown, their localized creative links are archived to keep storage bloating to a minimum!
+                </p>
+              </div>
+            </div>
+
+            {/* Lead Table List */}
+            <div className="lg:col-span-2 glass-card p-6 overflow-hidden flex flex-col">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 font-display">Discovered Lead Records</h3>
+                  <p className="text-xs text-slate-400 font-sans">All live data rows stored in Firestore db</p>
+                </div>
+
+                {/* Filter */}
+                <div className="flex bg-slate-100/80 p-0.5 rounded-lg text-xs border border-slate-200/60 overflow-x-auto gap-1">
+                  {(["ALL", "PENDING_OUTREACH", "OUTREACH_SENT", "INTERACTED"] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setActiveLeadFilter(f)}
+                      className={`px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
+                        activeLeadFilter === f 
+                          ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50 font-semibold' 
+                          : 'text-slate-505 hover:text-slate-800'
+                      }`}
+                    >
+                      {f.replace("_", " ")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actual List */}
+              <div className="overflow-x-auto flex-1 [&::-webkit-scrollbar]:hidden font-sans font-light">
+                {loadingLeads ? (
+                  <div className="py-12 text-center">
+                    <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#10B981]" />
+                    <p className="text-xs text-slate-400 mt-2">Connecting to Firestore collections...</p>
+                  </div>
+                ) : leads.length === 0 ? (
+                  <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl">
+                    <MessageSquare className="w-8 h-8 mx-auto text-slate-400 mb-2 animate-pulse" />
+                    <p className="text-sm text-slate-800 font-semibold font-display">No active lead data stored yet</p>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 font-light font-sans">Use the left Scan simulator to run a live Google Maps sieve pipeline!</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left border-collapse text-slate-700 font-sans">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-[11px] font-mono text-slate-400 uppercase">
+                        <th className="py-3 px-2">Merchant Name</th>
+                        <th className="py-3 px-2">Phone & Address</th>
+                        <th className="py-3 px-2">WebP Space ratio</th>
+                        <th className="py-3 px-2">Status</th>
+                        <th className="py-3 px-2 text-right">Outreach triggers</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-650">
+                      {leads
+                        .filter(l => activeLeadFilter === 'ALL' ? true : l.status === activeLeadFilter)
+                        .map((lead) => {
+                          const isUnengaged = lead.status === 'DEACTIVATED_UNENGAGED';
+                          return (
+                            <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors text-xs font-light">
+                              <td className="py-3 px-2 max-w-[140px]">
+                                <div className="font-bold text-slate-800 truncate">{lead.name}</div>
+                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                  ⭐ {lead.rating} | {lead.photosCount} photos
+                                </div>
+                              </td>
+                              <td className="py-3 px-2 max-w-[170px]">
+                                <div className="text-slate-650 font-mono truncate">{lead.phone}</div>
+                                <div className="text-[10px] text-slate-400 truncate mt-0.5 leading-snug">{lead.address}</div>
+                              </td>
+                              <td className="py-3 px-2">
+                                {lead.compressedSize && lead.compressedSize !== "N/A" ? (
+                                  <div>
+                                    <span className="font-mono text-[#10B981] font-bold">{lead.compressedSize}</span>
+                                    <div className="text-[9px] text-slate-400 italic font-light">Saved ~91%</div>
+                                  </div>
+                                ) : (
+                                  <span className="text-amber-600 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-250/50 text-[10px] font-mono">No Canvas</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-2">
+                                <span 
+                                  onClick={() => handleToggleLeadStatus(lead.id, lead.status)}
+                                  className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase cursor-pointer select-none transition-all hover:scale-105 active:scale-95 ${
+                                    lead.status === 'PENDING_OUTREACH' ? 'bg-amber-50 text-amber-700 border border-amber-200/80' :
+                                    lead.status === 'OUTREACH_SENT' ? 'bg-blue-50 text-blue-700 border border-blue-200/80' :
+                                    lead.status === 'INTERACTED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80' :
+                                    'bg-slate-50 text-slate-500 border border-slate-200'
+                                  }`}
+                                >
+                                  {lead.status.replace("_", " ")}
+                                </span>
+                                {lead.nextCheckTime && lead.status === 'OUTREACH_SENT' && (
+                                  <div className="text-[8px] text-slate-400 flex items-center gap-0.5 mt-1 font-mono">
+                                    <Clock className="w-2.5 h-2.5 text-blue-500" /> 71h TTL
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 px-2 text-right font-sans">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => handleTriggerWhatsAppOutreach(lead.id)}
+                                    disabled={isUnengaged}
+                                    className={`px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
+                                      simulatedMessageStatus === lead.id 
+                                        ? 'bg-[#10B981] text-white font-semibold' 
+                                        : 'bg-slate-50 border border-slate-205 hover:bg-slate-100 text-slate-700'
+                                    }`}
+                                  >
+                                    {simulatedMessageStatus === 'sending' ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin text-slate-600" />
+                                    ) : simulatedMessageStatus === lead.id ? (
+                                      <>
+                                        <CheckCircle2 className="w-3 h-3 text-white" /> Sent!
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Smartphone className="w-3 h-3 text-[#10B981]" /> Send Pitch
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteLead(lead.id)}
+                                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-colors border border-red-100 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* STEP-BY-STEP WHATSAPP BUSINESS SETUP GUIDE */}
+          <div className="glass-card p-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-[#7C3AED]/5 rounded-full blur-3xl"></div>
+            
+            <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-3 font-display">
+              <Smartphone className="w-6 h-6 text-[#7C3AED]" /> Tror WhatsApp Cloud API integration & Setup Manual
+            </h2>
+            
+            <p className="text-sm text-slate-555 max-w-4xl mb-8 leading-relaxed font-light">
+              Since all general customer outreach interactions happen over WhatsApp securely, follow this guide to link the Meta Developers suite with our custom active webhook systems.
             </p>
 
-            <div className="space-y-4 font-sans text-xs">
-              <div>
-                <label className="block text-xs uppercase text-slate-400 font-semibold mb-1.5 font-sans">Target Niche</label>
-                <select 
-                  value={sieveNiche}
-                  onChange={(e) => setSieveNiche(e.target.value)}
-                  className="w-full bg-[#1C1C2A] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-[#10B981]"
-                >
-                  <option value="Clinics & Surgical Stores">🏥 Clinics & Surgical Stores</option>
-                  <option value="Chemist & Medicos">💊 Chemist Shop</option>
-                  <option value="Ayurvedic Wellness">🌿 Ayurvedic Stores</option>
-                  <option value="Organic Superfoods">🥗 Organic Groceries</option>
-                </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-sans">
+              <div className="bg-white/80 p-5 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-emerald-55 text-emerald-600 flex items-center justify-center font-bold text-sm font-mono border border-emerald-100">1</div>
+                <h4 className="font-bold text-slate-800 text-base">Create Meta Developer App</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-sans font-light">
+                  Go to <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="text-[#7C3AED] hover:underline font-semibold">developers.facebook.com</a>, register, create a new <strong>Business Type</strong> application, and enable the <strong>WhatsApp</strong> product.
+                </p>
               </div>
 
-              <div>
-                <label className="block text-xs uppercase text-slate-400 font-semibold mb-1.5 font-sans">Local Address Area</label>
-                <input 
-                  type="text"
-                  value={sieveLocation}
-                  onChange={(e) => setSieveLocation(e.target.value)}
-                  placeholder="e.g. Lajpat Nagar, Delhi"
-                  className="w-full bg-[#1C1C2A] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-[#10B981]"
-                />
+              <div className="bg-white/80 p-5 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-emerald-55 text-emerald-600 flex items-center justify-center font-bold text-sm font-mono border border-emerald-100">2</div>
+                <h4 className="font-bold text-slate-800 text-base">Generate Permanent Token</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light font-sans font-light font-light">
+                  Avoid temporal test tokens. Go to your Meta Business Manager, create a new <strong>System User</strong>, authorize WhatsApp assets, and grant full <strong>whatsapp_business_messaging</strong> permissions.
+                </p>
               </div>
 
-              <button
-                onClick={handleRunMapsSieve}
-                disabled={runningMapSieve}
-                className="w-full py-3 bg-[#10B981] hover:bg-emerald-600 font-bold text-sm text-black rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              <div className="bg-white/80 p-5 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-emerald-55 text-emerald-600 flex items-center justify-center font-bold text-sm font-mono border border-emerald-100">3</div>
+                <h4 className="font-bold text-slate-800 text-base font-semibold">Setup Webhook URL</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light font-sans font-light font-sans font-light">
+                  In Meta App Dashboard, navigate to WhatsApp - Configuration. Paste your Live URL endpoint: <code className="text-[10px] text-slate-700 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-mono">https://brandtopost.com/api/whatsapp</code>. Verify using secrets token <strong>TROR_WEBHOOK_SECURE_KEY</strong>.
+                </p>
+              </div>
+
+              <div className="bg-white/80 p-5 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-[#10B910]/15 text-emerald-600 flex items-center justify-center font-bold text-sm font-mono border border-emerald-100">4</div>
+                <h4 className="font-bold text-slate-800 text-base">Subscribe to Event Topics</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light font-sans font-light font-sans font-light">
+                  Choose <strong>messages</strong> and <strong>message_templates</strong> hooks as active subscriptions. This updates the customer response state in real-time when they type any layout letters back!
+                </p>
+              </div>
+
+              <div className="bg-white/80 p-5 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-[#10B910]/15 text-emerald-600 flex items-center justify-center font-bold text-sm font-mono border border-emerald-100">5</div>
+                <h4 className="font-bold text-slate-800 text-base">Build Media Templates</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light font-sans font-light font-sans">
+                  Submit your story layout templates for approval inside Meta Business Suite. Ensure header parameter utilizes <strong>JPEG/PNG (WebP Optimized)</strong> media formats so creatives load lightning-fast.
+                </p>
+              </div>
+
+              <div className="bg-white/80 p-5 rounded-xl border border-slate-200/80 space-y-3 shadow-sm">
+                <div className="w-8 h-8 rounded-full bg-[#10B910]/15 text-emerald-650 flex items-center justify-center font-bold text-sm font-mono border border-emerald-100">6</div>
+                <h4 className="font-bold text-slate-800 text-base font-semibold">Configure Env Variables</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light font-sans font-light font-sans font-light">
+                  Set <code className="text-[10px] text-slate-700 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-mono">WHATSAPP_TOKEN</code> and <code className="text-[10px] text-slate-700 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-mono">PHONE_NUMBER_ID</code> inside settings. Your automated robotic assistant is now fully integrated.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'tokens' && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="glass-card p-6 flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-[#2583EB]/10 flex items-center justify-center">
+                <Activity className="h-6 w-6 text-[#2583EB]" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-500">Total API Calls</p>
+                <p className="text-2xl font-bold text-slate-800">{logs.length}</p>
+              </div>
+            </div>
+            <div className="glass-card p-6 flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-[#7C3AED]/10 flex items-center justify-center">
+                <Database className="h-6 w-6 text-purple-650" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-500">Total Tokens / Images</p>
+                <p className="text-lg font-bold text-slate-800">{totalTokens.toLocaleString()} / {totalImages}</p>
+              </div>
+            </div>
+            <div className="glass-card p-6 flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                <DollarSign className="h-6 w-6 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-500">Estimated Cost (USD)</p>
+                <p className="text-2xl font-bold text-emerald-700">${totalEstimatedCostUSD.toFixed(4)}</p>
+              </div>
+            </div>
+            <div className="glass-card p-6 flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                <span className="text-emerald-600 font-bold text-xl">₹</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-500">Estimated Cost (INR)</p>
+                <p className="text-2xl font-bold text-emerald-700">₹{totalEstimatedCostINR.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Tokens by Operation */}
+            <div className="glass-card p-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-6">Tokens by Operation</h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={operationChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
+                    <YAxis stroke="#94a3b8" fontSize={12} />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#0F172A', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}
+                      cursor={{fill: 'rgba(0,0,0,0.02)'}}
+                    />
+                    <Bar dataKey="value" fill="#7C3AED" radius={[4, 4, 0, 0]} name="Tokens" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Tokens by Model */}
+            <div className="glass-card p-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-6">Cost by Model (USD)</h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={modelChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                      label={({name, percent}) => `${name.replace('gemini-','')} (${(percent * 100).toFixed(0)}%)`}
+                      labelLine={false}
+                    >
+                      {modelChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#0F172A', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline Chart */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-6">Usage Timeline (Tokens)</h3>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={timelineChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
+                  <YAxis stroke="#94a3b8" fontSize={12} />
+                  <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', color: '#0F172A', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }} />
+                  <Line type="monotone" dataKey="tokens" stroke="#7C3AED" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Tokens" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Cost & Tokens by Process */}
+          <div className="glass-card p-6 overflow-hidden">
+            <h3 className="text-lg font-semibold text-slate-800 mb-6">Cost & Tokens by Process</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Process (Operation)</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Run Count</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Prompt Tokens</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Candidate Tokens</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Total Tokens / Img</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Total Cost (USD)</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Total Cost (INR)</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Avg Cost / Run</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {costBreakdownData.map((row) => (
+                    <tr key={row.name} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3 px-4 text-sm text-slate-800 font-medium whitespace-nowrap">
+                        {row.friendlyName}
+                        <span className="text-[10px] text-slate-400 block font-mono mt-0.5">{row.name}</span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-600 text-center font-mono">
+                        {row.count}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-650 text-right font-mono">
+                        {row.name === 'generateImage' || row.name === 'generateOneDayStoryImage' ? '-' : row.promptTokens.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-650 text-right font-mono">
+                        {row.name === 'generateImage' || row.name === 'generateOneDayStoryImage' ? '-' : row.candidateTokens.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-sm font-semibold text-slate-800 text-right font-mono">
+                        {row.name === 'generateImage' || row.name === 'generateOneDayStoryImage' 
+                          ? `${row.totalTokens} img` 
+                          : row.totalTokens.toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4 text-sm font-semibold text-emerald-700 text-right font-mono">
+                        ${row.totalCostUsd.toFixed(4)}
+                      </td>
+                      <td className="py-3 px-4 text-sm font-semibold text-emerald-700 text-right font-mono">
+                        ₹{row.totalCostInr.toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-600 text-right font-mono">
+                        ${row.averageCostUsd.toFixed(4)} <span className="text-slate-400 text-xs">/ ₹{row.averageCostInr.toFixed(2)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {costBreakdownData.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-400 font-light">
+                        No process logs found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Recent API Logs Table */}
+          <div className="glass-card p-6 overflow-hidden">
+            <h3 className="text-lg font-semibold text-slate-800 mb-6">Recent API Logs</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date & Time</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Operation</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Model</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Prompt</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Candidate</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Total</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Cost (USD)</th>
+                    <th className="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Cost (INR)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.slice(0, 20).map((log) => {
+                    let logCost = 0;
+                    const rates = PRICING[log.model as keyof typeof PRICING] as any;
+                    if (rates) {
+                      if (rates.perImage) {
+                        logCost = log.totalTokenCount * rates.perImage;
+                      } else {
+                        logCost = (log.promptTokenCount / 1000000) * rates.prompt + (log.candidatesTokenCount / 1000000) * rates.candidate;
+                      }
+                    }
+                    return (
+                      <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                        <td className="py-3 px-4 text-sm text-slate-650 whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-slate-800 font-medium">
+                          {getFriendlyOperationName(log.operationType)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-slate-500 font-mono text-[11px]">
+                          {log.model}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-slate-600 text-right font-mono">
+                          {log.promptTokenCount.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-slate-600 text-right font-mono">
+                          {log.candidatesTokenCount.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-sm font-semibold text-slate-800 text-right font-mono">
+                          {rates?.perImage ? (log.model.startsWith('puppeteer-') ? `${log.totalTokenCount} run` : `${log.totalTokenCount} img`) : log.totalTokenCount.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-sm font-semibold text-emerald-700 text-right font-mono">
+                          ${logCost.toFixed(5)}
+                        </td>
+                        <td className="py-3 px-4 text-sm font-semibold text-emerald-700 text-right font-mono">
+                          ₹{(logCost * USD_TO_INR).toFixed(3)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {logs.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-400 font-light">
+                        No token usage logs found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'errors' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="glass-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-l-red-500">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-red-50 text-red-650 flex items-center justify-center shrink-0 border border-red-100">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-500">Total Logged Errors</p>
+                <p className="text-2xl font-bold text-slate-800">{errorLogs.length}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-2 rounded-xl">
+              <select 
+                value={deleteFilter === null ? "" : deleteFilter}
+                onChange={(e) => setDeleteFilter(e.target.value === "" ? null : Number(e.target.value))}
+                className="glass-input bg-white border border-slate-200 text-sm py-2 px-3 focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] text-slate-800 outline-none"
               >
-                {runningMapSieve ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" /> Gathering Places API...
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4" /> Trigger Automated Sieve Scan
-                  </>
-                )}
+                <option value="">Select logs to delete...</option>
+                <option value="30">Older than 30 days</option>
+                <option value="7">Older than 7 days</option>
+                <option value="1">Older than 1 day</option>
+                <option value="0">All logs</option>
+              </select>
+              <button
+                onClick={handleDeleteLogs}
+                disabled={deleteFilter === null || isDeleting}
+                className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+              >
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-white" /> : <Trash2 className="h-4 w-4 text-white" />}
+                Delete
               </button>
             </div>
           </div>
 
-          <div className="bg-[#12121E] border border-white/5 rounded-3xl p-6 shadow-xl">
-            <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2 font-display">
-              <ShieldCheck className="text-blue-400 w-5 h-5 animate-pulse" /> TTL Automatic Deactivation
-            </h3>
-            <p className="text-xs text-[#94A3B8] leading-relaxed font-light font-sans">
-              Leads in the collection have a 72-hour TTL (Time-To-Live) window. If the merchant fails to respond within this countdown, their localized creative links are archived to keep storage bloating to a minimum!
-            </p>
-          </div>
-        </div>
-
-        {/* Lead Table List */}
-        <div className="lg:col-span-2 bg-[#12121E] border border-white/5 rounded-3xl p-6 overflow-hidden flex flex-col shadow-2xl">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-            <div>
-              <h3 className="text-lg font-bold text-white font-display">Discovered Lead Records</h3>
-              <p className="text-xs text-slate-405 font-sans">All live data rows stored in Firestore db</p>
-            </div>
-
-            {/* Filter */}
-            <div className="flex bg-[#1C1C2A] p-0.5 rounded-lg text-xs border border-white/5 overflow-x-auto gap-1">
-              {(["ALL", "PENDING_OUTREACH", "OUTREACH_SENT", "INTERACTED"] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setActiveLeadFilter(f)}
-                  className={`px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
-                    activeLeadFilter === f 
-                      ? 'bg-[#12121E] text-white shadow-sm ring-1 ring-black/5 font-semibold' 
-                      : 'text-slate-405 hover:text-white'
-                  }`}
-                >
-                  {f.replace("_", " ")}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Actual List */}
-          <div className="overflow-x-auto flex-1 [&::-webkit-scrollbar]:hidden font-sans font-light">
-            {loadingLeads ? (
-              <div className="py-12 text-center">
-                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#10B981]" />
-                <p className="text-xs text-slate-400 mt-2">Connecting to Firestore collections...</p>
-              </div>
-            ) : leads.length === 0 ? (
-              <div className="py-12 text-center border border-dashed border-white/5 rounded-2xl">
-                <MessageSquare className="w-8 h-8 mx-auto text-slate-550 mb-2 animate-pulse" />
-                <p className="text-sm text-slate-350 font-semibold font-display">No active lead data stored yet</p>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 font-light font-sans">Use the left Scan simulator to run a live Google Maps sieve pipeline!</p>
+          <div className="space-y-4">
+            {errorLogs.length === 0 ? (
+              <div className="glass-card p-12 text-center">
+                <div className="mx-auto h-16 w-16 bg-emerald-50 border border-emerald-100 rounded-full flex items-center justify-center mb-4">
+                  <Activity className="h-8 w-8 text-emerald-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-800">All Systems Operational</h3>
+                <p className="text-slate-500 mt-2">No errors have been logged recently.</p>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse text-slate-200 font-sans">
-                <thead>
-                  <tr className="border-b border-white/5 text-[11px] font-mono text-slate-400 uppercase">
-                    <th className="py-3 px-2">Merchant Name</th>
-                    <th className="py-3 px-2">Phone & Address</th>
-                    <th className="py-3 px-2">WebP Space ratio</th>
-                    <th className="py-3 px-2">Status</th>
-                    <th className="py-3 px-2 text-right">Outreach triggers</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-slate-300">
-                  {leads
-                    .filter(l => activeLeadFilter === 'ALL' ? true : l.status === activeLeadFilter)
-                    .map((lead) => {
-                      const isUnengaged = lead.status === 'DEACTIVATED_UNENGAGED';
-                      return (
-                        <tr key={lead.id} className="hover:bg-white/5 transition-colors text-xs font-light">
-                          <td className="py-3 px-2 max-w-[140px]">
-                            <div className="font-bold text-white truncate">{lead.name}</div>
-                            <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                              ⭐ {lead.rating} | {lead.photosCount} photos
-                            </div>
-                          </td>
-                          <td className="py-3 px-2 max-w-[170px]">
-                            <div className="text-slate-200 font-mono truncate">{lead.phone}</div>
-                            <div className="text-[10px] text-slate-405 truncate mt-0.5 leading-snug">{lead.address}</div>
-                          </td>
-                          <td className="py-3 px-2">
-                            {lead.compressedSize && lead.compressedSize !== "N/A" ? (
-                              <div>
-                                <span className="font-mono text-[#10B981] font-bold">{lead.compressedSize}</span>
-                                <div className="text-[9px] text-slate-500 italic font-light">Saved ~91%</div>
-                              </div>
-                            ) : (
-                              <span className="text-amber-500 px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] font-mono">No Canvas</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-2">
-                            <span 
-                              onClick={() => handleToggleLeadStatus(lead.id, lead.status)}
-                              className={`px-2 py-1 rounded-full text-[9px] font-bold uppercase cursor-pointer select-none transition-all hover:scale-105 active:scale-95 ${
-                                lead.status === 'PENDING_OUTREACH' ? 'bg-amber-500/15 text-amber-505 border border-amber-500/25' :
-                                lead.status === 'OUTREACH_SENT' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/25' :
-                                lead.status === 'INTERACTED' ? 'bg-[#10B981]/15 text-[#10B981] border border-emerald-500/25' :
-                                'bg-slate-500/15 text-slate-400 border border-slate-500/25'
-                              }`}
-                            >
-                              {lead.status.replace("_", " ")}
-                            </span>
-                            {lead.nextCheckTime && lead.status === 'OUTREACH_SENT' && (
-                              <div className="text-[8px] text-slate-500 flex items-center gap-0.5 mt-1 font-mono">
-                                <Clock className="w-2.5 h-2.5 text-blue-400" /> 71h TTL
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3 px-2 text-right font-sans">
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => handleTriggerWhatsAppOutreach(lead.id)}
-                                disabled={isUnengaged}
-                                className={`px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                                  simulatedMessageStatus === lead.id 
-                                    ? 'bg-[#10B981] text-black font-semibold' 
-                                    : 'bg-[#1C1C2A] hover:bg-white/10 text-slate-200'
-                                }`}
-                              >
-                                {simulatedMessageStatus === 'sending' ? (
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                ) : simulatedMessageStatus === lead.id ? (
-                                  <>
-                                    <CheckCircle2 className="w-3 h-3" /> Sent!
-                                  </>
-                                ) : (
-                                  <>
-                                    <Smartphone className="w-3 h-3 text-[#10B981]" /> Send Pitch
-                                  </>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteLead(lead.id)}
-                                className="p-1.5 bg-red-400/10 hover:bg-red-400/20 text-red-500 rounded-lg transition-colors border border-red-500/10 cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+              errorLogs.map((log) => (
+                <div key={log.id} className="glass-card p-6 border border-slate-200 hover:border-[#7C3AED]/20 transition-colors">
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-1">
+                        {log.type === 'firestore_error' ? (
+                          <Database className="h-5 w-5 text-orange-500" />
+                        ) : (
+                          <Bug className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+                            log.type === 'firestore_error' 
+                              ? 'bg-orange-50 text-orange-700 border-orange-100' 
+                              : 'bg-red-50 text-red-650 border-red-100'
+                          }`}>
+                            {log.type === 'firestore_error' ? 'Firestore DB' : 'Application'}
+                          </span>
+                          <span className="text-sm font-medium text-slate-500">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <h4 className="text-lg font-bold text-slate-800 break-all">{log.error}</h4>
+                      </div>
+                    </div>
+                    
+                    {log.email && (
+                      <div className="text-sm bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shrink-0">
+                        <span className="text-slate-500 font-light">User: </span>
+                        <span className="font-semibold text-slate-800">{log.email}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs font-mono text-slate-650 overflow-x-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                      {log.operationType && (
+                        <div><span className="text-slate-400">Operation:</span> <span className="text-slate-700">{log.operationType}</span></div>
+                      )}
+                      {log.path && (
+                        <div><span className="text-slate-400">DB Path:</span> <span className="text-slate-700">{log.path}</span></div>
+                      )}
+                      {log.url && (
+                        <div className="col-span-full"><span className="text-slate-400">URL:</span> <span className="text-slate-700 break-all">{log.url}</span></div>
+                      )}
+                      {log.userAgent && (
+                        <div className="col-span-full"><span className="text-slate-400">User Agent:</span> <span className="text-slate-700">{log.userAgent}</span></div>
+                      )}
+                    </div>
+                    
+                    {log.context && Object.keys(log.context).length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-slate-205/60">
+                        <span className="text-slate-400 block mb-1">Context:</span>
+                        <pre className="text-[11px] whitespace-pre-wrap text-slate-700 bg-white border border-slate-200 p-2.5 rounded-lg mt-1 max-h-[300px] overflow-y-auto">{JSON.stringify(log.context, null, 2)}</pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
-      </div>
-
-      {/* STEP-BY-STEP WHATSAPP BUSINESS SETUP GUIDE */}
-      <div className="bg-[#12121E] border border-white/5 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full blur-3xl"></div>
-        
-        <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3 font-display">
-          <Smartphone className="w-6 h-6 text-[#10B981]" /> Tror WhatsApp Cloud API integration & Setup Manual
-        </h2>
-        
-        <p className="text-sm text-slate-350 max-w-4xl mb-8 leading-relaxed font-light">
-          Since all general customer outreach interactions happen over WhatsApp securely, follow this guide to link the Meta Developers suite with our custom active webhook systems.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-sans">
-          <div className="bg-[#1C1C2A] p-5 rounded-2xl border border-white/5 space-y-3 shadow-lg">
-            <div className="w-8 h-8 rounded-full bg-emerald-400/10 text-emerald-400 flex items-center justify-center font-bold text-sm font-mono border border-emerald-400/20">1</div>
-            <h4 className="font-bold text-white text-base">Create Meta Developer App</h4>
-            <p className="text-xs text-slate-400 leading-relaxed font-sans font-light">
-              Go to <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="text-emerald-400 underline font-semibold">developers.facebook.com</a>, register, create a new <strong>Business Type</strong> application, and enable the <strong>WhatsApp</strong> product.
-            </p>
-          </div>
-
-          <div className="bg-[#1C1C2A] p-5 rounded-2xl border border-white/5 space-y-3 shadow-lg">
-            <div className="w-8 h-8 rounded-full bg-emerald-400/10 text-emerald-400 flex items-center justify-center font-bold text-sm font-mono border border-emerald-400/20">2</div>
-            <h4 className="font-bold text-white text-base">Generate Permanent Token</h4>
-            <p className="text-xs text-slate-450 leading-relaxed font-light font-sans font-light">
-              Avoid temporal test tokens. Go to your Meta Business Manager, create a new <strong>System User</strong>, authorize WhatsApp assets, and grant full <strong>whatsapp_business_messaging</strong> permissions.
-            </p>
-          </div>
-
-          <div className="bg-[#1C1C2A] p-5 rounded-2xl border border-white/5 space-y-3 shadow-lg">
-            <div className="w-8 h-8 rounded-full bg-emerald-400/10 text-emerald-400 flex items-center justify-center font-bold text-sm font-mono border border-emerald-400/20">3</div>
-            <h4 className="font-bold text-white text-base font-semibold">Setup Webhook URL</h4>
-            <p className="text-xs text-slate-405 leading-relaxed font-light font-sans font-light">
-              In Meta App Dashboard, navigate to WhatsApp - Configuration. Paste your Live URL endpoint: <code className="text-[10px] text-slate-300 bg-black/40 px-1.5 py-0.5 rounded font-mono">https://brandtopost.com/api/whatsapp</code>. Verify using secrets token <strong>TROR_WEBHOOK_SECURE_KEY</strong>.
-            </p>
-          </div>
-
-          <div className="bg-[#1C1C2A] p-5 rounded-2xl border border-white/5 space-y-3 shadow-lg">
-            <div className="w-8 h-8 rounded-full bg-[#10B910]/10 text-emerald-400 flex items-center justify-center font-bold text-sm font-mono border border-emerald-400/20">4</div>
-            <h4 className="font-bold text-white text-base">Subscribe to Event Topics</h4>
-            <p className="text-xs text-slate-400 leading-relaxed font-light font-sans font-light">
-              Choose <strong>messages</strong> and <strong>message_templates</strong> hooks as active subscriptions. This updates the customer response state in real-time when they type any layout letters back!
-            </p>
-          </div>
-
-          <div className="bg-[#1C1C2A] p-5 rounded-2xl border border-white/5 space-y-3 shadow-lg">
-            <div className="w-8 h-8 rounded-full bg-[#10B910]/10 text-[#10B981] flex items-center justify-center font-bold text-sm font-mono border border-emerald-400/20">5</div>
-            <h4 className="font-bold text-white text-base">Build Media Templates</h4>
-            <p className="text-xs text-slate-400 leading-relaxed font-light font-sans font-light font-sans">
-              Submit your story layout templates for approval inside Meta Business Suite. Ensure header parameter utilizes <strong>JPEG/PNG (WebP Optimized)</strong> media formats so creatives load lightning-fast.
-            </p>
-          </div>
-
-          <div className="bg-[#1C1C2A] p-5 rounded-2xl border border-white/5 space-y-3 shadow-lg">
-            <div className="w-8 h-8 rounded-full bg-[#10B910]/10 text-emerald-400 flex items-center justify-center font-bold text-sm font-mono border border-emerald-400/20">6</div>
-            <h4 className="font-bold text-white text-base font-semibold">Configure Env Variables</h4>
-            <p className="text-xs text-slate-400 leading-relaxed font-light font-sans font-light font-sans font-light">
-              Set <code className="text-[10px] text-slate-300 bg-black/40 px-1.5 py-0.5 rounded font-mono">WHATSAPP_TOKEN</code> and <code className="text-[10px] text-slate-300 bg-black/40 px-1.5 py-0.5 rounded font-mono">PHONE_NUMBER_ID</code> inside settings. Your automated robotic assistant is now fully integrated.
-            </p>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
-  )}
-
- {activeTab === 'tokens' && (
- <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
- {/* KPI Cards */}
- <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
- <div className="glass-card p-6 flex items-center gap-4">
- <div className="h-12 w-12 rounded-full bg-[#2583EB]/10 flex items-center justify-center">
- <Activity className="h-6 w-6 text-[#2583EB]" />
- </div>
- <div>
- <p className="text-sm font-medium text-gray-300">Total API Calls</p>
- <p className="text-2xl font-bold text-white">{logs.length}</p>
- </div>
- </div>
- <div className="glass-card p-6 flex items-center gap-4">
- <div className="h-12 w-12 rounded-full bg-[#7C3AED]/10 flex items-center justify-center">
- <Database className="h-6 w-6 text-purple-600" />
- </div>
- <div>
- <p className="text-sm font-medium text-gray-300">Total Tokens / Images</p>
- <p className="text-lg font-bold text-white">{totalTokens.toLocaleString()} / {totalImages}</p>
- </div>
- </div>
- <div className="glass-card p-6 flex items-center gap-4">
- <div className="h-12 w-12 rounded-full bg-[#18F07A]/10 flex items-center justify-center">
- <DollarSign className="h-6 w-6 text-[#18F07A]" />
- </div>
- <div>
- <p className="text-sm font-medium text-gray-300">Estimated Cost (USD)</p>
- <p className="text-2xl font-bold text-white">${totalEstimatedCostUSD.toFixed(4)}</p>
- </div>
- </div>
- <div className="glass-card p-6 flex items-center gap-4">
- <div className="h-12 w-12 rounded-full bg-[#18F07A]/10 flex items-center justify-center">
- <span className="text-[#18F07A] font-bold text-xl">₹</span>
- </div>
- <div>
- <p className="text-sm font-medium text-gray-300">Estimated Cost (INR)</p>
- <p className="text-2xl font-bold text-white">₹{totalEstimatedCostINR.toFixed(2)}</p>
- </div>
- </div>
- </div>
-
- <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
- {/* Tokens by Operation */}
- <div className="glass-card p-6">
- <h3 className="text-lg font-semibold text-white mb-6">Tokens by Operation</h3>
- <div className="h-[300px]">
- <ResponsiveContainer width="100%" height="100%">
- <BarChart data={operationChartData}>
- <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
- <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
- <YAxis stroke="#6b7280" fontSize={12} />
- <Tooltip 
- contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
- cursor={{fill: 'rgba(0,0,0,0.05)'}}
- />
- <Bar dataKey="value" fill="#ff6347" radius={[4, 4, 0, 0]} name="Tokens" />
- </BarChart>
- </ResponsiveContainer>
- </div>
- </div>
-
- {/* Tokens by Model */}
- <div className="glass-card p-6">
- <h3 className="text-lg font-semibold text-white mb-6">Cost by Model (USD)</h3>
- <div className="h-[300px]">
- <ResponsiveContainer width="100%" height="100%">
- <PieChart>
- <Pie
- data={modelChartData}
- cx="50%"
- cy="50%"
- innerRadius={60}
- outerRadius={100}
- paddingAngle={5}
- dataKey="value"
- label={({name, percent}) => `${name.replace('gemini-','')} (${(percent * 100).toFixed(0)}%)`}
- labelLine={false}
- >
- {modelChartData.map((entry, index) => (
- <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
- ))}
- </Pie>
- <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
- <Legend />
- </PieChart>
- </ResponsiveContainer>
- </div>
- </div>
- </div>
-
- {/* Timeline Chart */}
- <div className="glass-card p-6">
- <h3 className="text-lg font-semibold text-white mb-6">Usage Timeline (Tokens)</h3>
- <div className="h-[300px]">
- <ResponsiveContainer width="100%" height="100%">
- <LineChart data={timelineChartData}>
- <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
- <XAxis dataKey="date" stroke="#6b7280" fontSize={12} />
- <YAxis stroke="#6b7280" fontSize={12} />
- <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
- <Line type="monotone" dataKey="tokens" stroke="#8884d8" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Tokens" />
- </LineChart>
- </ResponsiveContainer>
- </div>
- </div>
-
- {/* Cost & Tokens by Process */}
-  <div className="glass-card p-6 overflow-hidden">
-    <h3 className="text-lg font-semibold text-white mb-6">Cost & Tokens by Process</h3>
-    <div className="overflow-x-auto">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-[#7C3AED]/20">
-            <th className="py-3 px-4 text-sm font-semibold text-gray-300">Process (Operation)</th>
-            <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-center">Run Count</th>
-            <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Prompt Tokens</th>
-            <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Candidate Tokens</th>
-            <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Total Tokens / Img</th>
-            <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Total Cost (USD)</th>
-            <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Total Cost (INR)</th>
-            <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Avg Cost / Run</th>
-          </tr>
-        </thead>
-        <tbody>
-          {costBreakdownData.map((row) => (
-            <tr key={row.name} className="border-b border-[#7C3AED]/20 hover:bg-[#1C1C22]/50 border-[#7C3AED]/20 transition-colors">
-              <td className="py-3 px-4 text-sm text-white font-medium whitespace-nowrap">
-                {row.friendlyName}
-                <span className="text-[10px] text-gray-400 block font-mono mt-0.5">{row.name}</span>
-              </td>
-              <td className="py-3 px-4 text-sm text-gray-300 text-center font-mono">
-                {row.count}
-              </td>
-              <td className="py-3 px-4 text-sm text-gray-300 text-right font-mono">
-                {row.name === 'generateImage' || row.name === 'generateOneDayStoryImage' ? '-' : row.promptTokens.toLocaleString()}
-              </td>
-              <td className="py-3 px-4 text-sm text-gray-300 text-right font-mono">
-                {row.name === 'generateImage' || row.name === 'generateOneDayStoryImage' ? '-' : row.candidateTokens.toLocaleString()}
-              </td>
-              <td className="py-3 px-4 text-sm font-semibold text-white text-right font-mono">
-                {row.name === 'generateImage' || row.name === 'generateOneDayStoryImage' 
-                  ? `${row.totalTokens} img` 
-                  : row.totalTokens.toLocaleString()}
-              </td>
-              <td className="py-3 px-4 text-sm font-semibold text-[#18F07A] text-right font-mono">
-                ${row.totalCostUsd.toFixed(4)}
-              </td>
-              <td className="py-3 px-4 text-sm font-semibold text-[#18F07A] text-right font-mono">
-                ₹{row.totalCostInr.toFixed(2)}
-              </td>
-              <td className="py-3 px-4 text-sm text-gray-300 text-right font-mono">
-                ${row.averageCostUsd.toFixed(4)} <span className="text-gray-400 text-xs">/ ₹{row.averageCostInr.toFixed(2)}</span>
-              </td>
-            </tr>
-          ))}
-          {costBreakdownData.length === 0 && (
-            <tr>
-              <td colSpan={8} className="py-8 text-center text-gray-300">
-                No process logs found.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
- {/* Recent Logs Table */}
- <div className="glass-card p-6 overflow-hidden">
- <h3 className="text-lg font-semibold text-white mb-6">Recent API Logs</h3>
- <div className="overflow-x-auto">
- <table className="w-full text-left border-collapse">
- <thead>
- <tr className="border-b border-[#7C3AED]/20">
- <th className="py-3 px-4 text-sm font-semibold text-gray-300">Date & Time</th>
- <th className="py-3 px-4 text-sm font-semibold text-gray-300">Operation</th>
- <th className="py-3 px-4 text-sm font-semibold text-gray-300">Model</th>
- <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Prompt</th>
- <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Candidate</th>
- <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Total</th>
- <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Cost (USD)</th>
- <th className="py-3 px-4 text-sm font-semibold text-gray-300 text-right">Cost (INR)</th>
- </tr>
- </thead>
- <tbody>
- {logs.slice(0, 20).map((log) => {
- let logCost = 0;
- const rates = PRICING[log.model as keyof typeof PRICING] as any;
- if (rates) {
- if (log.model === 'gemini-3.1-flash-image-preview' && rates.perImage) {
- logCost = log.totalTokenCount * rates.perImage;
- } else {
- logCost = (log.promptTokenCount / 1000000) * rates.prompt + (log.candidatesTokenCount / 1000000) * rates.candidate;
- }
- }
- return (
- <tr key={log.id} className="border-b border-[#7C3AED]/20 hover:bg-[#1C1C22]/50 border-[#7C3AED]/20 transition-colors">
- <td className="py-3 px-4 text-sm text-white whitespace-nowrap">
- {new Date(log.timestamp).toLocaleString()}
- </td>
- <td className="py-3 px-4 text-sm text-white font-medium">
- {getFriendlyOperationName(log.operationType)}
- </td>
- <td className="py-3 px-4 text-sm text-gray-300">
- {log.model}
- </td>
- <td className="py-3 px-4 text-sm text-gray-300 text-right font-mono">
- {log.promptTokenCount.toLocaleString()}
- </td>
- <td className="py-3 px-4 text-sm text-gray-300 text-right font-mono">
- {log.candidatesTokenCount.toLocaleString()}
- </td>
- <td className="py-3 px-4 text-sm font-semibold text-white text-right font-mono">
- {log.model === 'gemini-3.1-flash-image-preview' ? `${log.totalTokenCount} img` : log.totalTokenCount.toLocaleString()}
- </td>
- <td className="py-3 px-4 text-sm font-semibold text-[#18F07A] text-right font-mono">
- ${logCost.toFixed(5)}
- </td>
- <td className="py-3 px-4 text-sm font-semibold text-[#18F07A] text-right font-mono">
- ₹{(logCost * USD_TO_INR).toFixed(3)}
- </td>
- </tr>
- );
- })}
- {logs.length === 0 && (
- <tr>
- <td colSpan={8} className="py-8 text-center text-gray-300">
- No token usage logs found.
- </td>
- </tr>
- )}
- </tbody>
- </table>
- </div>
- </div>
- </div>
- )}
-
- {activeTab === 'errors' && (
- <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
- <div className="glass-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-l-red-500">
- <div className="flex items-center gap-4">
- <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
- <AlertCircle className="h-6 w-6 text-red-600" />
- </div>
- <div>
- <p className="text-sm font-medium text-gray-300">Total Logged Errors</p>
- <p className="text-2xl font-bold text-white">{errorLogs.length}</p>
- </div>
- </div>
-
- <div className="flex items-center gap-3 bg-[#1C1C22]/50 border-[#7C3AED]/20 p-2 rounded-xl border border-red-100">
- <select 
- value={deleteFilter === null ? "" : deleteFilter}
- onChange={(e) => setDeleteFilter(e.target.value === "" ? null : Number(e.target.value))}
- className="glass-input text-sm py-2 px-3 border-red-500/20 focus:border-red-400 focus:ring-red-400"
- >
- <option value="">Select logs to delete...</option>
- <option value="30">Older than 30 days</option>
- <option value="7">Older than 7 days</option>
- <option value="1">Older than 1 day</option>
- <option value="0">All logs</option>
- </select>
- <button
- onClick={handleDeleteLogs}
- disabled={deleteFilter === null || isDeleting}
- className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-full transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
- >
- {isDeleting ? <VideoLoader className="h-7 w-7" /> : <Trash2 className="h-4 w-4" />}
- Delete
- </button>
- </div>
- </div>
-
- <div className="space-y-4">
- {errorLogs.length === 0 ? (
- <div className="glass-card p-12 text-center">
- <div className="mx-auto h-16 w-16 bg-[#18F07A]/10 rounded-full flex items-center justify-center mb-4">
- <Activity className="h-8 w-8 text-[#18F07A]" />
- </div>
- <h3 className="text-xl font-semibold text-white">All Systems Operational</h3>
- <p className="text-gray-300 mt-2">No errors have been logged recently.</p>
- </div>
- ) : (
- errorLogs.map((log) => (
- <div key={log.id} className="glass-card p-6 border border-red-100 hover:border-red-500/20 transition-colors">
- <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
- <div className="flex items-start gap-3">
- <div className="mt-1">
- {log.type === 'firestore_error' ? (
- <Database className="h-5 w-5 text-orange-500" />
- ) : (
- <Bug className="h-5 w-5 text-red-500" />
- )}
- </div>
- <div>
- <div className="flex items-center gap-2 mb-1">
- <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
- log.type === 'firestore_error' ? 'bg-orange-500/10 text-orange-400' : 'bg-red-500/10 text-red-500'
- }`}>
- {log.type === 'firestore_error' ? 'Firestore DB' : 'Application'}
- </span>
- <span className="text-sm font-medium text-gray-300">
- {new Date(log.timestamp).toLocaleString()}
- </span>
- </div>
- <h4 className="text-lg font-bold text-white break-all">{log.error}</h4>
- </div>
- </div>
- 
- {log.email && (
- <div className="text-sm bg-[#1C1C22]/50 border-[#7C3AED]/20 px-3 py-1.5 rounded-lg border border-[#7C3AED]/20 shrink-0">
- <span className="text-gray-300">User: </span>
- <span className="font-medium text-white">{log.email}</span>
- </div>
- )}
- </div>
-
- <div className="bg-[#1C1C22]/50 border-[#7C3AED]/20 rounded-xl p-4 text-sm font-mono text-gray-300 overflow-x-auto border border-[#7C3AED]/40">
- <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
- {log.operationType && (
- <div><span className="text-gray-300">Operation:</span> {log.operationType}</div>
- )}
- {log.path && (
- <div><span className="text-gray-300">DB Path:</span> {log.path}</div>
- )}
- {log.url && (
- <div className="col-span-full"><span className="text-gray-300">URL:</span> {log.url}</div>
- )}
- {log.userAgent && (
- <div className="col-span-full"><span className="text-gray-300">User Agent:</span> {log.userAgent}</div>
- )}
- </div>
- 
- {log.context && Object.keys(log.context).length > 0 && (
- <div className="mt-4 pt-4 border-t border-[#7C3AED]/20/50">
- <span className="text-gray-300 block mb-1">Context:</span>
- <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(log.context, null, 2)}</pre>
- </div>
- )}
- </div>
- </div>
- ))
- )}
- </div>
- </div>
- )}
- </div>
- );
+  );
 }
+

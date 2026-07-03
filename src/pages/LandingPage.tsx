@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { AgentFlipbook } from '../components/AgentFlipbook';
+import { RevolvingAgents } from '../components/RevolvingAgents';
 import '../components/AgentFlipbook.css';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -71,6 +72,23 @@ export function LandingPage() {
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [pipelineImpressions, setPipelineImpressions] = useState(1280);
+
+  // Deliverables showcase state
+  const [activeDeliverable, setActiveDeliverable] = useState<'linkedin' | 'x' | 'dna' | 'graphics'>('linkedin');
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const [isHoveredDeliverable, setIsHoveredDeliverable] = useState(false);
+
+  useEffect(() => {
+    if (!isAutoPlaying || isHoveredDeliverable) return;
+    const interval = setInterval(() => {
+      const order: ('linkedin' | 'x' | 'dna' | 'graphics')[] = ['linkedin', 'x', 'dna', 'graphics'];
+      setActiveDeliverable(prev => {
+        const idx = order.indexOf(prev);
+        return order[(idx + 1) % order.length];
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isAutoPlaying, isHoveredDeliverable]);
 
   // Metrics animation state
   const [metrics, setMetrics] = useState({ prompts: 99, voice: 0, time: 20, channels: 0 });
@@ -594,322 +612,563 @@ export function LandingPage() {
       </section>
 
       {/* 6. SCROLL-LOCKED CREATIVE TEAM FLIPBOOK */}
-      <AgentFlipbook />      {/* 7. THE POST GROWTH METHODOLOGY (Editorial Timeline) */}
-      <section className="py-24 md:py-32 px-6 lg:px-8 max-w-6xl mx-auto relative z-10 border-b border-slate-200/60 bg-slate-50">
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center justify-center mb-4">
-            <span className="bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20 text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm">B2B Content Blueprint</span>
+      <AgentFlipbook />
+
+      {/* 6.5. REVOLVING 3D AGENTS CYLINDER */}
+      <RevolvingAgents />
+
+      {/* 7. THE POST GROWTH METHODOLOGY (Editorial Timeline) */}
+      <section className="w-full bg-[#FAF9F6] border-b border-slate-200/60 relative z-10">
+        <div className="pt-24 md:pt-32 pb-12 md:pb-16 px-6 md:px-16 lg:px-24 max-w-7xl mx-auto">
+          
+          {/* Section Header */}
+          <div className="max-w-3xl mb-16 text-left">
+            <p className="text-sm font-medium text-[#7C3AED] mb-4 font-sans">Growth framework</p>
+            <h2 className="text-4xl md:text-7xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
+              Proven POST Framework, <br />
+              <span className="font-normal italic text-[#7C3AED]">Executed Daily.</span>
+            </h2>
+            <p className="text-base text-slate-655 max-w-xl font-light leading-relaxed">
+              Organic distribution fails when content is random. Our agent network is engineered to execute the rigorous POST methodology used by category-leading brands.
+            </p>
           </div>
-          <h2 className="text-3xl md:text-5xl font-bold font-display text-slate-900 mb-6 tracking-tight">
-            Proven <span className="text-[#7C3AED]">POST Framework</span>, Executed Daily.
-          </h2>
-          <p className="text-base sm:text-lg text-slate-655 max-w-2xl mx-auto font-light leading-relaxed">
-            Organic distribution fails when content is random. Our agent network is engineered to execute the rigorous POST methodology used by category-leading brands.
-          </p>
-        </div>
-        
-        {/* Horizontal Timeline on Desktop, Vertical on Mobile */}
-        <div className="relative max-w-5xl mx-auto">
-          {/* Connecting Line */}
-          <div className="absolute top-[40px] left-8 right-8 h-0.5 bg-gradient-to-r from-[#7C3AED] via-[#2583EB] via-[#FF7778] to-[#10B981] hidden lg:block" />
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-12 lg:gap-8 relative z-10">
+          
+          {/* Flat Editorial Typographic Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-8 text-left">
             {[
-              { l: "P", t: "Positioning DNA", d: "Arthur locks down your ICPs, objection maps, and unique mechanisms so copy never drifts off-brand.", icon: <Target className="h-5 w-5" />, color: "#7C3AED", bgLight: "rgba(124, 58, 237, 0.1)" },
-              { l: "O", t: "Outreach Routing", d: "Sarah searches for real-time market triggers, and Alex drafts platform-native structures tailored to algorithms.", icon: <PenTool className="h-5 w-5" />, color: "#2583EB", bgLight: "rgba(37, 131, 235, 0.1)" },
-              { l: "S", t: "Signal & Cards", d: "Chloe & Julian build custom typography layouts and logo placements directly into scroll-stopping graphic cards.", icon: <Sparkles className="h-5 w-5" />, color: "#FF7778", bgLight: "rgba(255, 119, 120, 0.1)" },
-              { l: "T", t: "Traction Autopilot", d: "Maya schedules drafts, and Max handles API publishing automatically, transforming content into revenue pipelines.", icon: <TrendingUp className="h-5 w-5" />, color: "#10B981", bgLight: "rgba(16, 185, 129, 0.1)" }
+              { 
+                l: "P", 
+                t: "Positioning DNA", 
+                d: "Arthur locks down your ICPs, objection maps, and unique mechanisms so copy never drifts off-brand.", 
+                color: "text-[#FF7778]", // Coral
+                bgLight: "rgba(255, 119, 120, 0.3)"
+              },
+              { 
+                l: "O", 
+                t: "Outreach Routing", 
+                d: "Sarah searches for real-time market triggers, and Alex drafts platform-native structures tailored to algorithms.", 
+                color: "text-[#2583EB]", // Blue
+                bgLight: "rgba(37, 131, 235, 0.3)"
+              },
+              { 
+                l: "S", 
+                t: "Signal & Cards", 
+                d: "Chloe & Julian build custom typography layouts and logo placements directly into scroll-stopping graphic cards.", 
+                color: "text-[#7C3AED]", // Purple
+                bgLight: "rgba(124, 58, 237, 0.3)"
+              },
+              { 
+                l: "T", 
+                t: "Traction Autopilot", 
+                d: "Maya schedules drafts, and Max handles API publishing automatically, transforming content into revenue pipelines.", 
+                color: "text-[#10B981]", // Green
+                bgLight: "rgba(16, 185, 129, 0.3)"
+              }
             ].map((item, idx) => (
-              <div key={idx} className="relative flex flex-col items-center lg:items-start text-center lg:text-left group">
-                
-                {/* Timeline node circle */}
-                <div 
-                  className="w-20 h-20 rounded-full flex items-center justify-center border-2 transition-all duration-300 relative z-20 shadow-md group-hover:scale-110 mb-6 bg-white"
-                  style={{ borderColor: item.color, boxShadow: `0 0 15px ${item.color}20` }}
+              <div 
+                key={idx} 
+                className={`relative space-y-4 pt-4 text-left ${
+                  idx > 0 ? "lg:border-l lg:border-slate-900/10 lg:pl-8" : ""
+                }`}
+              >
+                {/* Large Background Watermark Letter */}
+                <span 
+                  className={`text-8xl font-black font-display select-none leading-none block`}
+                  style={{ color: item.bgLight }}
                 >
-                  <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: item.bgLight, color: item.color }}>
-                    {item.icon}
-                  </div>
-                  {/* Small step number */}
-                  <span className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-slate-900 text-white font-mono text-[10px] font-bold flex items-center justify-center border border-white/10">
-                    {idx + 1}
-                  </span>
-                </div>
+                  {item.l}
+                </span>
 
-                {/* Content Card using glass-card properties */}
-                <div className="glass-card border-[#7C3AED]/10 p-6 rounded-xl relative overflow-hidden w-full min-h-[160px] flex flex-col justify-start">
-                  {/* Large background letter overlay */}
-                  <span 
-                    className="absolute -right-4 -bottom-6 text-8xl font-black font-display opacity-5 select-none pointer-events-none"
-                    style={{ color: item.color }}
-                  >
-                    {item.l}
-                  </span>
-
-                  <h3 className="text-base font-bold text-slate-800 mb-2 flex items-center justify-center lg:justify-start gap-2">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                <div className="space-y-2">
+                  <h3 className="text-lg font-display font-normal text-slate-900">
                     {item.t}
                   </h3>
-                  <p className="text-slate-600 text-xs leading-relaxed font-light relative z-10">{item.d}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed font-light">
+                    {item.d}
+                  </p>
                 </div>
               </div>
             ))}
           </div>
         </div>
       </section>
-
-      {/* 8. CLIENT DELIVERABLES BENTO GRID (Editorial Redesign) */}
-      <section className="py-24 px-6 lg:px-8 max-w-6xl mx-auto relative z-10 border-b border-slate-200/60 bg-white">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center justify-center mb-4">
-            <span className="bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20 text-[10px] uppercase font-semibold tracking-widest px-4 py-1.5 rounded-full shadow-sm">AI Deliverables</span>
-          </div>
-          <h2 className="text-3xl md:text-5xl font-bold font-display text-slate-900 mb-6 tracking-tight">
-            1 URL in. A Month of Pipeline out.
-          </h2>
-          <p className="text-base sm:text-lg text-slate-655 max-w-xl mx-auto font-light leading-relaxed">
-            We don't give you template libraries. Our AI employees write, design, and assemble ready-to-publish campaigns specifically tailored to your ideal clients.
-          </p>
+      {/* 8. CLIENT DELIVERABLES SHOWCASE (Interactive Workspace Console) */}
+      <section className="w-full bg-[#FAF9F6] border-b border-slate-200/60 relative z-10 overflow-hidden">
+        {/* Flowing Wave Vector Art Background */}
+        <div className="absolute inset-0 pointer-events-none select-none z-0">
+          <svg className="absolute w-[120%] h-[120%] -bottom-10 -left-[10%] opacity-50" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path 
+              d="M0,80 C30,70 50,90 70,75 C90,60 95,85 100,70 L100,100 L0,100 Z" 
+              fill="url(#flow-wave-grad)"
+            />
+            <path 
+              d="M0,78 C30,73 45,88 65,73 C85,58 95,83 100,68" 
+              fill="none" 
+              stroke="url(#flow-line-grad)" 
+              strokeWidth="0.5"
+            />
+          </svg>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
-          
-          {/* LinkedIn Posts (Span 2) */}
-          <div className="glass-card border-[#7C3AED]/10 p-6 md:col-span-2 relative overflow-hidden group flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2 text-[#7C3AED] font-mono text-[9px] font-bold uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#7C3AED]" />
-                LINKEDIN THOUGHT LEADERSHIP
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1.5">Authority Campaigns</h3>
-              <p className="text-slate-500 text-xs font-light mb-6 max-w-md leading-relaxed">
-                Crafted by Alex using hook-story-lesson sequencing. Formatted with generous paragraph spacing and industry-proof objection counters.
-              </p>
-            </div>
+        <div className="pt-12 md:pt-16 pb-12 md:pb-16 px-6 md:px-16 lg:px-24 max-w-7xl mx-auto relative z-10">
+          {/* Section Header */}
+          <div className="max-w-3xl mb-16 text-left">
+            <p className="text-sm font-medium text-slate-400 mb-4 font-sans">Our output</p>
+            <h2 className="text-4xl md:text-7xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
+              1 URL in. <br />
+              <span className="font-normal italic text-[#7C3AED]">A month of pipeline out.</span>
+            </h2>
+            <p className="text-base text-slate-600 max-w-xl font-light leading-relaxed">
+              We don't give you template libraries. Our AI employees write, design, and assemble ready-to-publish campaigns specifically tailored to your ideal clients.
+            </p>
+          </div>
+
+          {/* Interactive Console Workspace Grid */}
+          <div 
+            className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-start"
+            onMouseEnter={() => setIsHoveredDeliverable(true)}
+            onMouseLeave={() => setIsHoveredDeliverable(false)}
+          >
             
-            {/* Real LinkedIn Preview Graphic */}
-            <div className="bg-[#FCFBF9] border border-slate-200/85 rounded-xl p-5 relative z-10 shadow-sm">
-              <div className="flex gap-3 mb-4">
-                <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" className="w-8 h-8 rounded-full border border-[#7C3AED]" alt="Avatar" />
-                <div>
-                  <div className="text-xs font-bold text-slate-800">Your AI Doppelganger</div>
-                  <div className="text-[9px] text-slate-400">Founder & CEO | 2m ago</div>
-                </div>
-              </div>
-              <div className="space-y-2 text-[11px] text-slate-700 leading-relaxed font-sans">
-                <p className="font-semibold text-slate-900">Stop prompting boxes to write generic marketing text.</p>
-                <p>B2B distribution is broken because prompt tools don't know your buyers' hell states or heaven states.</p>
-                <p>Arthur locks down your Positioning DNA. Sarah maps active market triggers. Max auto-publishes. Marketing that runs itself.</p>
-              </div>
-              <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-semibold font-mono">
-                <span>👍 142 Likes</span>
-                <span>💬 38 Comments</span>
-              </div>
+            {/* Left Sidebar Menu: Flat Typographic Toggles */}
+            <div className="lg:col-span-5 space-y-0 text-left border-t border-slate-900/10">
+              {[
+                { 
+                  id: 'linkedin', 
+                  num: '01', 
+                  title: 'Authority Campaigns', 
+                  sub: 'LinkedIn thought leadership',
+                  desc: 'Crafted by Alex using hook-story-lesson sequencing and industry-proof objection counters to build voice authority.',
+                  color: 'text-[#7C3AED]',
+                  border: 'border-[#7C3AED]/40'
+                },
+                { 
+                  id: 'x', 
+                  num: '02', 
+                  title: 'Multi-Tweet Threads', 
+                  sub: 'X platform native',
+                  desc: 'Punchy, hook-driven tweet sequences optimized to stop the scroll, break concepts down, and build massive traction.',
+                  color: 'text-[#2583EB]',
+                  border: 'border-[#2583EB]/40'
+                },
+                { 
+                  id: 'dna', 
+                  num: '03', 
+                  title: 'Brand DNA Reports', 
+                  sub: 'Positioning strategy',
+                  desc: 'Arthur maps out your ideal customer profiles, key objections, tone rules, and decision structures so copy sounds authentic.',
+                  color: 'text-[#FF7778]',
+                  border: 'border-[#FF7778]/40'
+                },
+                { 
+                  id: 'graphics', 
+                  num: '04', 
+                  title: 'Magazine Graphics', 
+                  sub: 'Creative studio overlay',
+                  desc: 'Chloe & Julian render custom background graphics and stamp your logo cleanly into high-DPI scroll-stopping card designs.',
+                  color: 'text-[#10B981]',
+                  border: 'border-[#10B981]/40'
+                }
+              ].map((item) => {
+                const isActive = activeDeliverable === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveDeliverable(item.id as any);
+                      setIsAutoPlaying(false); // Stop autoplay when clicked
+                    }}
+                    className="w-full text-left py-6 border-b border-slate-900/10 group cursor-pointer block transition-all"
+                  >
+                    <div className="flex justify-between items-baseline">
+                      <span className={`font-sans text-xs font-bold ${isActive ? item.color : 'text-slate-400'}`}>
+                        {item.num}
+                      </span>
+                      <span className={`font-sans text-[10px] font-light ${isActive ? item.color : 'text-slate-400'}`}>
+                        {item.sub}
+                      </span>
+                    </div>
+                    <h3 className={`text-xl font-display mt-2 ${isActive ? 'font-normal text-slate-900' : 'font-light text-slate-400'}`}>
+                      {item.title}
+                    </h3>
+                    {isActive && (
+                      <p className={`text-xs text-slate-500 leading-relaxed font-light mt-3 pl-6 border-l ${item.border}`}>
+                        {item.desc}
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+
+            {/* Right Main Screen: High-fidelity Output Preview Container (Completely Boxless) */}
+            <div className="lg:col-span-7 flex items-center min-h-[340px] relative">
+              <AnimatePresence mode="wait">
+                {activeDeliverable === 'linkedin' && (
+                  <motion.div
+                    key="linkedin"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.25 }}
+                    className="w-full"
+                  >
+                    {/* Realistic B2B LinkedIn Post Mockup - Flat Editorial style */}
+                    <div className="pl-6 md:pl-10 border-l-2 border-[#7C3AED] py-2 max-w-xl mx-auto lg:mr-0 text-left space-y-4">
+                      <div className="flex items-center gap-3">
+                        {/* Minimalist Headshot avatar */}
+                        <div className="w-10 h-10 bg-[#7C3AED]/10 flex items-center justify-center text-[10px] font-mono text-[#7C3AED] select-none">
+                          B2P
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900 leading-tight">Your AI Doppelganger</div>
+                          <div className="text-[10px] text-slate-400 font-sans mt-0.5">Founder & CEO • 1st</div>
+                        </div>
+                      </div>
+                      <p className="text-sm sm:text-base text-slate-800 font-light leading-relaxed font-sans whitespace-pre-line">
+                        We spent $40k on ads last month. Net pipeline generated: $0.
+                        {"\n\n"}
+                        Then we shut down the ad account and had our founders write about our engineering secrets organic on LinkedIn.
+                        {"\n\n"}
+                        In 30 days: 3 Enterprise demos booked.
+                        {"\n\n"}
+                        Paid ads capture demand. Organic thought leadership creates it. If your buyers don't trust you, no ad budget will save you.
+                      </p>
+                      <div className="text-[10px] text-slate-400 font-sans pt-2 border-t border-slate-900/5 uppercase tracking-wider">
+                        142 likes • 12 comments
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeDeliverable === 'x' && (
+                  <motion.div
+                    key="x"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.25 }}
+                    className="w-full"
+                  >
+                    {/* Realistic B2B Twitter Thread Blueprint - Connected Tweet feed */}
+                    <div className="pl-6 md:pl-10 border-l-2 border-[#2583EB] py-2 max-w-xl mx-auto lg:mr-0 text-left space-y-6">
+                      
+                      {/* Tweet 1 */}
+                      <div className="flex gap-4 relative">
+                        {/* Vertical line connecting tweet chain */}
+                        <div className="absolute left-5 top-10 bottom-[-24px] w-0.5 bg-[#2583EB]/15" />
+                        
+                        <div className="w-10 h-10 bg-[#2583EB]/10 flex items-center justify-center text-[10px] font-mono text-[#2583EB] select-none shrink-0 z-10">
+                          B2P
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex gap-2 items-center text-xs">
+                            <span className="font-semibold text-slate-900">Your Brand Voice</span>
+                            <span className="text-slate-400">@founder</span>
+                          </div>
+                          <p className="text-sm text-slate-800 font-light leading-relaxed font-sans">
+                            How we scale B2B SaaS organic channels with zero ad spend. The exact playbook we use for our portfolio companies: 🧵👇
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Tweet 2 */}
+                      <div className="flex gap-4 relative">
+                        <div className="w-10 h-10 bg-[#2583EB]/10 flex items-center justify-center text-[10px] font-mono text-[#2583EB] select-none shrink-0 z-10">
+                          B2P
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex gap-2 items-center text-xs">
+                            <span className="font-semibold text-slate-900">Your Brand Voice</span>
+                            <span className="text-slate-400">@founder</span>
+                          </div>
+                          <p className="text-sm text-slate-800 font-light leading-relaxed font-sans">
+                            The secret is Earned Secrets. If you repeat what's in standard blogs, you are noise. You must extract unique compliance insights from your team.
+                          </p>
+                        </div>
+                      </div>
+
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeDeliverable === 'dna' && (
+                  <motion.div
+                    key="dna"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.25 }}
+                    className="w-full"
+                  >
+                    {/* Realistic B2B DNA Specification Sheet Table */}
+                    <div className="pl-6 md:pl-10 border-l-2 border-[#FF7778] py-2 max-w-xl mx-auto lg:mr-0 text-left space-y-4">
+                      <div className="text-xs text-[#FF7778] font-sans block">DNA positioning sheet // Archive 2.0</div>
+                      <table className="w-full text-xs font-sans text-slate-700 border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-900/10 text-left text-[10px] text-slate-400 font-medium">
+                            <th className="py-2 pr-4">Key metric</th>
+                            <th className="py-2">Calibration value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-slate-900/5">
+                            <td className="py-3 pr-4 font-mono text-[10px] text-slate-900">TARGET AUDIENCE</td>
+                            <td className="py-3 font-light">AWS/GCP Infrastructure SaaS Founders</td>
+                          </tr>
+                          <tr className="border-b border-slate-900/5">
+                            <td className="py-3 pr-4 font-mono text-[10px] text-slate-900">CORE OBJECTION</td>
+                            <td className="py-3 font-light">"We already use manual compliance audits"</td>
+                          </tr>
+                          <tr className="border-b border-slate-900/5">
+                            <td className="py-3 pr-4 font-mono text-[10px] text-slate-900">OBJECTION HANDLING</td>
+                            <td className="py-3 font-light text-slate-800">Audits are reactive; real-time monitors catch errors early</td>
+                          </tr>
+                          <tr>
+                            <td className="py-3 pr-4 font-mono text-[10px] text-slate-900">TONE RULES</td>
+                            <td className="py-3 font-light">Direct, Technical, Jargon-Free, Authoritative</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeDeliverable === 'graphics' && (
+                  <motion.div
+                    key="graphics"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.25 }}
+                    className="w-full"
+                  >
+                    {/* Realistic Graphic Slide Spec */}
+                    <div className="pl-6 md:pl-10 border-l-2 border-[#10B981] py-2 max-w-xl mx-auto lg:mr-0 text-left space-y-6">
+                      <span className="text-xs text-[#10B981] font-sans block">Canvas overlay spec</span>
+                      <div className="w-full max-w-sm border border-slate-900/10 p-8 bg-white flex flex-col justify-between h-44 text-left shadow-sm">
+                        <div className="flex justify-between items-start">
+                          <span className="font-mono text-[9px] text-slate-400 uppercase tracking-widest">PLATE NO. 04</span>
+                          <span className="font-mono text-[9px] text-slate-400">5120 × 2880 PX</span>
+                        </div>
+                        <div>
+                          <h4 className="font-display text-xl font-light tracking-tight text-slate-900 leading-tight">
+                            The B2B Organic Pipeline: <span className="italic font-serif">15 minutes to configure</span>, 30 days to execute.
+                          </h4>
+                        </div>
+                        <div className="flex justify-between items-end border-t border-slate-900/10 pt-3 mt-4">
+                          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" className="w-4.5 h-4.5 opacity-80" alt="B2P" />
+                          <span className="font-mono text-[8px] text-slate-400">CALIBRATED SECRETS INDEX</span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
           </div>
 
-          {/* X Threads (Span 1) */}
-          <div className="glass-card border-[#7C3AED]/10 p-6 relative overflow-hidden group flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2 text-[#2583EB] font-mono text-[9px] font-bold uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#2583EB]" />
-                X PLATFORM NATIVE
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1.5">Multi-Tweet Threads</h3>
-              <p className="text-slate-500 text-xs font-light mb-6 leading-relaxed">
-                Punchy, hook-driven tweet sequences optimized to stop the scroll and build massive traction.
-              </p>
-            </div>
-            
-            {/* Real X Thread Preview */}
-            <div className="space-y-3 bg-[#FCFBF9] border border-slate-200/85 rounded-xl p-4 shadow-sm text-[11px]">
-              <div className="flex gap-2 items-start border-l-2 border-[#7C3AED]/40 pl-3">
-                 <div className="font-bold text-slate-800">1/</div>
-                 <p className="text-slate-700 leading-relaxed">B2B organic growth isn't dead. Your templates are. Here is the blueprint to fix it: 👇</p>
-              </div>
-              <div className="flex gap-2 items-start border-l-2 border-[#7C3AED]/40 pl-3">
-                 <div className="font-bold text-slate-800">2/</div>
-                 <p className="text-slate-700 leading-relaxed">Map psychographics: Find the "Enemy," the "Hell State," and the "Earned Secret" before drafting copy.</p>
-              </div>
-            </div>
-          </div>
-
-          {/* DNA Reports (Span 1) */}
-          <div className="glass-card border-[#7C3AED]/10 p-6 relative overflow-hidden group flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2 text-[#FF7778] font-mono text-[9px] font-bold uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#FF7778]" />
-                POSITIONING STRATEGY
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1.5">Brand DNA Reports</h3>
-              <p className="text-slate-500 text-xs font-light mb-6 leading-relaxed">
-                Arthur maps out your ideal customer profiles, key objections, and tone rules.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 p-3 bg-[#FCFBF9] border border-slate-200/85 rounded-xl">
-              <span className="px-2 py-1 bg-white border border-[#7C3AED]/15 rounded text-[9px] font-bold text-[#7C3AED] font-mono">ICP Objection Mapping</span>
-              <span className="px-2 py-1 bg-white border border-[#2583EB]/15 rounded text-[9px] font-bold text-[#2583EB] font-mono">Vocabulary Lock</span>
-              <span className="px-2 py-1 bg-white border border-[#10B981]/15 rounded text-[9px] font-bold text-[#10B981] font-mono">Buyer Hell/Heaven State</span>
-              <span className="px-2 py-1 bg-white border border-[#FF7778]/15 rounded text-[9px] font-bold text-[#FF7778] font-mono">Earned Secrets</span>
-            </div>
-          </div>
-
-          {/* Image Cards (Span 2) */}
-          <div className="glass-card border-[#7C3AED]/10 p-6 md:col-span-2 relative overflow-hidden group flex flex-col md:flex-row items-center gap-6">
-             <div className="flex-1">
-               <div className="flex items-center gap-2 mb-2 text-[#10B981] font-mono text-[9px] font-bold uppercase tracking-wider">
-                 <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
-                 CREATIVE STUDIO
-               </div>
-               <h3 className="text-lg font-bold text-slate-800 mb-1.5">Magazine-Grade Graphics</h3>
-               <p className="text-slate-500 text-xs font-light leading-relaxed mb-4 md:mb-0">
-                 Chloe & Julian render custom background canvas prompt graphics and stamp your logo cleanly into high-DPI scroll-stopping marketing cards.
-               </p>
-             </div>
-             
-             {/* Realistic Image Mockup */}
-             <div className="w-full md:w-48 h-32 rounded-xl bg-slate-900 flex items-center justify-center shadow-inner relative overflow-hidden shrink-0 border border-white/10">
-                {/* Simulated canvas background */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-[#7C3AED]/30 via-[#2583EB]/20 to-transparent" />
-                <div className="relative z-10 text-center px-4">
-                  <div className="text-[10px] font-bold text-white uppercase tracking-widest font-display mb-1">MARKETING THAT RUNS ITSELF.</div>
-                  <div className="w-12 h-0.5 bg-[#7C3AED] mx-auto mb-2" />
-                  <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" className="w-5 h-5 mx-auto opacity-80" alt="B2P" />
-                </div>
-             </div>
-          </div>
+          {/* Closing Bottom Rule */}
+          <div className="border-t border-slate-900/10 mt-16" />
         </div>
       </section>
 
       {/* 9. THE SUBSCRIPTION MATRIX (Pricing Selectors - Light Theme) */}
-      <section className="py-24 md:py-32 px-6 lg:px-8 max-w-7xl mx-auto relative z-10 border-b border-slate-200/60 bg-slate-50">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center justify-center mb-4">
-            <span className="bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20 text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm">Pricing Plans</span>
-          </div>
-          <h2 className="text-3xl md:text-5xl font-bold font-display text-slate-900 mb-6 tracking-tight">Choose Your Virtual Team.</h2>
-          <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto font-light leading-relaxed">
-            Select a subscription plan based on the size of the AI marketing team you want active. Upgrade or downgrade anytime.
+      <section className="w-full bg-[#FAF9F6] border-b border-slate-200/60 relative z-10">
+      <div className="pt-12 md:pt-16 pb-24 md:pb-32 px-6 md:px-16 lg:px-24 max-w-7xl mx-auto">
+        
+        {/* Section Header */}
+        <div className="max-w-3xl mb-16 text-left">
+          <p className="text-sm font-medium text-[#7C3AED] mb-4 font-sans">Pricing structure</p>
+          <h2 className="text-4xl md:text-6xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
+            Choose your <br />
+            <span className="font-normal italic text-[#7C3AED]">Virtual Team.</span>
+          </h2>
+          <p className="text-base text-slate-600 max-w-xl font-light leading-relaxed mt-4">
+            Select a configuration tier based on the size of the AI marketing specialists you want active. Scale up or down as required.
           </p>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto text-left items-stretch">
+        {/* Pricing Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto text-left items-stretch">
           
-          {/* Plan 1: Starter */}
-          <div className="bg-white border border-slate-200/80 rounded-xl p-6 sm:p-8 flex flex-col justify-between relative shadow-sm hover:shadow-md transition-shadow">
-            <div>
-              <div className="text-xs text-[#7C3AED] font-mono font-bold uppercase tracking-wider mb-2">Solo Founder Tier</div>
-              <div className="flex items-baseline gap-1 text-slate-900 mb-4">
-                <span className="text-4xl font-light font-display">₹2,499</span>
-                <span className="text-xs text-slate-400 font-mono">/ month</span>
+          {/* Plan 1: Solo Founder */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-8 flex flex-col justify-between relative shadow-sm hover:shadow-md transition-shadow">
+            <div className="space-y-6 flex-1 flex flex-col">
+              <div>
+                <span className="text-xs text-slate-400 font-sans font-light block">Tier 01</span>
+                <h3 className="text-2xl font-display font-light text-slate-900 mt-1">Solo Founder</h3>
+                <div className="flex items-baseline gap-1 text-slate-950 mt-4">
+                  <span className="text-4xl font-light font-display">₹2,499</span>
+                  <span className="text-xs text-slate-400 font-sans font-light">/ mo</span>
+                </div>
+                <p className="text-xs text-slate-500 font-sans font-light mt-3 leading-relaxed">
+                  Deploy a standard content engine to get campaigns written, designed, and queued automatically on your primary social channels.
+                </p>
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed font-light mb-6">Deploy a standard content engine to get campaigns written and designed on all social channels.</p>
-              
-              {/* Agent Grid */}
-              <div className="border-t border-slate-100 pt-6 space-y-4">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-mono font-bold block">Active AI Specialists:</span>
-                
-                <div className="flex flex-wrap gap-2">
-                  {PLAN_AGENTS.starter.map((agent, i) => (
-                    <div 
-                      key={i} 
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] border font-medium ${
-                        agent.active 
-                          ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
-                          : 'bg-slate-50 border-slate-100 text-slate-400 opacity-40'
-                      }`}
-                    >
-                      <img src={agent.avatar} className="w-3.5 h-3.5 rounded-full object-cover grayscale-0" alt="" />
-                      <span>{agent.name}</span>
-                    </div>
-                  ))}
+
+              {/* Active Specialists list */}
+              <div className="border-t border-slate-100 pt-6 flex-1 flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-sans uppercase tracking-wider block mb-4">Active Roster Specialists</span>
+                  <div className="space-y-3">
+                    {[
+                      { name: "Sarah", role: "Research & Strategy", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Chloe", role: "Visual Aesthetics", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Elena", role: "Publishing Router", avatar: "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=100&h=100" }
+                    ].map((agent, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <img src={agent.avatar} className="w-5 h-5 rounded-full object-cover" alt="" />
+                          <span className="font-sans font-medium text-slate-800">{agent.name}</span>
+                        </div>
+                        <span className="text-slate-400 font-sans font-light text-[11px]">{agent.role}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-            <Link to="/login" className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-lg text-center text-xs font-semibold tracking-wide border border-slate-200 transition-colors mt-8 inline-block">Deploy Starter Grid</Link>
+
+            <Link 
+              to="/login" 
+              className="w-full mt-8 py-3 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition-all text-xs font-sans font-semibold text-center rounded-lg shadow-sm block"
+            >
+              Deploy Starter Grid
+            </Link>
           </div>
 
-          {/* Plan 2: Growth (Dark Card Accent) */}
-          <div className="bg-[#08080C] border-2 border-[#7C3AED] rounded-xl p-6 sm:p-8 flex flex-col justify-between relative shadow-xl shadow-[#7C3AED]/10 text-white">
-            <div className="absolute top-0 right-8 -translate-y-1/2 bg-gradient-to-r from-[#7C3AED] to-[#C084FC] text-white text-[9px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full shadow-md">Most Popular</div>
-            <div>
-              <div className="text-xs text-[#C084FC] font-mono font-bold uppercase tracking-wider mb-2">Growth Autopilot Tier</div>
-              <div className="flex items-baseline gap-1 text-white mb-4">
-                <span className="text-4xl font-light font-display">₹4,499</span>
-                <span className="text-xs text-slate-400 font-mono">/ month</span>
+          {/* Plan 2: Growth Autopilot (Flagship Highlight) */}
+          <div className="bg-white border-2 border-[#7C3AED] rounded-2xl p-8 flex flex-col justify-between relative shadow-md shadow-[#7C3AED]/5">
+            {/* Top Accent bar */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#7C3AED] rounded-t-xl" />
+            
+            <div className="space-y-6 flex-1 flex flex-col">
+              <div>
+                <span className="text-[11px] text-[#7C3AED] font-sans font-medium block mb-1">Recommended configuration</span>
+                <span className="text-xs text-slate-400 font-sans font-light block">Tier 02</span>
+                <h3 className="text-2xl font-display font-light text-slate-900 mt-1">Growth Autopilot</h3>
+                <div className="flex items-baseline gap-1 text-slate-955 mt-4">
+                  <span className="text-4xl font-light font-display">₹4,499</span>
+                  <span className="text-xs text-slate-400 font-sans font-light">/ mo</span>
+                </div>
+                <p className="text-xs text-slate-500 font-sans font-light mt-3 leading-relaxed">
+                  Clone your personal voice signature and let the system run automated compliance campaigns in the background hands-free.
+                </p>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed font-light mb-6">Clone your exact personal voice and let the system run automated campaigns in the background hands-free.</p>
-              
-              {/* Agent Grid */}
-              <div className="border-t border-white/10 pt-6 space-y-4">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-mono font-bold block">Active AI Specialists:</span>
-                
-                <div className="flex flex-wrap gap-2">
-                  {PLAN_AGENTS.growth.map((agent, i) => (
-                    <div 
-                      key={i} 
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] border font-medium ${
-                        agent.active 
-                          ? 'bg-[#7C3AED]/20 border-[#7C3AED]/40 text-[#C084FC]' 
-                          : 'bg-white/5 border-white/5 text-white/20 opacity-30'
-                      }`}
-                    >
-                      <img src={agent.avatar} className="w-3.5 h-3.5 rounded-full object-cover" alt="" />
-                      <span>{agent.name}</span>
-                    </div>
-                  ))}
+
+              {/* Active Specialists list */}
+              <div className="border-t border-slate-100 pt-6 flex-1 flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] text-[#7C3AED] font-sans uppercase tracking-wider block mb-4">Active Roster Specialists</span>
+                  <div className="space-y-3">
+                    {[
+                      { name: "Sarah", role: "Research & Strategy", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Chloe", role: "Visual Aesthetics", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Elena", role: "Publishing Router", avatar: "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Maya", role: "Campaign Scheduler", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Zack", role: "Objection Handling", avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=100&h=100" }
+                    ].map((agent, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <img src={agent.avatar} className="w-5 h-5 rounded-full object-cover" alt="" />
+                          <span className="font-sans font-medium text-slate-800">{agent.name}</span>
+                        </div>
+                        <span className="text-slate-400 font-sans font-light text-[11px]">{agent.role}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-            <Link to="/login" className="w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-lg text-center text-xs font-semibold tracking-wide shadow-md shadow-[#7C3AED]/20 transition-all mt-8 inline-block">Deploy Growth Autopilot</Link>
+
+            <Link 
+              to="/login" 
+              className="w-full mt-8 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white transition-all text-xs font-sans font-semibold text-center rounded-lg shadow-md shadow-[#7C3AED]/15 block"
+            >
+              Deploy Growth Autopilot
+            </Link>
           </div>
 
-          {/* Plan 3: Agency */}
-          <div className="bg-white border border-slate-200/80 rounded-xl p-6 sm:p-8 flex flex-col justify-between relative shadow-sm hover:shadow-md transition-shadow">
-            <div>
-              <div className="text-xs text-[#7C3AED] font-mono font-bold uppercase tracking-wider mb-2">Agency Partner Tier</div>
-              <div className="flex items-baseline gap-1 text-slate-900 mb-4">
-                <span className="text-4xl font-light font-display">₹12,499</span>
-                <span className="text-xs text-slate-400 font-mono">/ month</span>
+          {/* Plan 3: Agency Partner */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-8 flex flex-col justify-between relative shadow-sm hover:shadow-md transition-shadow">
+            <div className="space-y-6 flex-1 flex flex-col">
+              <div>
+                <span className="text-xs text-slate-400 font-sans font-light block">Tier 03</span>
+                <h3 className="text-2xl font-display font-light text-slate-900 mt-1">Agency Partner</h3>
+                <div className="flex items-baseline gap-1 text-slate-955 mt-4">
+                  <span className="text-4xl font-light font-display">₹12,499</span>
+                  <span className="text-xs text-slate-400 font-sans font-light">/ mo</span>
+                </div>
+                <p className="text-xs text-slate-500 font-sans font-light mt-3 leading-relaxed">
+                  Connect your WhatsApp number to command client campaign reviews, edits, and schedule auto-publishing in real-time.
+                </p>
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed font-light mb-6">Connect your WhatsApp number to command client campaign reviews, edits, and schedule auto-publishing.</p>
-              
-              {/* Agent Grid */}
-              <div className="border-t border-slate-100 pt-6 space-y-4">
-                <span className="text-[10px] text-slate-400 uppercase tracking-widest font-mono font-bold block">Active AI Specialists:</span>
-                
-                <div className="flex flex-wrap gap-2">
-                  {PLAN_AGENTS.agency.map((agent, i) => (
-                    <div 
-                      key={i} 
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] border font-medium ${
-                        agent.active 
-                          ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
-                          : 'bg-slate-50 border-slate-100 text-slate-400 opacity-40'
-                      }`}
-                    >
-                      <img src={agent.avatar} className="w-3.5 h-3.5 rounded-full object-cover" alt="" />
-                      <span>{agent.name}</span>
-                    </div>
-                  ))}
+
+              {/* Active Specialists list */}
+              <div className="border-t border-slate-100 pt-6 flex-1 flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-sans uppercase tracking-wider block mb-4">Active Roster Specialists</span>
+                  <div className="space-y-3">
+                    {[
+                      { name: "Sarah", role: "Research & Strategy", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Chloe", role: "Visual Aesthetics", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Elena", role: "Publishing Router", avatar: "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Maya", role: "Campaign Scheduler", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Zack", role: "Objection Handling", avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Victor", role: "WhatsApp Commander", avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=100&h=100" },
+                      { name: "Max", role: "Autopilot Monitor", avatar: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&q=80&w=100&h=100" }
+                    ].map((agent, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <img src={agent.avatar} className="w-5 h-5 rounded-full object-cover" alt="" />
+                          <span className="font-sans font-medium text-slate-800">{agent.name}</span>
+                        </div>
+                        <span className="text-slate-400 font-sans font-light text-[11px]">{agent.role}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
+
+            <Link 
+              to="/login" 
+              className="w-full mt-8 py-3 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition-all text-xs font-sans font-semibold text-center rounded-lg shadow-sm block"
+            >
+              Deploy Agency Console
+              </Link>
             </div>
-            <Link to="/login" className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-800 rounded-lg text-center text-xs font-semibold tracking-wide border border-slate-200 transition-colors mt-8 inline-block">Deploy Agency Console</Link>
+
           </div>
+
+          {/* Closing divider rule */}
+          <div className="border-t border-slate-900/10" />
 
         </div>
+      </div>
       </section>
 
       {/* 10. FAQ ACCORDION (Editorial Minimalist Design) */}
-      <section className="py-24 md:py-32 px-6 lg:px-8 max-w-4xl mx-auto relative z-10 border-b border-slate-200/60 bg-white">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center justify-center mb-4">
-            <span className="bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20 text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm">FAQ</span>
-          </div>
-          <h2 className="text-3xl md:text-5xl font-bold font-display text-slate-900 mb-6 tracking-tight">Frequently Asked Questions.</h2>
-          <p className="text-base sm:text-lg text-slate-655 max-w-xl mx-auto font-light leading-relaxed">
+      <section className="w-full bg-[#FAF9F6] border-b border-slate-200/60 relative z-10">
+      <div className="py-24 md:py-32 px-6 lg:px-8 max-w-4xl mx-auto">
+        
+        {/* Section Header */}
+        <div className="max-w-3xl mb-16 text-left">
+          <p className="text-sm font-medium text-[#7C3AED] mb-4 font-sans">Questions</p>
+          <h2 className="text-4xl md:text-6xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
+            Frequently Asked <br />
+            <span className="font-normal italic text-[#7C3AED]">Questions.</span>
+          </h2>
+          <p className="text-base text-slate-600 max-w-xl font-light leading-relaxed">
             Everything you need to know about cloning your voice, resources, and automation.
           </p>
         </div>
@@ -924,10 +1183,10 @@ export function LandingPage() {
             const isFaqActive = activeFaq === index;
             const stepNum = String(index + 1).padStart(2, '0');
             return (
-              <div key={index} className="border-b border-slate-100 pb-4">
+              <div key={index} className="border-b border-slate-900/10 pb-4">
                 <button 
                   onClick={() => toggleFaq(index)}
-                  className="w-full flex items-center justify-between py-4 text-sm sm:text-base font-semibold text-slate-800 hover:text-[#7C3AED] transition-colors cursor-pointer text-left"
+                  className="w-full flex items-center justify-between py-4 text-sm sm:text-base font-semibold text-slate-800 hover:text-[#7C3AED] transition-colors cursor-pointer text-left font-display"
                 >
                   <div className="flex items-center gap-4">
                     <span className="font-mono text-[#7C3AED] text-xs font-bold">{stepNum}.</span>
@@ -938,7 +1197,7 @@ export function LandingPage() {
                   </span>
                 </button>
                 <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isFaqActive ? 'max-h-[300px] opacity-100 py-3' : 'max-h-0 opacity-0'}`}>
-                  <div className="pl-8 border-l-2 border-[#7C3AED] text-xs sm:text-sm text-slate-600 leading-relaxed font-light bg-slate-50/50 p-4 rounded-r-lg">
+                  <div className="pl-8 border-l-2 border-[#7C3AED] text-xs sm:text-sm text-slate-655 leading-relaxed font-light bg-white p-4 rounded-r-lg shadow-sm">
                     {item.a}
                   </div>
                 </div>
@@ -946,53 +1205,74 @@ export function LandingPage() {
             );
           })}
         </div>
+      </div>
       </section>
 
-      {/* 11. CTA SECTION & FOOTER (Tech Luxury Dark Redesign) */}
-      <section className="py-28 px-6 lg:px-8 relative overflow-hidden z-10 w-full bg-[#08080C] text-slate-300 border-t border-white/5">
-        
-        {/* Animated Background Blobs for depth */}
-        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-[#7C3AED]/15 rounded-full blur-[100px] animate-blob-1 pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-[#2583EB]/10 rounded-full blur-[120px] animate-blob-2 pointer-events-none" />
+      {/* 11. CTA SECTION (Tech Luxury Dark Editorial Layout) */}
+      <section className="py-32 md:py-44 px-6 md:px-16 lg:px-24 relative z-10 w-full bg-[#08080C] text-slate-300 border-t border-white/5">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center">
+          
+          {/* Left Column: Bold Typographic Statement */}
+          <div className="lg:col-span-7 text-left space-y-4">
+            <h2 className="text-5xl sm:text-6xl md:text-8xl font-light font-display tracking-tighter leading-[1.02]" style={{ color: '#FFFFFF' }}>
+              Get your <br className="hidden md:block" />
+              20 hours <br />
+              <span className="font-normal italic text-[#C084FC]">a week back.</span>
+            </h2>
+          </div>
 
-        <div className="max-w-4xl mx-auto text-center relative z-10 bg-[#0E0E12]/80 border border-white/5 rounded-2xl p-12 md:p-20 shadow-2xl overflow-hidden backdrop-blur-md">
-          <div className="absolute inset-0 bg-gradient-to-b from-white/[0.01] to-transparent pointer-events-none" />
-          
-          <div className="flex justify-center mb-8 relative">
-             <div className="absolute inset-0 bg-[#7C3AED]/20 blur-[40px] rounded-full w-24 h-24 mx-auto"></div>
-             <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="Tror" className="w-20 h-20 rounded-full border-4 border-[#08080C] shadow-lg relative z-10" />
-          </div>
-          
-          <h2 className="text-3xl md:text-5xl font-bold font-display text-white mb-6 tracking-tight leading-[1.1]">
-            Get your 20 hours<br/>a week back.
-          </h2>
-          <p className="text-base text-slate-400 mb-10 max-w-lg mx-auto font-light leading-relaxed">
-            Join the next wave of founders who treat organic social not as a chore, but as a fully automated revenue engine.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 max-w-md mx-auto">
-            <Link 
-              to="/login"
-              className="w-full sm:w-auto px-8 py-4 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm tracking-wide uppercase transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#7C3AED]/20 text-center"
-            >
-              Start Free Trial
-            </Link>
+          {/* Right Column: Active Pilot & CTAs */}
+          <div className="lg:col-span-5 text-left space-y-8">
             
-            <a 
-              href={isDefaultWhatsAppUrl ? "#" : whatsappUrl} 
-              onClick={(e) => {
-                if (isDefaultWhatsAppUrl) {
-                  e.preventDefault();
-                  setShowSetupModal(true);
-                }
-              }}
-              {...(!isDefaultWhatsAppUrl && whatsappUrl.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
-              className="w-full sm:w-auto px-8 py-4 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-sm tracking-wide uppercase transition-all hover:scale-105 active:scale-95 text-center flex items-center justify-center gap-2"
-            >
-              💬 Chat on WhatsApp
-            </a>
+            {/* Active pilot node */}
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <img 
+                  src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" 
+                  alt="Tror" 
+                  className="w-10 h-10 rounded-full border border-white/15 object-cover" 
+                />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border border-[#08080C] rounded-full" />
+              </div>
+              <div>
+                <span className="text-xs text-white font-sans font-medium block">TROR Conductor</span>
+                <span className="text-[10px] text-slate-400 font-sans font-light">Orchestration Active</span>
+              </div>
+            </div>
+
+            <p className="text-base sm:text-lg text-slate-400 font-light leading-relaxed max-w-md">
+              Join the next wave of founders who treat organic social not as a manual chore, but as a fully autonomous customer acquisition engine.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+              <Link 
+                to="/login"
+                className="px-8 py-4 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#7C3AED]/20 text-center block"
+              >
+                Start Free Trial
+              </Link>
+              
+              <a 
+                href={isDefaultWhatsAppUrl ? "#" : whatsappUrl} 
+                onClick={(e) => {
+                  if (isDefaultWhatsAppUrl) {
+                    e.preventDefault();
+                    setShowSetupModal(true);
+                  }
+                }}
+                {...(!isDefaultWhatsAppUrl && whatsappUrl.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
+                className="px-8 py-4 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] text-center flex items-center justify-center gap-2"
+              >
+                💬 Chat on WhatsApp
+              </a>
+            </div>
+
+            <span className="block text-xs text-slate-500 font-sans font-light pt-2">
+              Instantly onboard your brand profile in under 60 seconds.
+            </span>
+
           </div>
-          <span className="block text-[11px] text-slate-500 mt-6 font-mono uppercase tracking-wider">Instantly onboard your brand profile in under 60 seconds.</span>
+
         </div>
       </section>
 

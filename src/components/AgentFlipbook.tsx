@@ -470,12 +470,11 @@ export function AgentFlipbook() {
       id="creative-roster"
     >
       {/* Section Header */}
-      <div className="artbook-header">
-        <span className="artbook-header-tag">CREATIVE ROSTER</span>
-        <h2 className="artbook-header-title">Meet Your AI Marketing Team.</h2>
-        <p className="artbook-header-subtitle">
-          10 specialized AI employees. Scroll or click arrows to flip through the roster.
-        </p>
+      <div className="w-full max-w-[1200px] px-6 lg:px-8 mx-auto mb-16 text-left relative z-10">
+        <p className="text-sm font-medium text-[#7C3AED] mb-4 font-sans">Creative roster</p>
+        <h2 className="text-4xl md:text-7xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
+          Meet your AI <span className="font-normal italic text-[#7C3AED]">Marketing Team.</span>
+        </h2>
       </div>
 
       {/* Book Stage */}

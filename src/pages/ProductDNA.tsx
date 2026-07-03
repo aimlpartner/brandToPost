@@ -529,6 +529,22 @@ export function ProductDNA() {
       delete (newDna as any).extractedMediaImages;
       setDna(newDna);
       await updateProduct(activeProduct.id, newDna);
+      
+      // Trigger Product DNA Research PDF Mail
+      if (user?.email) {
+        (async () => {
+          try {
+            const { generateDNAPDF } = await import("../lib/pdfGenerator");
+            const pdfDoc = await generateDNAPDF(newDna);
+            const pdfBase64 = pdfDoc.output("datauristring");
+            const { triggerBrandedEmail } = await import("../lib/emailTriggers");
+            await triggerBrandedEmail("product_dna", user.email!, { productName: newDna.name }, pdfBase64);
+          } catch (emailErr) {
+            logSilentError(emailErr as Error, { context: "sendProductDNAEmail" });
+          }
+        })();
+      }
+
       setExtractionComplete(true);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -592,6 +608,27 @@ export function ProductDNA() {
       const updatedDna = { ...dna, founderAgentSynthesized: { ...profile, synthesizedAt: new Date().toISOString() } };
       setDna(updatedDna);
       await updateProduct(activeProduct!.id, updatedDna);
+
+      // Trigger Founder Agent Synthesized PDF Mail
+      if (user?.email) {
+        (async () => {
+          try {
+            const { generateFounderAgentPDF } = await import("../lib/pdfGenerator");
+            const pdfDoc = await generateFounderAgentPDF(updatedDna);
+            const pdfBase64 = pdfDoc.output("datauristring");
+            const { triggerBrandedEmail } = await import("../lib/emailTriggers");
+            await triggerBrandedEmail(
+              "founder_agent",
+              user.email!,
+              { personaName: profile.personaName, productName: updatedDna.name },
+              pdfBase64
+            );
+          } catch (emailErr) {
+            logSilentError(emailErr as Error, { context: "sendFounderAgentEmail" });
+          }
+        })();
+      }
+
       setIsSynthesizing(false); setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       logSilentError(err as Error, { context: "handleSynthesizeFounderAgent" });
