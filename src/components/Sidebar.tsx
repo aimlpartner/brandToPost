@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Settings, FileText, Megaphone, CalendarClock, ChevronDown, Plus, LogOut, Image as ImageIcon, UserCircle, Clapperboard, Gauge, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Megaphone, CalendarClock, ChevronDown, Plus, LogOut, Image as ImageIcon, UserCircle, Clapperboard, Gauge, MessageSquare, Brain } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -140,6 +140,47 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     )}
     </NavLink>
     ))}
+    </div>
+
+    {/* Separator / Master Control Label */}
+    <div className="px-3 py-2 mt-4 border-t border-slate-100/60">
+      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block px-1">Master Controls</span>
+    </div>
+
+    {/* Master Founder Link - Styled uniquely and highlighted */}
+    <div className="mt-1">
+      <NavLink
+        to="/dashboard/master-founder"
+        onClick={onClose}
+        className={({ isActive }) =>
+          cn(
+            "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all duration-200 relative overflow-hidden group",
+            isActive
+              ? "bg-gradient-to-r from-violet-600 to-indigo-650 text-white shadow-md shadow-violet-100"
+              : "text-violet-700 bg-violet-50/50 hover:bg-violet-50 border border-violet-100 hover:border-violet-200 shadow-sm"
+          )
+        }
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <span className="absolute inset-0 bg-gradient-to-r from-violet-600 to-indigo-650 opacity-95 animate-pulse" />
+            )}
+            <Brain
+              className={cn("h-[18px] w-[18px] shrink-0 relative z-10 transition-colors duration-250", 
+                isActive ? "text-white" : "text-violet-600"
+              )}
+              strokeWidth={2.2}
+            />
+            <span className="relative z-10 font-bold flex-1 min-w-0 truncate whitespace-nowrap text-[12px] sm:text-[13px]">Master Founder Agent</span>
+            {!isActive && (
+              <span className="ml-auto bg-violet-600 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider scale-90 origin-right shrink-0">
+                Master
+              </span>
+            )}
+          </>
+        )}
+      </NavLink>
     </div>
    </nav>
 

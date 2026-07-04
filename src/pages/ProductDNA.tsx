@@ -47,14 +47,12 @@ const getFontUrl = (fontName: string) => {
     .join("+");
   return `https://fonts.googleapis.com/css?family=${formattedName}:300,400,500,600,700&display=swap`;
 };
-
-type TabKey = "identity" | "visual" | "psychographics" | "founder" | "strategy";
+type TabKey = "identity" | "visual" | "psychographics" | "strategy";
 
 const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: "identity", label: "Identity", icon: Layout },
   { key: "visual", label: "Visual DNA", icon: Palette },
   { key: "psychographics", label: "Psychographics", icon: Target },
-  { key: "founder", label: "Founder Agent", icon: Brain },
   { key: "strategy", label: "Strategy", icon: Megaphone },
 ];
 
@@ -1058,128 +1056,6 @@ export function ProductDNA() {
     </div>
   );
 
-  const renderFounderTab = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Founder Description */}
-      <BentoCard span={1}>
-        <SectionTitle icon={Brain} title="Founder Behavior & Personality" iconColor="text-violet-600" />
-        <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-          Describe your actions, communication style, and emotional vibes. Our AI will analyze your inputs to synthesize a virtual Doppelganger Agent.
-        </p>
-        <SmartField
-          label="Founder Voice Description"
-          value={dna.founderVoiceDescription || ""}
-          placeholder="e.g., I speak directly with no jargon. I prefer short, punchy paragraphs. I am highly skeptical of corporate synergies but passionate about craft..."
-          multiline
-          onChange={(v) => setField("founderVoiceDescription", v)}
-        />
-      </BentoCard>
-
-      {/* File Upload + Synthesize */}
-      <BentoCard span={1}>
-        <SectionTitle icon={Upload} title="Voice Training Document" iconColor="text-violet-500" />
-        <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-          Upload essays, blog drafts, or diary logs to train the agent on your natural voice.
-        </p>
-        <div className="space-y-4">
-          {dna.founderVoiceFileName ? (
-            <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-violet-500" />
-                <div>
-                  <p className="text-xs text-slate-700 font-semibold truncate max-w-[180px]">{dna.founderVoiceFileName}</p>
-                  <p className="text-[10px] text-slate-400">Voice training document loaded</p>
-                </div>
-              </div>
-              <button type="button" onClick={handleRemoveFounderFile} className="p-1 px-2.5 text-xs text-red-500 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-all font-semibold">Remove</button>
-            </div>
-          ) : (
-            <div className="border border-dashed border-slate-200 hover:border-violet-300 rounded-xl p-6 transition-colors bg-slate-50/50 flex flex-col items-center justify-center text-center relative">
-              <input type="file" accept=".pdf,.txt,.md" onChange={handleFounderFileUpload} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
-              <Upload className="h-6 w-6 text-slate-400 mb-2" />
-              <p className="text-xs text-slate-600 font-medium">Click or drag file to upload</p>
-              <p className="text-[10px] text-slate-400 mt-1">PDF, TXT, or MD (Max 5MB)</p>
-            </div>
-          )}
-          <button
-            type="button" onClick={handleSynthesizeFounderAgent}
-            disabled={isSynthesizing || (!dna.founderVoiceDescription && !dna.founderVoiceFileData)}
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isSynthesizing
-              ? <span className="flex items-center gap-2"><Loader2 className="animate-spin h-4 w-4" /> Synthesizing Agent...</span>
-              : <span className="flex items-center gap-2"><Cpu className="h-4 w-4" /> Synthesize Founder Agent Profile</span>}
-          </button>
-        </div>
-      </BentoCard>
-
-      {isSynthesizing && (
-        <BentoCard span={2} className="!bg-slate-900 !border-slate-800">
-          <div className="font-mono text-xs text-slate-300 space-y-2">
-            <div className="flex justify-between text-[10px] text-violet-400 uppercase font-semibold tracking-wider">
-              <span>Synthesis Engine Active</span><span>{synthesisProgress}%</span>
-            </div>
-            <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-violet-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${synthesisProgress}%` }} />
-            </div>
-            <div className="space-y-1 pt-1 select-none">
-              {synthesisLogs.map((log, idx) => (
-                <p key={idx} className={log.startsWith(">") ? "text-emerald-400 font-semibold" : "text-slate-400"}>{log}</p>
-              ))}
-            </div>
-          </div>
-        </BentoCard>
-      )}
-
-      {dna.founderAgentSynthesized && !isSynthesizing && (
-        <BentoCard span={2} className="!bg-violet-50/30 !border-violet-100">
-          <div className="flex items-center justify-between mb-5 pb-4 border-b border-violet-100/50">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-600 border border-violet-200/50 animate-pulse">
-                <Cpu className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-md font-bold text-slate-800">{dna.founderAgentSynthesized.personaName || "Active Doppelganger"}</h3>
-                <p className="text-[10px] text-violet-500 font-semibold uppercase tracking-wider">Virtual Agent Active</p>
-              </div>
-            </div>
-            {dna.founderAgentSynthesized.synthesizedAt && (
-              <span className="text-[10px] text-slate-400 font-mono">Profiled on {new Date(dna.founderAgentSynthesized.synthesizedAt).toLocaleDateString()}</span>
-            )}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { key: "behavioralTraits" as const, icon: Brain, color: "text-violet-500", label: "Personality & Traits", items: dna.founderAgentSynthesized.behavioralTraits || [], dotColor: "text-violet-400" },
-              { key: "coreValues" as const, icon: Target, color: "text-rose-500", label: "Core Beliefs & Values", items: dna.founderAgentSynthesized.coreValues || [], dotColor: "text-rose-400" },
-              { key: "communicationStyle" as const, icon: MessageSquare, color: "text-emerald-500", label: "Communication Style", items: dna.founderAgentSynthesized.communicationStyle || [], dotColor: "text-emerald-400" },
-              { key: "decisionHeuristics" as const, icon: Zap, color: "text-amber-500", label: "Decision Heuristics", items: dna.founderAgentSynthesized.decisionHeuristics || [], dotColor: "text-amber-400" },
-            ].map(({ key, icon: Icon, color, label, items, dotColor }) => (
-              <FounderAgentField
-                key={key}
-                label={label}
-                items={items}
-                icon={Icon}
-                color={color}
-                dotColor={dotColor}
-                onChange={(newItems) => {
-                  const updatedSynthesized = {
-                    ...dna.founderAgentSynthesized,
-                    [key]: newItems
-                  };
-                  setDna({
-                    ...dna,
-                    founderAgentSynthesized: updatedSynthesized
-                  });
-                  setSaved(false);
-                }}
-              />
-            ))}
-          </div>
-        </BentoCard>
-      )}
-    </div>
-  );
-
   const renderStrategyTab = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <BentoCard span={1}>
@@ -1316,7 +1192,6 @@ export function ProductDNA() {
               {activeTab === "identity" && renderIdentityTab()}
               {activeTab === "visual" && renderVisualTab()}
               {activeTab === "psychographics" && renderPsychographicsTab()}
-              {activeTab === "founder" && renderFounderTab()}
               {activeTab === "strategy" && renderStrategyTab()}
             </div>
           </div>

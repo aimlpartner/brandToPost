@@ -9,6 +9,21 @@ interface AuthProfile {
   role: string;
   onboarded: boolean;
   createdAt?: string;
+  founderVoiceDescription?: string;
+  founderVoiceFileName?: string;
+  founderVoiceFileMimeType?: string;
+  founderVoiceFileData?: string;
+  founderAgentSynthesized?: {
+    personaName: string;
+    behavioralTraits: string[];
+    communicationStyle: string[];
+    coreValues: string[];
+    decisionHeuristics: string[];
+    synthesizedAt: string;
+  };
+  nonBrandedColors?: string[];
+  nonBrandedPrimaryFont?: string;
+  nonBrandedSecondaryFont?: string;
 }
 
 interface AuthContextType {

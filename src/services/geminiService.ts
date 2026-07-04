@@ -1680,32 +1680,88 @@ const founderAgentSchema = {
       type: Type.ARRAY,
       items: { type: Type.STRING },
       description: "List of 4-6 actionable rules of thumb the founder uses to make decisions or handle operations."
+    },
+    targetIndustry: {
+      type: Type.STRING,
+      description: "The primary industry, sector, or business domain the founder operates in."
+    },
+    targetAudience: {
+      type: Type.STRING,
+      description: "The primary target audience, ideal customer profile, or reader persona the founder addresses."
+    },
+    vision: {
+      type: Type.STRING,
+      description: "The founder's long-term vision or inspiration."
+    },
+    mission: {
+      type: Type.STRING,
+      description: "The core mission or purpose of the founder's professional focus."
+    },
+    goal: {
+      type: Type.STRING,
+      description: "The immediate or long-term business/personal goal."
+    },
+    contentPillars: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "3-5 strategic content topics, themes, or core categories the founder writes and speaks about."
     }
   },
-  required: ["personaName", "behavioralTraits", "communicationStyle", "coreValues", "decisionHeuristics"]
+  required: [
+    "personaName", "behavioralTraits", "communicationStyle", "coreValues", "decisionHeuristics",
+    "targetIndustry", "targetAudience", "vision", "mission", "goal", "contentPillars"
+  ]
 };
 
 export async function synthesizeFounderAgent(
   description: string,
   document: { data: string, mimeType: string } | null,
-  userId?: string
+  userId?: string,
+  productsContext?: string,
+  optionalInputs?: {
+    targetIndustry?: string;
+    targetAudience?: string;
+    vision?: string;
+    mission?: string;
+    goal?: string;
+    contentPillars?: string;
+  }
 ): Promise<any> {
   const contents: any[] = [];
   
   let prompt = `You are a world-class cognitive profiler and executive strategist.
 Analyze the following input about a founder's personal behavior, actions, activities, feelings, and real-life approach.
-Your goal is to synthesize this input to construct a "Founder Agent" (a digital doppelganger) that can act, write, and think like this founder in the future.
+Your goal is to synthesize this input to construct a "Founder Agent" (a digital doppelganger) that can act, write, think, and target the correct market space like this founder.
+
+Core Inputs for Doppelganger Style/Voice:
 `;
 
   if (description) {
-    prompt += `\nDescription of the Founder's voice/behavior:\n"${description}"\n`;
+    prompt += `- Description of the Founder's voice/behavior: "${description}"\n`;
   }
-  
   if (document) {
-    prompt += `\nI have also provided an attached document with background info about the founder's behavior or writings. Please analyze it.\n`;
+    prompt += `- Attached document with background writings, diaries, or essays from the founder.\n`;
   }
-  
-  prompt += `\nExtract the personality traits, core values, communication style, and key decision heuristics to build a structured profile.`;
+
+  prompt += `
+Optional Strategic Inputs Provided by the Founder:
+- Custom target industry: ${optionalInputs?.targetIndustry || "Not provided"}
+- Custom target audience: ${optionalInputs?.targetAudience || "Not provided"}
+- Custom vision: ${optionalInputs?.vision || "Not provided"}
+- Custom mission: ${optionalInputs?.mission || "Not provided"}
+- Custom goal: ${optionalInputs?.goal || "Not provided"}
+- Custom content pillars: ${optionalInputs?.contentPillars || "Not provided"}
+
+Connected Brands/Products (use as context/reference if any of the above strategic inputs are "Not provided"):
+${productsContext || "No connected products"}
+
+Rules for Strategy Context Generation:
+1. If the founder provided a custom target industry, audience, vision, mission, goal, or content pillars, USE them exactly as defined or clean them up professionally.
+2. If any of those strategic inputs are "Not provided", analyze the connected products' details. The founder will naturally operate in the same general industry, target the same general audience, and write about similar pillars. Extract, compile, and unify these fields across the active products to form a master strategic context for the founder agent.
+3. If neither custom inputs nor connected products exist, deduce professional, baseline startup/entrepreneurial fields based on their voice description.
+`;
+
+  prompt += `\nExtract the personality traits, core values, communication style, key decision heuristics, and strategic context to build a structured profile.`;
   
   contents.push({ text: prompt });
   
@@ -1737,5 +1793,207 @@ Your goal is to synthesize this input to construct a "Founder Agent" (a digital 
   }
   
   return JSON.parse(text);
+}
+
+export async function generateGeneralFounderPost(params: {
+  topic: string;
+  referencePosts?: string;
+  attachmentStyle: "text-only" | "image-only" | "image-overlay";
+  customImagePrompt?: string;
+  founderAgent: any;
+  userId?: string;
+}): Promise<{
+  postCopy: string;
+  imagePrompt?: string;
+  headline?: string;
+  subtext?: string;
+  imageUrl?: string;
+}> {
+  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, userId } = params;
+
+  let prompt = `You are a virtual Founder Agent named "${founderAgent.personaName}".
+Your profile:
+- Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
+- Core Values: ${founderAgent.coreValues?.join(", ") || ""}
+- Communication Style: ${founderAgent.communicationStyle?.join(", ") || ""}
+- Decision Heuristics: ${founderAgent.decisionHeuristics?.join(", ") || ""}
+
+Strategic Context:
+- Target Industry: ${founderAgent.targetIndustry || "General Entrepreneurship"}
+- Target Audience: ${founderAgent.targetAudience || "General Public/Professionals"}
+- Vision: ${founderAgent.vision || ""}
+- Mission: ${founderAgent.mission || ""}
+- Goal: ${founderAgent.goal || ""}
+- Key Content Pillars: ${founderAgent.contentPillars?.join(", ") || ""}
+
+Draft an organic, highly engaging, and completely non-branded social media post for LinkedIn or X.
+Topic: "${topic}"
+`;
+
+  if (referencePosts?.trim()) {
+    prompt += `\nReference posts for style, structure, or tone inspiration:\n"${referencePosts}"\n`;
+  }
+
+  prompt += `
+CRITICAL rules:
+1. Do NOT reference any specific products, company names, brands, or websites. This is a personal branding post for the founder's own profile.
+2. Focus purely on general insights, lessons learned, personal stories, or earned secrets.
+3. Sound exactly like the founder's profile (behavioral traits, style, values).
+`;
+
+  if (attachmentStyle === "image-overlay") {
+    prompt += `
+Since this post will have a custom graphic with text overlaid, you must also generate:
+- A short, punchy headline (1-5 words) to overlay on the image (e.g. "Kill the Status Quo", "ARR is a Lie").
+- A brief subtext (1-2 lines) to support the headline on the image.
+- A descriptive image prompt for an AI photo generator to create a beautiful, modern background graphic. It should specify high-quality editorial photography, cinematic lighting, and vast empty negative space (left, right, or top) for overlaying text. Do NOT instruct the generator to include any letters or words.
+`;
+  } else if (attachmentStyle === "image-only") {
+    prompt += `
+Since this post will have an image attachment (with no text overlaid), you must also generate:
+- A detailed descriptive image prompt for an AI photo generator to create a stunning, evocative background graphic. It should specify high-quality editorial photography, cinematic lighting, representing the theme of the post. Do NOT instruct the generator to include any text or words.
+`;
+  }
+
+  prompt += `
+Return a JSON object with the following fields:
+- postCopy: string (The actual post text copy with paragraphs, bullets, etc.)
+- imagePrompt: string (Optional. The descriptive image prompt for Imagen AI. Required if an image is requested.)
+- headline: string (Optional. The punchy headline for the text overlay. Required only if overlay style is requested.)
+- subtext: string (Optional. The subtext for the text overlay. Required only if overlay style is requested.)
+`;
+
+  const response = await generateContentProxy(
+    "gemini-3.1-pro-preview",
+    [{ text: prompt }],
+    {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          postCopy: { type: Type.STRING },
+          imagePrompt: { type: Type.STRING },
+          headline: { type: Type.STRING },
+          subtext: { type: Type.STRING }
+        },
+        required: ["postCopy"]
+      }
+    }
+  );
+
+  if (response.usageMetadata && userId) {
+    await logTokenUsage(userId, "generateGeneralFounderPost", "gemini-3.1-pro-preview", response.usageMetadata);
+  }
+
+  const result = JSON.parse(response.text || "{}");
+  
+  // If image requested, trigger Imagen generation
+  let imageUrl = "";
+  const finalImagePrompt = customImagePrompt || result.imagePrompt;
+  if ((attachmentStyle === "image-only" || attachmentStyle === "image-overlay") && finalImagePrompt) {
+    try {
+      const imgRes = await generateContentProxy(
+        'gemini-3.1-flash-image-preview',
+        finalImagePrompt,
+        {
+          imageConfig: {
+            imageSize: "1K",
+            aspectRatio: "1:1"
+          }
+        }
+      );
+      
+      if (userId) {
+        await logTokenUsage(userId, "generateGeneralFounderPost_image", "gemini-3.1-flash-image-preview", {
+          promptTokenCount: 0,
+          candidatesTokenCount: 0,
+          totalTokenCount: 1
+        });
+      }
+
+      if (imgRes?.candidates?.[0]?.content?.parts) {
+        for (const pt of imgRes.candidates[0].content.parts) {
+          if (pt.inlineData) {
+            imageUrl = `data:${pt.inlineData.mimeType || 'image/png'};base64,${pt.inlineData.data}`;
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to generate general post image background:", err);
+    }
+  }
+
+  return {
+    postCopy: result.postCopy,
+    imagePrompt: result.imagePrompt,
+    headline: result.headline,
+    subtext: result.subtext,
+    imageUrl: imageUrl || undefined
+  };
+}
+
+export async function generateFounderTopicSuggestions(
+  founderAgent: any,
+  userId?: string
+): Promise<{ title: string; description: string; prompt: string }[]> {
+  const prompt = `You are a world-class executive strategist and personal branding coach.
+Analyze the following virtual Founder Doppelganger agent profile:
+- Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
+- Core Values: ${founderAgent.coreValues?.join(", ") || ""}
+- Communication Style: ${founderAgent.communicationStyle?.join(", ") || ""}
+- Decision Heuristics: ${founderAgent.decisionHeuristics?.join(", ") || ""}
+
+Strategic Context:
+- Target Industry: ${founderAgent.targetIndustry || "General Entrepreneurship"}
+- Target Audience: ${founderAgent.targetAudience || "General Public/Professionals"}
+- Vision: ${founderAgent.vision || ""}
+- Mission: ${founderAgent.mission || ""}
+- Goal: ${founderAgent.goal || ""}
+- Key Content Pillars: ${founderAgent.contentPillars?.join(", ") || ""}
+
+Generate 5 highly engaging, customized, and distinct social media post ideas/topics tailored for this founder to write on their personal LinkedIn/X profile.
+
+CRITICAL rules:
+1. Do NOT mention or refer to any specific products, brands, or company names. Keep the topics focused on general insights, industry observations, opinions, personal experiences, or core beliefs.
+2. Ensure the suggestions alternate between the founder's key content pillars.
+3. The topics should feel authentic, organic, and avoid generic clickbait.
+
+Return a JSON array of objects. Each object must have:
+- title: A short title representing the theme (e.g. "Lean Engineering Teams", "The Pre-Seed Trap").
+- description: A brief explanation of the unique angle or story from the founder's perspective.
+- prompt: A clear, actionable concept prompt that can be used directly as input to generate the final post.
+`;
+
+  const response = await generateContentProxy(
+    "gemini-2.5-flash",
+    [{ text: prompt }],
+    {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            prompt: { type: Type.STRING }
+          },
+          required: ["title", "description", "prompt"]
+        }
+      }
+    }
+  );
+
+  if (response.usageMetadata && userId) {
+    await logTokenUsage(userId, "generateFounderTopicSuggestions", "gemini-2.5-flash", response.usageMetadata);
+  }
+
+  try {
+    return JSON.parse(response.text || "[]");
+  } catch (err) {
+    console.error("Failed to parse topic suggestions response:", err);
+    return [];
+  }
 }
 

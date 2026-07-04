@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Clock, Play, Pause, Trash2, CalendarClock, CheckCircle2, Brain, Cpu, Zap, Sparkles, Loader2 } from "lucide-react";
 import { cn, formatCopy, localToUtc, utcToLocal } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
+import { useAuth } from "../contexts/AuthContext";
 import { logSilentError } from "../lib/firestore-error";
 import { auth } from "../firebase";
 import { CustomTimePicker } from "../components/CustomTimePicker";
@@ -18,6 +19,7 @@ interface QueueItem {
 
 export function Schedule() {
  const { activeProduct } = useProducts();
+ const { userProfile } = useAuth();
  const [config, setConfig] = useState({ enabled: false, timeUtc: "14:00" });
  const [queue, setQueue] = useState<QueueItem[]>([]);
  const [localTime, setLocalTime] = useState("09:00");
@@ -307,17 +309,17 @@ export function Schedule() {
     </p>
 
     <div className="space-y-4">
-      {!activeProduct.founderAgentSynthesized && (
+      {!userProfile?.founderAgentSynthesized && (
         <div className="bg-amber-50/90 border border-amber-200/80 rounded-xl p-4 text-xs text-amber-850 flex flex-col gap-2 shadow-sm mb-2 text-left">
           <div className="font-bold flex items-center gap-1.5 text-amber-900">
             <Sparkles className="h-4 w-4 text-amber-600 animate-pulse" />
             <span>Founder Agent Doppelganger Required</span>
           </div>
           <p className="leading-relaxed text-amber-750 font-light">
-            You haven't created your Founder Agent yet. Please first feed and synthesize your Founder Agent Doppelganger on the Product DNA page to activate automated campaigns.
+            You haven't created your Founder Agent yet. Please first feed and synthesize your Founder Agent Doppelganger on the Master Founder Agent page to activate automated campaigns.
           </p>
           <a
-            href="/dashboard/dna"
+            href="/dashboard/master-founder"
             className="mt-1 inline-flex items-center justify-center px-3.5 py-2 text-[10px] uppercase tracking-wider font-bold text-white bg-amber-600 hover:bg-amber-700 active:scale-[0.98] transition-all rounded-lg w-fit shadow"
           >
             Create Founder Agent
@@ -326,14 +328,14 @@ export function Schedule() {
       )}
 
       {/* Daily Content Automation */}
-      <div className={cn("flex flex-col gap-3 pb-3 border-b border-slate-100", !activeProduct.founderAgentSynthesized && "opacity-60 pointer-events-none")}>
+      <div className={cn("flex flex-col gap-3 pb-3 border-b border-slate-100", !userProfile?.founderAgentSynthesized && "opacity-60 pointer-events-none")}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-slate-800">Automate Daily Content</p>
             <p className="text-[10px] text-slate-400 font-light mt-0.5">Automatically research and generate content daily</p>
           </div>
           <button
-            disabled={!activeProduct.founderAgentSynthesized}
+            disabled={!userProfile?.founderAgentSynthesized}
             onClick={() => {
               const isEnabled = autoConfig.automateDailyPosts || autoConfig.automateDailyBlogs;
               if (isEnabled) {
@@ -390,7 +392,7 @@ export function Schedule() {
                 return (
                   <button
                     key={opt.id}
-                    disabled={!activeProduct.founderAgentSynthesized}
+                    disabled={!userProfile?.founderAgentSynthesized}
                     onClick={() => handleSaveAutoConfig({ automateDailyPosts: opt.posts, automateDailyBlogs: opt.blogs })}
                     className={cn(
                       "flex flex-col items-start text-left p-3 rounded-xl border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed",
@@ -410,13 +412,13 @@ export function Schedule() {
       </div>
 
       {/* Weekly Campaigns toggle */}
-      <div className={cn("flex items-center justify-between pb-3", !activeProduct.founderAgentSynthesized && "opacity-60 pointer-events-none")}>
+      <div className={cn("flex items-center justify-between pb-3", !userProfile?.founderAgentSynthesized && "opacity-60 pointer-events-none")}>
         <div>
           <p className="text-sm font-semibold text-slate-800">Automate Weekly Campaigns</p>
           <p className="text-[10px] text-slate-400 font-light mt-0.5">Generate weekly campaign drafts in background</p>
         </div>
         <button
-          disabled={!activeProduct.founderAgentSynthesized}
+          disabled={!userProfile?.founderAgentSynthesized}
           onClick={() => handleSaveAutoConfig({ automateWeeklyCampaigns: !autoConfig.automateWeeklyCampaigns })}
           className={cn(
             "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed",
@@ -434,11 +436,11 @@ export function Schedule() {
 
       {/* Time & Day Selection for Automation Creation */}
       {autoConfig.enabled && (
-        <div className={cn("pt-4 border-t border-slate-100 space-y-4 animate-in fade-in duration-200", !activeProduct.founderAgentSynthesized && "opacity-60 pointer-events-none")}>
+        <div className={cn("pt-4 border-t border-slate-100 space-y-4 animate-in fade-in duration-200", !userProfile?.founderAgentSynthesized && "opacity-60 pointer-events-none")}>
           <div>
-            <label className="block text-xs font-semibold text-slate-750 mb-1.5">Automation Generation Time (Local)</label>
+            <label className="block text-xs font-semibold text-slate-755 mb-1.5">Automation Generation Time (Local)</label>
             <CustomTimePicker
-              disabled={!activeProduct.founderAgentSynthesized}
+              disabled={!userProfile?.founderAgentSynthesized}
               value={autoLocalTime}
               onChange={handleSaveAutoTime}
             />
@@ -448,7 +450,7 @@ export function Schedule() {
             <div>
               <label className="block text-xs font-semibold text-slate-755 mb-1.5">Weekly Automation Day</label>
               <select
-                disabled={!activeProduct.founderAgentSynthesized}
+                disabled={!userProfile?.founderAgentSynthesized}
                 value={autoConfig.automationWeeklyDay}
                 onChange={(e) => handleSaveAutoConfig({ automationWeeklyDay: e.target.value })}
                 className="glass-input block w-full py-2 px-3 text-xs border border-slate-200 rounded-lg text-slate-800 bg-white shadow-inner focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
@@ -467,7 +469,7 @@ export function Schedule() {
         <button
           type="button"
           onClick={handleTriggerAutomation}
-          disabled={isTriggering || !activeProduct.founderAgentSynthesized}
+          disabled={isTriggering || !userProfile?.founderAgentSynthesized}
           className="w-full glass-button-primary rounded-xl py-2.5 text-xs font-semibold flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-750 text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isTriggering ? (

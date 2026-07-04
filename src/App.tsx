@@ -21,6 +21,7 @@ import { WhatsAppSystem } from "./pages/WhatsAppSystem";
 import { WhatsAppLogin } from "./pages/WhatsAppLogin";
 import { WhatsAppDashboard } from "./pages/WhatsAppDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import { MasterFounder } from "./pages/MasterFounder";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ProductProvider } from "./contexts/ProductContext";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -77,6 +78,7 @@ export default function App() {
                 <Route path="campaigns" element={<Campaigns />} />
                 <Route path="scripts" element={<Scripts />} />
                 <Route path="schedule" element={<Schedule />} />
+                <Route path="master-founder" element={<MasterFounder />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="profile" element={<div className="p-8 text-white">Profile Page Coming Soon</div>} />
                 <Route path="admin" element={<AdminDashboard />} />

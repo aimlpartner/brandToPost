@@ -237,9 +237,12 @@ async function executeAutoCampaignGeneration(productId: string) {
   if (!productDoc.exists) throw new Error("Product not found");
   const product = productDoc.data()!;
 
-  const founderAgent = product.founderAgentSynthesized;
+  const userDoc = await db.collection('users').doc(product.userId || 'anonymous').get();
+  if (!userDoc.exists) throw new Error("User profile not found. Please set up the Master Founder Agent.");
+  const userData = userDoc.data()!;
+  const founderAgent = userData.founderAgentSynthesized;
   if (!founderAgent) {
-    throw new Error("Founder Agent doppelganger has not been synthesized yet.");
+    throw new Error("Founder Agent doppelganger has not been synthesized globally yet.");
   }
   let apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -493,9 +496,12 @@ async function executeAutoDailyPostGeneration(productId: string) {
   if (!productDoc.exists) throw new Error("Product not found");
   const product = productDoc.data()!;
 
-  const founderAgent = product.founderAgentSynthesized;
+  const userDoc = await db.collection('users').doc(product.userId || 'anonymous').get();
+  if (!userDoc.exists) throw new Error("User profile not found. Please set up the Master Founder Agent.");
+  const userData = userDoc.data()!;
+  const founderAgent = userData.founderAgentSynthesized;
   if (!founderAgent) {
-    throw new Error("Founder Agent doppelganger has not been synthesized yet.");
+    throw new Error("Founder Agent doppelganger has not been synthesized globally yet.");
   }
   let apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -738,9 +744,12 @@ async function executeAutoDailyBlogGeneration(productId: string) {
   if (!productDoc.exists) throw new Error("Product not found");
   const product = productDoc.data()!;
 
-  const founderAgent = product.founderAgentSynthesized;
+  const userDoc = await db.collection('users').doc(product.userId || 'anonymous').get();
+  if (!userDoc.exists) throw new Error("User profile not found. Please set up the Master Founder Agent.");
+  const userData = userDoc.data()!;
+  const founderAgent = userData.founderAgentSynthesized;
   if (!founderAgent) {
-    throw new Error("Founder Agent doppelganger has not been synthesized yet.");
+    throw new Error("Founder Agent doppelganger has not been synthesized globally yet.");
   }
   let apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -1361,10 +1370,16 @@ setInterval(async () => {
     const productsSnap = await db.collection('products').where('automationAgentEnabled', '==', true).get();
     for (const productDoc of productsSnap.docs) {
       const product = productDoc.data();
-      if (!product.founderAgentSynthesized) continue;
-
       if (processingProductIds.has(product.id)) {
         console.log(`[Automation Agent] Skipping product ${product.id} because a generation is already in progress.`);
+        continue;
+      }
+
+      if (!product.userId) continue;
+      const userDoc = await db.collection('users').doc(product.userId).get();
+      if (!userDoc.exists) continue;
+      const userData = userDoc.data()!;
+      if (!userData.founderAgentSynthesized) {
         continue;
       }
 
@@ -1676,7 +1691,7 @@ async function sendBrandedEmail(options: SendEmailOptions) {
   const textContent = bodyHtml.replace(/<[^>]*>/g, '');
 
   const mailOptions: any = {
-    from: '"B2P Support" <noreply@b2p.com>',
+    from: `"B2P Support" <${process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@b2p.com'}>`,
     to,
     subject,
     text: textContent,
