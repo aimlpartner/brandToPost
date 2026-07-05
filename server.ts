@@ -1023,6 +1023,215 @@ async function executeAutoDailyGeneration(productId: string, automatePosts: bool
   }
 }
 
+async function executeAutoFounderPostGeneration(userId: string) {
+  if (!db) throw new Error("Database connection is not active.");
+
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) throw new Error("User not found");
+  const user = userDoc.data()!;
+  const founderAgent = user.founderAgentSynthesized;
+  if (!founderAgent) {
+    throw new Error("Founder Agent has not been synthesized yet.");
+  }
+
+  // Load API Key
+  let apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    const productsSnap = await db.collection('products').where('userId', '==', userId).limit(1).get();
+    if (!productsSnap.empty) {
+      apiKey = await getToken(productsSnap.docs[0].id, 'gemini_api_key');
+    }
+  }
+  if (!apiKey) {
+    throw new Error("Missing GEMINI_API_KEY for user founder post automation.");
+  }
+  const ai = new GoogleGenAI({ apiKey });
+
+  const attachmentStyle = user.founderPostAttachmentStyle || "text-only";
+  const postType = user.founderPostType || "general"; // 'general' | 'branded' | 'both'
+  console.log(`[executeAutoFounderPostGeneration] Run for user ${userId}. Type: ${postType}, Style: ${attachmentStyle}...`);
+
+  // Helper to generate and save a single post
+  const generateAndSavePost = async (productData?: any) => {
+    let prompt = "";
+    if (productData) {
+      // Branded post prompt
+      prompt = `You are a virtual Founder Agent named "${founderAgent.personaName}".
+Your profile:
+- Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
+- Core Values: ${founderAgent.coreValues?.join(", ") || ""}
+- Communication Style: ${founderAgent.communicationStyle?.join(", ") || ""}
+- Decision Heuristics: ${founderAgent.decisionHeuristics?.join(", ") || ""}
+
+Product Focus & Brand DNA:
+- Product Name: ${productData.name}
+- Positioning / Value Prop: ${productData.positioning || ""}
+- Target Audience: ${productData.audience || ""}
+- Company Stage: ${productData.stage || ""}
+- Content Pillars: ${productData.contentPillars?.join(", ") || ""}
+
+Additional Product DNA elements:
+${productData.enemy ? `- Enemy / Status Quo: ${productData.enemy}` : ""}
+${productData.earnedSecret ? `- Earned Secret: ${productData.earnedSecret}` : ""}
+${productData.originStory ? `- Origin Story: ${productData.originStory}` : ""}
+${productData.uniqueMechanism ? `- Unique Mechanism: ${productData.uniqueMechanism}` : ""}
+
+Strategic Personal Branding Context:
+- Target Industry: ${founderAgent.targetIndustry || ""}
+- Vision: ${founderAgent.vision || ""}
+- Mission: ${founderAgent.mission || ""}
+- Goal: ${founderAgent.goal || ""}
+
+Write an organic, highly engaging, and thought-provoking personal social media post for your profile.
+CRITICAL RULES:
+1. Speak as the creator/founder of "${productData.name}". You are sharing an insight, story, status quo challenge, or lesson directly related to the problem "${productData.name}" solves or the journey of building it.
+2. Blend the product's positioning, audience, and narrative elements smoothly into a high-value personal post. Avoid simple sales pitches—the post must offer real value to the reader.
+3. Sound exactly like the founder's profile (behavioral traits, style, values).
+
+Return a JSON object containing:
+- postCopy: The full post copy (formatted with clean spacing and paragraph breaks).
+- imagePrompt: A detailed, high-quality descriptive prompt for a photographic backdrop matching the post's theme.
+- headline: A short, punchy overlay title (3-6 words, e.g. "Hiring is a Trap").
+- subtext: A brief subtitle (4-8 words).
+`;
+    } else {
+      // General post prompt
+      prompt = `You are a virtual Founder Agent named "${founderAgent.personaName}".
+Your profile:
+- Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
+- Core Values: ${founderAgent.coreValues?.join(", ") || ""}
+- Communication Style: ${founderAgent.communicationStyle?.join(", ") || ""}
+- Decision Heuristics: ${founderAgent.decisionHeuristics?.join(", ") || ""}
+- Content Pillars: ${founderAgent.contentPillars?.join(", ") || ""}
+
+Strategic Context:
+- Target Industry: ${founderAgent.targetIndustry || "Tech"}
+- Target Audience: ${founderAgent.targetAudience || "Entrepreneurs & Tech Builders"}
+- Vision: ${founderAgent.vision || ""}
+- Mission: ${founderAgent.mission || ""}
+- Goal: ${founderAgent.goal || ""}
+
+Write an organic, highly engaging, and thought-provoking personal social media post for your profile.
+CRITICAL RULES:
+1. Do NOT talk about, mention, or name any specific products, brands, or commercial projects. This post must be strictly non-branded, educational, narrative-driven, or a personal lesson.
+2. Adopt a natural, expert human voice matching your profile. Avoid marketing fluff or generic corporate listicles.
+
+Return a JSON object containing:
+- postCopy: The full post copy (formatted with clean spacing and paragraph breaks).
+- imagePrompt: A detailed, high-quality descriptive prompt for a photographic backdrop matching the post's theme.
+- headline: A short, punchy overlay title (3-6 words, e.g. "Hiring is a Trap").
+- subtext: A brief subtitle (4-8 words).
+`;
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-pro-preview",
+      contents: [{ text: prompt }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            postCopy: { type: Type.STRING },
+            imagePrompt: { type: Type.STRING },
+            headline: { type: Type.STRING },
+            subtext: { type: Type.STRING }
+          },
+          required: ["postCopy", "imagePrompt", "headline", "subtext"]
+        }
+      }
+    });
+
+    await logBackendTokenUsage(userId, productData ? `auto_founder_branded_${productData.id}` : "auto_founder_general", "gemini-3.1-pro-preview", response.usageMetadata);
+
+    const postData = JSON.parse(response.text || "{}");
+    if (!postData.postCopy) return;
+
+    let imageUrl = null;
+    if (attachmentStyle !== "text-only" && postData.imagePrompt) {
+      try {
+        console.log(`[executeAutoFounderPostGeneration] Generating Imagen backdrop for: "${postData.imagePrompt}"...`);
+        const imgRes = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-image-preview',
+          contents: { parts: [{ text: postData.imagePrompt }] },
+          config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
+        });
+
+        await logBackendTokenUsage(userId, productData ? `auto_founder_branded_img_${productData.id}` : "auto_founder_general_img", "gemini-3.1-flash-image-preview", {
+          promptTokenCount: 0,
+          candidatesTokenCount: 0,
+          totalTokenCount: 1
+        });
+
+        if (imgRes?.candidates?.[0]?.content?.parts) {
+          for (const pt of imgRes.candidates[0].content.parts) {
+            if (pt.inlineData) {
+              const base64Data = pt.inlineData.data;
+              const mimeType = pt.inlineData.mimeType || 'image/png';
+              const imageId = 'img_founder_' + Math.random().toString(36).substring(2, 10);
+              
+              await saveImageLocalAndDb(imageId, base64Data, mimeType, postData.imagePrompt);
+              imageUrl = `/api/whatsapp/images/${imageId}.png`;
+              break;
+            }
+          }
+        }
+      } catch (eImg) {
+        console.warn('[executeAutoFounderPostGeneration Image Gen Failed]', eImg);
+      }
+    }
+
+    const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
+    const newPost = {
+      id: newPostId,
+      userId: userId,
+      postCopy: postData.postCopy,
+      imageUrl: imageUrl || null,
+      headline: postData.headline || null,
+      subtext: postData.subtext || null,
+      imagePrompt: postData.imagePrompt || null,
+      createdAt: new Date().toISOString(),
+      status: "scheduled",
+      topic: productData ? `Focus: ${productData.name}` : (postData.headline || "Daily Automated Insight"),
+      isBranded: !!productData,
+      productId: productData ? productData.id : null
+    };
+
+    await db.collection('users').doc(userId).collection('founder_posts').doc(newPostId).set(newPost);
+    console.log(`[executeAutoFounderPostGeneration] Saved post ${newPostId} (branded: ${!!productData}).`);
+  };
+
+  // Run general post generation if applicable
+  if (postType === "general" || postType === "both") {
+    try {
+      await generateAndSavePost();
+    } catch (errGen) {
+      console.error("[executeAutoFounderPostGeneration] General post failed:", errGen);
+    }
+  }
+
+  // Run branded post generation if applicable
+  if (postType === "branded" || postType === "both") {
+    let targetProductIds = user.founderPostSelectedProducts || [];
+    if (targetProductIds.length === 0) {
+      // Fallback: load all user's products
+      const pSnap = await db.collection('products').where('userId', '==', userId).get();
+      targetProductIds = pSnap.docs.map(doc => doc.id);
+    }
+
+    for (const pId of targetProductIds) {
+      try {
+        const pDoc = await db.collection('products').doc(pId).get();
+        if (pDoc.exists) {
+          await generateAndSavePost(pDoc.data());
+        }
+      } catch (errBr) {
+        console.error(`[executeAutoFounderPostGeneration] Branded post failed for product ${pId}:`, errBr);
+      }
+    }
+  }
+}
+
 // --- Storage Helpers ---
 async function getScheduleConfig(productId: string) {
   if (db) {
@@ -1507,6 +1716,52 @@ setInterval(async () => {
       processingProductIds.delete(product.id);
     }
     }
+
+    // 2. Process Automated Founder Profile posts
+    try {
+      const usersSnap = await db.collection('users').where('automateFounderPosts', '==', true).get();
+      for (const userDoc of usersSnap.docs) {
+        const user = userDoc.data();
+        const userId = userDoc.id;
+
+        if (!user.founderAgentSynthesized) {
+          continue;
+        }
+
+        // Check if it's trigger time
+        const triggerTime = user.founderPostTimeUtc || "14:00";
+        const [trigH, trigM] = triggerTime.split(':');
+        const trigMinutes = parseInt(trigH, 10) * 60 + parseInt(trigM, 10);
+        const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+        const shouldRunToday = nowMinutes === trigMinutes || nowMinutes === (trigMinutes + 1) % 1440;
+
+        if (!shouldRunToday) {
+          continue;
+        }
+
+        // Check if already run today to prevent double-runs
+        if (user.lastFounderPostRunDate === currentDateUtc) {
+          continue;
+        }
+
+        console.log(`[Automation Agent] Triggering automated founder post generation for user ${userId}...`);
+        try {
+          await executeAutoFounderPostGeneration(userId);
+          await db.collection('users').doc(userId).update({
+            lastFounderPostRunDate: currentDateUtc
+          });
+        } catch (err: any) {
+          console.error(`[Automation Agent] Founder post generation failed for user ${userId}:`, err);
+          // Set date anyway to avoid hammer
+          await db.collection('users').doc(userId).update({
+            lastFounderPostRunDate: currentDateUtc
+          });
+        }
+      }
+    } catch (errUser) {
+      console.error('[Automation Agent User check failed]:', errUser);
+    }
+
   } catch (err) {
     console.error('[Automation Agent Error] Check failed:', err);
   }

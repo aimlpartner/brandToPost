@@ -81,6 +81,12 @@ export interface ProductDNA {
     coreValues: string[];
     decisionHeuristics: string[];
     synthesizedAt: string;
+    targetIndustry?: string;
+    targetAudience?: string;
+    vision?: string;
+    mission?: string;
+    goal?: string;
+    contentPillars?: string[];
   };
 
   // Founder Agent Automation

@@ -20,7 +20,26 @@ enableIndexedDbPersistence(db).catch((err) => {
 });
 
 export const auth = getAuth(app);
+
+// Map hostnames to Firebase Tenant IDs
+// Configure your Tenant IDs here from the Firebase Console (Authentication > Tenants)
+const TENANT_MAP: Record<string, string> = {
+  'brandtopost.com': 'brandtopost-3isdh',
+  'localhost': 'brandtopost-3isdh',
+  // Add other domains and tenant mappings as needed
+};
+
+if (typeof window !== 'undefined') {
+  const currentHost = window.location.hostname;
+  if (TENANT_MAP[currentHost]) {
+    auth.tenantId = TENANT_MAP[currentHost];
+  }
+}
+
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 export const facebookProvider = new FacebookAuthProvider();
 export const appleProvider = new OAuthProvider('apple.com');
 

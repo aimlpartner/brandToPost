@@ -1997,3 +1997,151 @@ Return a JSON array of objects. Each object must have:
   }
 }
 
+export async function generateBrandedFounderPost(params: {
+  topic: string;
+  referencePosts?: string;
+  attachmentStyle: "text-only" | "image-only" | "image-overlay";
+  customImagePrompt?: string;
+  founderAgent: any;
+  product: any;
+  userId?: string;
+}): Promise<{
+  postCopy: string;
+  imagePrompt?: string;
+  headline?: string;
+  subtext?: string;
+  imageUrl?: string;
+}> {
+  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, product, userId } = params;
+
+  let prompt = `You are a virtual Founder Agent named "${founderAgent.personaName}".
+Your profile:
+- Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
+- Core Values: ${founderAgent.coreValues?.join(", ") || ""}
+- Communication Style: ${founderAgent.communicationStyle?.join(", ") || ""}
+- Decision Heuristics: ${founderAgent.decisionHeuristics?.join(", ") || ""}
+
+Product Focus & Brand DNA:
+- Product Name: ${product.name}
+- Positioning / Value Prop: ${product.positioning || ""}
+- Target Audience: ${product.audience || ""}
+- Company Stage: ${product.stage || ""}
+- Content Pillars: ${product.contentPillars?.join(", ") || ""}
+
+Additional Product DNA elements:
+${product.enemy ? `- Enemy / Status Quo: ${product.enemy}` : ""}
+${product.earnedSecret ? `- Earned Secret: ${product.earnedSecret}` : ""}
+${product.originStory ? `- Origin Story: ${product.originStory}` : ""}
+${product.uniqueMechanism ? `- Unique Mechanism: ${product.uniqueMechanism}` : ""}
+
+Strategic Personal Branding Context:
+- Target Industry: ${founderAgent.targetIndustry || ""}
+- Vision: ${founderAgent.vision || ""}
+- Mission: ${founderAgent.mission || ""}
+- Goal: ${founderAgent.goal || ""}
+
+Draft an organic, highly engaging social media post for LinkedIn or X.
+This is a BRANDED post written from your perspective as the founder of "${product.name}". 
+Topic or Concept to cover: "${topic}"
+
+CRITICAL rules:
+1. Speak as the creator/founder of "${product.name}". You are sharing an insight, story, status quo challenge, or lesson directly related to the problem "${product.name}" solves or the journey of building it.
+2. Blend the product's positioning, audience, and narrative elements smoothly into a high-value personal post. Avoid simple sales pitches—the post must offer real value to the reader.
+3. Sound exactly like the founder's profile (behavioral traits, style, values).
+`;
+
+  if (referencePosts?.trim()) {
+    prompt += `\nReference posts for style, structure, or tone inspiration:\n"${referencePosts}"\n`;
+  }
+
+  if (attachmentStyle === "image-overlay") {
+    prompt += `
+Since this post will have a custom graphic with text overlaid, you must also generate:
+- A short, punchy headline (1-5 words) to overlay on the image (e.g. "Kill the Status Quo", "ARR is a Lie").
+- A brief subtext (1-2 lines) to support the headline on the image.
+- A descriptive image prompt for an AI photo generator to create a beautiful, modern background graphic. It should specify high-quality editorial photography, cinematic lighting, and vast empty negative space (left, right, or top) for overlaying text. Do NOT instruct the generator to include any letters or words.
+`;
+  } else if (attachmentStyle === "image-only") {
+    prompt += `
+Since this post will have an image attachment (with no text overlaid), you must also generate:
+- A detailed descriptive image prompt for an AI photo generator to create a stunning, evocative background graphic. It should specify high-quality editorial photography, cinematic lighting, representing the theme of the post. Do NOT instruct the generator to include any text or words.
+`;
+  }
+
+  prompt += `
+Return a JSON object with the following fields:
+- postCopy: string (The actual post text copy with paragraphs, bullets, etc.)
+- imagePrompt: string (Optional. The descriptive image prompt for Imagen AI. Required if an image is requested.)
+- headline: string (Optional. The punchy headline for the text overlay. Required only if overlay style is requested.)
+- subtext: string (Optional. The subtext for the text overlay. Required only if overlay style is requested.)
+`;
+
+  const response = await generateContentProxy(
+    "gemini-3.1-pro-preview",
+    [{ text: prompt }],
+    {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          postCopy: { type: Type.STRING },
+          imagePrompt: { type: Type.STRING },
+          headline: { type: Type.STRING },
+          subtext: { type: Type.STRING }
+        },
+        required: ["postCopy"]
+      }
+    }
+  );
+
+  if (response.usageMetadata && userId) {
+    await logTokenUsage(userId, "generateBrandedFounderPost", "gemini-3.1-pro-preview", response.usageMetadata);
+  }
+
+  const result = JSON.parse(response.text || "{}");
+  
+  let imageUrl = "";
+  const finalImagePrompt = customImagePrompt || result.imagePrompt;
+  if ((attachmentStyle === "image-only" || attachmentStyle === "image-overlay") && finalImagePrompt) {
+    try {
+      const imgRes = await generateContentProxy(
+        'gemini-3.1-flash-image-preview',
+        finalImagePrompt,
+        {
+          imageConfig: {
+            imageSize: "1K",
+            aspectRatio: "1:1"
+          }
+        }
+      );
+      
+      if (userId) {
+        await logTokenUsage(userId, "generateBrandedFounderPost_image", "gemini-3.1-flash-image-preview", {
+          promptTokenCount: 0,
+          candidatesTokenCount: 0,
+          totalTokenCount: 1
+        });
+      }
+
+      if (imgRes?.candidates?.[0]?.content?.parts) {
+        for (const pt of imgRes.candidates[0].content.parts) {
+          if (pt.inlineData) {
+            imageUrl = `data:${pt.inlineData.mimeType || 'image/png'};base64,${pt.inlineData.data}`;
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to generate branded post image background:", err);
+    }
+  }
+
+  return {
+    postCopy: result.postCopy,
+    imagePrompt: result.imagePrompt,
+    headline: result.headline,
+    subtext: result.subtext,
+    imageUrl: imageUrl || undefined
+  };
+}
+

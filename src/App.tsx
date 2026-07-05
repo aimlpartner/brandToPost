@@ -15,6 +15,7 @@ import { Creatives } from "./pages/Creatives";
 import { Settings } from "./pages/Settings";
 import { Schedule } from "./pages/Schedule";
 import { Login } from "./pages/Login";
+import { NotFound } from "./pages/NotFound";
 import { Onboarding } from "./pages/Onboarding";
 import { SharedCampaign } from "./pages/SharedCampaign";
 import { WhatsAppSystem } from "./pages/WhatsAppSystem";
@@ -84,7 +85,7 @@ export default function App() {
                 <Route path="admin" element={<AdminDashboard />} />
               </Route>
             </Route>
-            <Route path="*" element={<LandingPage />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

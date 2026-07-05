@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { User, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth, googleProvider, facebookProvider, appleProvider } from '../firebase';
 import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { logSilentError } from '../lib/firestore-error';
@@ -20,10 +20,21 @@ interface AuthProfile {
     coreValues: string[];
     decisionHeuristics: string[];
     synthesizedAt: string;
+    targetIndustry?: string;
+    targetAudience?: string;
+    vision?: string;
+    mission?: string;
+    goal?: string;
+    contentPillars?: string[];
   };
   nonBrandedColors?: string[];
   nonBrandedPrimaryFont?: string;
   nonBrandedSecondaryFont?: string;
+  automateFounderPosts?: boolean;
+  founderPostTimeUtc?: string;
+  founderPostAttachmentStyle?: "text-only" | "image-only" | "image-overlay";
+  founderPostType?: string;
+  founderPostSelectedProducts?: string[];
 }
 
 interface AuthContextType {
@@ -122,7 +133,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      googleProvider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      await signInWithRedirect(auth, googleProvider);
     } catch (error) {
       logSilentError(error as Error, { context: "signInWithGoogle" });
       throw error;
@@ -131,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithFacebook = async () => {
     try {
-      await signInWithPopup(auth, facebookProvider);
+      await signInWithRedirect(auth, facebookProvider);
     } catch (error) {
       logSilentError(error as Error, { context: "signInWithFacebook" });
       throw error;
@@ -140,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithApple = async () => {
     try {
-      await signInWithPopup(auth, appleProvider);
+      await signInWithRedirect(auth, appleProvider);
     } catch (error) {
       logSilentError(error as Error, { context: "signInWithApple" });
       throw error;
