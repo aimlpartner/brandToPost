@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogIn, Sparkles, ShieldCheck, Zap, Mail, Lock, ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 import { logSilentError } from '../lib/firestore-error';
@@ -376,7 +376,7 @@ export function Login() {
 
         {/* Footer */}
         <div className="relative z-10 text-center text-[10px] text-slate-400 font-light flex-shrink-0">
-          By signing in, you agree to our Terms and Privacy Policy.
+          By signing in, you agree to our <Link to="/terms" className="underline hover:text-slate-350 transition-colors">Terms of Service</Link> and <Link to="/privacy" className="underline hover:text-slate-350 transition-colors">Privacy Policy</Link>.
         </div>
       </div>
 

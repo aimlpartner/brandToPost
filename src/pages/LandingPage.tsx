@@ -1323,8 +1323,8 @@ export function LandingPage() {
             <div className="flex flex-col gap-2.5 text-xs text-slate-500 font-sans font-light">
               <a href="https://twitter.com" target="_blank" rel="noreferrer" className="hover:text-slate-900 transition-colors">Twitter / X</a>
               <span className="hover:text-slate-900 transition-colors cursor-pointer">About Us</span>
-              <span className="hover:text-slate-900 transition-colors cursor-pointer">Privacy Policy</span>
-              <span className="hover:text-slate-900 transition-colors cursor-pointer">Terms of Service</span>
+              <Link to="/privacy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
+              <Link to="/terms" className="hover:text-slate-900 transition-colors">Terms of Service</Link>
             </div>
           </div>
 
@@ -1358,8 +1358,8 @@ export function LandingPage() {
             &copy; {new Date().getFullYear()} BrandToPost Systems. All rights reserved.
           </p>
           <div className="flex gap-8 font-light">
-            <span className="hover:text-slate-600 transition-colors cursor-pointer">Privacy Policy</span>
-            <span className="hover:text-slate-600 transition-colors cursor-pointer">Terms of Service</span>
+            <Link to="/privacy" className="hover:text-slate-600 transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-slate-600 transition-colors">Terms of Service</Link>
           </div>
           <p className="font-light font-mono text-[9.5px]">Built by AiMlPartner.</p>
         </div>

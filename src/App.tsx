@@ -23,6 +23,8 @@ import { WhatsAppLogin } from "./pages/WhatsAppLogin";
 import { WhatsAppDashboard } from "./pages/WhatsAppDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import { MasterFounder } from "./pages/MasterFounder";
+import { TermsOfService } from "./pages/TermsOfService";
+import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ProductProvider } from "./contexts/ProductContext";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -38,6 +40,8 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/landing" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/whatsapp/login" element={<WhatsAppLogin />} />
             <Route
               path="/whatsapp-system"
