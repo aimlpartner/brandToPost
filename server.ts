@@ -1777,35 +1777,6 @@ async function sendBrandedEmail(options: SendEmailOptions) {
   const { to, subject, title, bodyHtml, ctaText, ctaUrl, attachments } = options;
   const appUrl = process.env.APP_URL || 'http://localhost:5173';
 
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn(`[SMTP Mock] SMTP credentials not configured. Simulating branded email send:
-    To: ${to}
-    Subject: ${subject}
-    Title: ${title}
-    CTA: ${ctaText} -> ${ctaUrl}`);
-    
-    if (db) {
-      await db.collection('admin_logs').add({
-        timestamp: new Date().toISOString(),
-        type: 'email_simulated',
-        recipient: to,
-        subject: subject,
-        status: 'Mock send successful (SMTP credentials not configured)'
-      }).catch(e => console.error('Failed to log simulated email to Firestore:', e));
-    }
-    return { messageId: 'mock-id-' + Math.random().toString(36).substring(2, 9) };
-  }
-
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true' || false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-
   const ctaButtonHtml = ctaText && ctaUrl ? `
     <div class="cta-container" style="text-align: center; margin: 32px 0;">
       <a href="${ctaUrl}" class="cta-button" target="_blank" style="background: linear-gradient(135deg, #7c3aed 0%, #2583eb 100%); color: #ffffff !important; padding: 14px 28px; font-weight: 600; text-decoration: none; border-radius: 9999px; display: inline-block; box-shadow: 0 4px 10px rgba(124, 58, 237, 0.25);">${ctaText}</a>
@@ -1925,6 +1896,87 @@ async function sendBrandedEmail(options: SendEmailOptions) {
 
   // Standard plain text version
   const textContent = bodyHtml.replace(/<[^>]*>/g, '');
+
+  // Native Resend API integration (if RESEND_API_KEY is present)
+  if (process.env.RESEND_API_KEY) {
+    const fromEmail = process.env.SMTP_FROM || 'noreply@brandtopost.com';
+    const resendAttachments = attachments?.map(att => ({
+      filename: att.filename,
+      content: att.content.replace(/^data:application\/pdf;base64,/, ""),
+    })) || [];
+
+    try {
+      console.log(`[Resend] Sending email to: ${to}, Subject: ${subject}`);
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `B2P Support <${fromEmail}>`,
+          to: [to],
+          subject: subject,
+          html: htmlContent,
+          text: textContent,
+          attachments: resendAttachments,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Resend API Error status ${response.status}: ${JSON.stringify(errorData)}`);
+      }
+
+      const data: any = await response.json();
+      console.log(`[Resend] Email sent: ${data.id}`);
+
+      if (db) {
+        await db.collection('admin_logs').add({
+          timestamp: new Date().toISOString(),
+          type: 'email_sent',
+          recipient: to,
+          subject: subject,
+          status: `Sent via Resend API (ID: ${data.id})`
+        }).catch(e => console.error('Failed to log email to Firestore:', e));
+      }
+
+      return { messageId: data.id };
+    } catch (err) {
+      console.error(`[Resend] Failed to send email via Resend API:`, err);
+      throw err;
+    }
+  }
+
+  // Fallback to Nodemailer SMTP or Mock
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn(`[SMTP Mock] SMTP credentials not configured. Simulating branded email send:
+    To: ${to}
+    Subject: ${subject}
+    Title: ${title}
+    CTA: ${ctaText} -> ${ctaUrl}`);
+    
+    if (db) {
+      await db.collection('admin_logs').add({
+        timestamp: new Date().toISOString(),
+        type: 'email_simulated',
+        recipient: to,
+        subject: subject,
+        status: 'Mock send successful (SMTP credentials not configured)'
+      }).catch(e => console.error('Failed to log simulated email to Firestore:', e));
+    }
+    return { messageId: 'mock-id-' + Math.random().toString(36).substring(2, 9) };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true' || false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
 
   const mailOptions: any = {
     from: `"B2P Support" <${process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@b2p.com'}>`,

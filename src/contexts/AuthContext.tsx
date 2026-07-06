@@ -136,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       googleProvider.setCustomParameters({
         prompt: 'select_account'
       });
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider);
     } catch (error) {
       logSilentError(error as Error, { context: "signInWithGoogle" });
       throw error;
@@ -145,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithFacebook = async () => {
     try {
-      await signInWithRedirect(auth, facebookProvider);
+      await signInWithPopup(auth, facebookProvider);
     } catch (error) {
       logSilentError(error as Error, { context: "signInWithFacebook" });
       throw error;
@@ -154,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithApple = async () => {
     try {
-      await signInWithRedirect(auth, appleProvider);
+      await signInWithPopup(auth, appleProvider);
     } catch (error) {
       logSilentError(error as Error, { context: "signInWithApple" });
       throw error;
