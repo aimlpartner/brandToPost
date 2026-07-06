@@ -774,54 +774,6 @@ export function Onboarding() {
         {error && (
           <div className="w-full mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm font-semibold text-center shadow-sm">
             <div>{error}</div>
-            {error.includes("API key") && activeProduct && (
-              <div className="mt-3 max-w-md mx-auto p-3 bg-white rounded-xl border border-rose-200 shadow-sm text-left">
-                <p className="text-xs text-slate-500 font-medium mb-2">
-                  Enter your Google Gemini API key to configure the server:
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    placeholder="AIzaSy..."
-                    id="onboarding-gemini-key-input"
-                    className="flex-1 bg-slate-50 border border-slate-200 focus:border-[#7C3AED] focus:bg-white rounded-lg px-3 py-1.5 text-xs text-slate-800 outline-none transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const input = document.getElementById("onboarding-gemini-key-input") as HTMLInputElement;
-                      const key = input?.value?.trim();
-                      if (!key) return;
-                      try {
-                        const token = await user.getIdToken();
-                        const response = await fetch('/api/config/gemini', {
-                          method: 'POST',
-                          headers: { 
-                            'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                          },
-                          body: JSON.stringify({ 
-                            productId: activeProduct.id,
-                            geminiApiKey: key
-                          })
-                        });
-                        if (!response.ok) {
-                          const errData = await response.json();
-                          throw new Error(errData.error || 'Failed to save key');
-                        }
-                        setError(null);
-                        alert("Gemini API Key configured successfully! You can now retry scanning your brand.");
-                      } catch (err: any) {
-                        alert("Failed to save key: " + err.message);
-                      }
-                    }}
-                    className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold px-4 py-1.5 rounded-lg shadow-sm transition-all duration-200 active:scale-95"
-                  >
-                    Save Key
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 

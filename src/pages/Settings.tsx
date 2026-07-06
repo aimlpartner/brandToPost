@@ -52,11 +52,6 @@ export function Settings() {
  const [isLinkedinConnected, setIsLinkedinConnected] = useState(false);
  const [isFacebookConnected, setIsFacebookConnected] = useState(false);
  const [isInstagramConnected, setIsInstagramConnected] = useState(false);
- 
-  const [geminiApiKey, setGeminiApiKey] = useState("");
-  const [isSavingGeminiKey, setIsSavingGeminiKey] = useState(false);
-  const [geminiSuccessMsg, setGeminiSuccessMsg] = useState<string | null>(null);
-  const [isGeminiConfigured, setIsGeminiConfigured] = useState(false);
  const [instagramManualToken, setInstagramManualToken] = useState("");
  const [isSavingInstaToken, setIsSavingInstaToken] = useState(false);
  const [instaSuccessMsg, setInstaSuccessMsg] = useState<string | null>(null);
@@ -132,20 +127,6 @@ export function Settings() {
           logSilentError(e as Error, { context: "fetchWhatsappConfig" });
         }
 
-        try {
-          const res = await fetch(`/api/config/gemini?productId=${activeProduct.id}`, { headers });
-          if (res.ok) {
-            const data = await res.json();
-            if (!isCancelled) {
-              setIsGeminiConfigured(data.configured);
-              if (data.configured) {
-                setGeminiApiKey(data.maskedKey || "");
-              }
-            }
-          }
-        } catch (e) {
-          logSilentError(e as Error, { context: "fetchGeminiConfig" });
-        }
       } catch (err) {
         logSilentError(err as Error, { context: "loadStatuses" });
       }
@@ -228,38 +209,6 @@ export function Settings() {
     }
   };
 
-  const handleSaveGeminiConfig = async () => {
-    if (!activeProduct) return;
-    setIsSavingGeminiKey(true);
-    setError(null);
-    setGeminiSuccessMsg(null);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const response = await fetch('/api/config/gemini', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ 
-          productId: activeProduct.id,
-          geminiApiKey: geminiApiKey.trim()
-        })
-      });
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Failed to save Gemini API key');
-      }
-      setGeminiSuccessMsg('Gemini API Key saved successfully!');
-      setIsGeminiConfigured(!!geminiApiKey.trim());
-      setTimeout(() => setGeminiSuccessMsg(null), 5000);
-    } catch (err: any) {
-      logSilentError(err as Error, { context: "handleSaveGeminiConfig" });
-      setError(err.message || 'Failed to save Gemini API key.');
-    } finally {
-      setIsSavingGeminiKey(false);
-    }
-  };
 
  const handleSelectOrganization = async (orgUrn: string) => {
    if (!activeProduct) return;
@@ -640,42 +589,6 @@ export function Settings() {
  </div>
  </div>
 
-  {/* API Config Section */}
-  <div className="border-t border-[#7C3AED]/15 pt-8">
-    <h3 className="text-lg font-semibold leading-6 text-slate-800">API Configuration</h3>
-    <p className="mt-1 text-sm text-slate-500 mb-4">
-      Configure your Google Gemini AI API key below. If not configured, the application will attempt to use the host environment variable fallback.
-    </p>
-
-    <div className="max-w-md space-y-3">
-      {geminiSuccessMsg && (
-        <div className="p-3 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60 rounded-xl">
-          {geminiSuccessMsg}
-        </div>
-      )}
-      <div className="flex gap-2">
-        <input
-          type="password"
-          value={geminiApiKey}
-          onChange={(e) => setGeminiApiKey(e.target.value)}
-          placeholder={isGeminiConfigured ? "••••••••••••••••" : "Enter your GEMINI_API_KEY"}
-          className="flex-1 bg-slate-50/80 border border-slate-200 focus:border-[#7C3AED] focus:bg-white rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-450 outline-none transition-all"
-        />
-        <button
-          onClick={handleSaveGeminiConfig}
-          disabled={isSavingGeminiKey}
-          className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-sm hover:shadow transition-all duration-200 active:scale-95 disabled:opacity-50"
-        >
-          {isSavingGeminiKey ? "Saving..." : "Save Key"}
-        </button>
-      </div>
-      <p className="text-[10px] text-slate-400 leading-normal">
-        {isGeminiConfigured 
-          ? "✅ Gemini API Key is configured and saved for this product." 
-          : "⚠️ No custom API key set. The system will fall back to default server keys."}
-      </p>
-    </div>
-  </div>
 
   {/* Guided Tour & Setup Wizard Management Section */}
   <div className="border-t border-[#7C3AED]/15 pt-8">
