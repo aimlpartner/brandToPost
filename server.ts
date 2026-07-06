@@ -2523,12 +2523,14 @@ ${htmlContent}
   });
 
   // --- AI Proxy Endpoint WITHOUT Caching ---
+  console.log(`[AI Proxy] GEMINI_API_KEY loaded: ${!!process.env.GEMINI_API_KEY} (${process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.length + ' chars' : 'missing'})`);
   app.post('/api/ai/generate', requireAuth, routeRateLimiter(15, 60 * 1000), async (req, res) => {
     try {
       const { model, contents, config } = req.body;
-      let apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
+        console.error('[AI Proxy] GEMINI_API_KEY is not set in process.env at request time.');
         return res.status(500).json({ error: 'Server API key not configured. Please configure GEMINI_API_KEY in the server environment.' });
       }
       
@@ -2547,8 +2549,11 @@ ${htmlContent}
       
       res.json(responseData);
     } catch (error: any) {
-      console.error('[AI Proxy] Error:', error);
-      res.status(500).json({ error: error.message });
+      console.error('[AI Proxy] Error:', error.message || error);
+      // Provide more specific error messages based on the error type
+      const msg = error.message || 'Unknown AI generation error';
+      const statusCode = msg.includes('429') || msg.includes('credits') || msg.includes('quota') ? 429 : 500;
+      res.status(statusCode).json({ error: msg });
     }
   });
 
