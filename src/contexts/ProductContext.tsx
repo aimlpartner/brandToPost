@@ -86,15 +86,10 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
             localStorage.removeItem('products'); // Clean up invalid data
           }
         } else {
-          // Always create a default product for new users so that onboarding/setup has a valid active product target
-          const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
-          const defaultProduct: ProductDNA = { id: newId, userId: user.uid, name: 'My Product', website: '', positioning: '', audience: '', tone: '', stage: 'Early Growth', visualStyle: '' };
-          try {
-            await setDoc(doc(db, 'products', newId), defaultProduct);
-          } catch (error) {
-            handleFirestoreError(error, OperationType.WRITE, `products/${newId}`);
-          }
-          return; // Wait for the next snapshot
+          setProducts([]);
+          setActiveProductId(null);
+          setIsLoaded(true);
+          return;
         }
       }
 
@@ -114,7 +109,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [user, loading, userProfile]);
+  }, [user, loading]);
 
   // Query and cache all campaigns for the logged-in user to eliminate individual tab loading skeletons
   useEffect(() => {

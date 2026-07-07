@@ -165,8 +165,15 @@ function SmartSelect({ label, value, options, onChange }: SmartSelectProps) {
 
 export function Onboarding() {
   const { user, userProfile } = useAuth();
-  const { activeProduct, updateProduct } = useProducts();
+  const { activeProduct, updateProduct, addProduct, products, isLoaded } = useProducts();
   const navigate = useNavigate();
+
+  // Initialize default product for brand new user if list is empty
+  useEffect(() => {
+    if (isLoaded && products.length === 0 && user && !activeProduct) {
+      addProduct("My Product");
+    }
+  }, [isLoaded, products.length, user, activeProduct, addProduct]);
 
   // Wizard Steps
   // 1: Brand Scan (Inputs & Scan Console)
