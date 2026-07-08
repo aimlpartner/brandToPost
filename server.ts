@@ -24,10 +24,39 @@ requiredEnvVars.forEach(v => {
 });
 
 // --- Firebase Admin Initialization ---
+function safeParseServiceAccount(raw: string | undefined): any {
+  if (!raw) return null;
+  let cleaned = raw.trim();
+
+  // Strip wrapping single or double quotes
+  if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+    cleaned = cleaned.slice(1, -1).trim();
+  } else if (cleaned.startsWith("'") && cleaned.endsWith("'")) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+
+  // If there are backslashes, fix escaping issues safely
+  if (cleaned.includes('\\')) {
+    cleaned = cleaned.replace(/\\\{/g, '{').replace(/\\\}/g, '}');
+    cleaned = cleaned.replace(/\\"/g, '"');
+  }
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (parsed && typeof parsed.private_key === 'string') {
+      parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+    }
+    return parsed;
+  } catch (err: any) {
+    console.error('[Firebase Admin] safeParseServiceAccount failed standard JSON parsing:', err.message);
+    throw err;
+  }
+}
+
 let db: admin.firestore.Firestore | null = null;
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    const serviceAccount = safeParseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
     const app = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)
     });
