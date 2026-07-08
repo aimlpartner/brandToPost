@@ -35,6 +35,9 @@ interface AuthProfile {
   founderPostAttachmentStyle?: "text-only" | "image-only" | "image-overlay";
   founderPostType?: string;
   founderPostSelectedProducts?: string[];
+  signupEmailSent?: boolean;
+  firstCampaignEmailSent?: boolean;
+  lastActive?: string;
 }
 
 interface AuthContextType {
@@ -68,6 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (currentUser) {
         setUser(currentUser);
+        let signupEmailUpdateAttempted = false;
+        let profileInitAttempted = false;
 
         // Update lastActive timestamp on session load
         const userRef = doc(db, 'users', currentUser.uid);
@@ -84,30 +89,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLoading(false);
 
             // Trigger Welcome email if it hasn't been sent yet
-            if (!data.signupEmailSent && currentUser.email) {
+            if (!data.signupEmailSent && currentUser.email && !signupEmailUpdateAttempted) {
               // Optimistically update flag to prevent duplicate calls
-              await updateDoc(userRef, { signupEmailSent: true });
-              const { triggerBrandedEmail } = await import('../lib/emailTriggers');
-              triggerBrandedEmail('signup', currentUser.email, {
-                name: data.name || currentUser.displayName || currentUser.email.split('@')[0]
-              });
+              signupEmailUpdateAttempted = true;
+              try {
+                await updateDoc(userRef, { signupEmailSent: true });
+                const { triggerBrandedEmail } = await import('../lib/emailTriggers');
+                triggerBrandedEmail('signup', currentUser.email, {
+                  name: data.name || currentUser.displayName || currentUser.email.split('@')[0]
+                });
+              } catch (err) {
+                logSilentError(err as Error, { context: "updateSignupEmailSent", userId: currentUser.uid });
+              }
             }
           } else {
             setUserProfile({ name: '', role: '', onboarded: false });
             setLoading(false);
             
-            // Initialize default profile document for new signup
-            setDoc(userRef, {
-              email: currentUser.email || '',
-              name: currentUser.displayName || '',
-              role: '',
-              onboarded: false,
-              createdAt: new Date().toISOString(),
-              lastActive: new Date().toISOString(),
-              signupEmailSent: false
-            }, { merge: true }).catch(err => {
-              logSilentError(err, { context: "initUserProfile", userId: currentUser.uid });
-            });
+            if (!profileInitAttempted) {
+              profileInitAttempted = true;
+              // Initialize default profile document for new signup
+              setDoc(userRef, {
+                email: currentUser.email || '',
+                name: currentUser.displayName || '',
+                role: '',
+                onboarded: false,
+                createdAt: new Date().toISOString(),
+                lastActive: new Date().toISOString(),
+                signupEmailSent: false
+              }, { merge: true }).catch(err => {
+                logSilentError(err, { context: "initUserProfile", userId: currentUser.uid });
+              });
+            }
           }
         }, (err) => {
           logSilentError(err, { context: "loadUserProfile", userId: currentUser.uid });
