@@ -1,4 +1,12 @@
-import { Type } from "@google/genai";
+const Type = {
+  STRING: "STRING",
+  NUMBER: "NUMBER",
+  INTEGER: "INTEGER",
+  BOOLEAN: "BOOLEAN",
+  ARRAY: "ARRAY",
+  OBJECT: "OBJECT",
+  NULL: "NULL",
+} as const;
 
 const fetchImageAsBase64 = async (url: string): Promise<string> => {
   if (url.startsWith('data:')) return url;
@@ -130,6 +138,12 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, de
   }
 }
 
+function normalizeWebsiteUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 function extractJSON(text: string): string {
   const firstOpenBracket = text.indexOf('[');
   const firstOpenBrace = text.indexOf('{');
@@ -243,7 +257,8 @@ export async function researchProductDNA(
   microlinkMetadata?: any,
   signal?: AbortSignal
 ): Promise<Partial<ProductDNA>> {
-  const hasWebsite = website && website.trim() !== "";
+  const normalizedWebsite = website ? normalizeWebsiteUrl(website) : "";
+  const hasWebsite = normalizedWebsite !== "";
   const hasDescription = currentDna?.description && currentDna.description.trim() !== "";
   const hasDocument = !!document;
   
@@ -268,7 +283,7 @@ export async function researchProductDNA(
   }
   
   if (hasWebsite) {
-    sourceContext += `Please use Google Search to research the following company website: ${website}\n`;
+    sourceContext += `Please use Google Search to research the following company website: ${normalizedWebsite}\n`;
     
     // Attempt to scrape the website for better context, especially for typography
     try {
@@ -296,7 +311,7 @@ export async function researchProductDNA(
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ url: website }),
+        body: JSON.stringify({ url: normalizedWebsite }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);

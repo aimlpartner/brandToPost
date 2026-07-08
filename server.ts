@@ -60,6 +60,26 @@ function formatDate(d: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function normalizePublicHttpUrl(rawUrl: unknown): string {
+  if (typeof rawUrl !== 'string') {
+    throw new Error('URL must be a string');
+  }
+
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    throw new Error('URL is required');
+  }
+
+  const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const parsed = new URL(normalized);
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Only HTTP and HTTPS URLs are supported');
+  }
+
+  return parsed.toString();
+}
+
 async function logBackendTokenUsage(userId: string | undefined, operationType: string, model: string, usageMetadata: any) {
   if (!db) return;
   if (!userId || !usageMetadata) return;
@@ -5234,8 +5254,11 @@ However, if they ask to make a campaign or send a product photo, and they have n
   // Scraping Endpoint for Brand DNA with Guarded Browser Lock to halt OOM Crashes
   app.post('/api/scrape', requireAuth, routeRateLimiter(3, 60 * 1000), async (req, res) => {
     const { url } = req.body;
-    if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+    let targetUrl: string;
+    try {
+      targetUrl = normalizePublicHttpUrl(url);
+    } catch (error: any) {
+      return res.status(400).json({ error: error.message || 'Invalid URL' });
     }
 
     let page: any = null;
@@ -5243,7 +5266,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
 
     const handleAbort = async () => {
       aborted = true;
-      console.log(`[api/scrape] Connection closed by client. Aborting Puppeteer page for URL: ${url}`);
+      console.log(`[api/scrape] Connection closed by client. Aborting Puppeteer page for URL: ${targetUrl}`);
       if (page) {
         try {
           await page.close().catch(() => {});
@@ -5269,7 +5292,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
           }
           
           // Go to the URL and wait until the DOM is loaded to ensure styles are available
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(e => {
+          await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(e => {
             if (aborted) {
               throw new DOMException("The user aborted a request.", "AbortError");
             }
@@ -5482,7 +5505,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
       });
     } catch (error: any) {
       if (aborted || error.name === 'AbortError' || error.message?.includes('aborted')) {
-        console.log(`[api/scrape] Scrape aborted successfully for URL: ${url}`);
+        console.log(`[api/scrape] Scrape aborted successfully for URL: ${targetUrl}`);
         if (!res.headersSent) {
           res.status(499).json({ error: 'Client closed request' });
         }
