@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -7,6 +7,9 @@ import nodemailer from 'nodemailer';
 import { GoogleGenAI, Type } from '@google/genai';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 
 // --- Environment Variable Validation ---
 const requiredEnvVars = [
