@@ -22,40 +22,40 @@ import {
 
 const PLAN_AGENTS = {
   starter: [
-    { name: "Sarah", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Alex", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Chloe", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Julian", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Elena", avatar: "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Arthur", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100&h=100", active: false },
-    { name: "Maya", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100&h=100", active: false },
-    { name: "Zack", avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=100&h=100", active: false },
-    { name: "Victor", avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=100&h=100", active: false },
-    { name: "Max", avatar: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&q=80&w=100&h=100", active: false }
+    { name: "Sarah", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png", active: true },
+    { name: "Alex", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png", active: true },
+    { name: "Chloe", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png", active: true },
+    { name: "Julian", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png", active: true },
+    { name: "Elena", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png", active: true },
+    { name: "Arthur", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png", active: false },
+    { name: "Maya", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png", active: false },
+    { name: "Zack", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png", active: false },
+    { name: "Victor", avatar: "/agents_img/Gemini_Generated_Image_victor.png", active: false },
+    { name: "Max", avatar: "/agents_img/Gemini_Generated_Image_max.png", active: false }
   ],
   growth: [
-    { name: "Sarah", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Alex", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Chloe", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Julian", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Elena", avatar: "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Arthur", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Maya", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Zack", avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Victor", avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=100&h=100", active: false },
-    { name: "Max", avatar: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&q=80&w=100&h=100", active: false }
+    { name: "Sarah", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png", active: true },
+    { name: "Alex", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png", active: true },
+    { name: "Chloe", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png", active: true },
+    { name: "Julian", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png", active: true },
+    { name: "Elena", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png", active: true },
+    { name: "Arthur", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png", active: true },
+    { name: "Maya", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png", active: true },
+    { name: "Zack", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png", active: true },
+    { name: "Victor", avatar: "/agents_img/Gemini_Generated_Image_victor.png", active: false },
+    { name: "Max", avatar: "/agents_img/Gemini_Generated_Image_max.png", active: false }
   ],
   agency: [
-    { name: "Sarah", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Alex", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Chloe", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Julian", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Elena", avatar: "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Arthur", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Maya", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Zack", avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Victor", avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=100&h=100", active: true },
-    { name: "Max", avatar: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&q=80&w=100&h=100", active: true }
+    { name: "Sarah", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png", active: true },
+    { name: "Alex", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png", active: true },
+    { name: "Chloe", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png", active: true },
+    { name: "Julian", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png", active: true },
+    { name: "Elena", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png", active: true },
+    { name: "Arthur", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png", active: true },
+    { name: "Maya", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png", active: true },
+    { name: "Zack", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png", active: true },
+    { name: "Victor", avatar: "/agents_img/Gemini_Generated_Image_victor.png", active: true },
+    { name: "Max", avatar: "/agents_img/Gemini_Generated_Image_max.png", active: true }
   ]
 };
 
@@ -614,8 +614,8 @@ export function LandingPage() {
       {/* 6. SCROLL-LOCKED CREATIVE TEAM FLIPBOOK */}
       <AgentFlipbook />
 
-      {/* 6.5. REVOLVING 3D AGENTS CYLINDER */}
-      <RevolvingAgents />
+      {/* 6.5. REVOLVING 3D AGENTS CYLINDER (Hidden for now) */}
+      {/* <RevolvingAgents /> */}
 
       {/* 7. THE POST GROWTH METHODOLOGY (Editorial Timeline) */}
       <section className="w-full bg-[#FAF9F6] border-b border-slate-200/60 relative z-10">
@@ -1066,14 +1066,14 @@ export function LandingPage() {
                   <span className="text-[10px] text-[#7C3AED] font-sans uppercase tracking-wider block mb-4">Active Roster Specialists</span>
                   <div className="space-y-3">
                     {[
-                      { name: "Sarah", role: "Research & Strategy", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Chloe", role: "Visual Aesthetics", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Elena", role: "Publishing Router", avatar: "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Maya", role: "Campaign Scheduler", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Zack", role: "Objection Handling", avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=100&h=100" }
+                      { name: "Sarah", role: "Research & Strategy", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png" },
+                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png" },
+                      { name: "Chloe", role: "Visual Aesthetics", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png" },
+                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png" },
+                      { name: "Elena", role: "Publishing Router", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png" },
+                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png" },
+                      { name: "Maya", role: "Campaign Scheduler", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png" },
+                      { name: "Zack", role: "Objection Handling", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png" }
                     ].map((agent, i) => (
                       <div key={i} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
@@ -1117,16 +1117,16 @@ export function LandingPage() {
                   <span className="text-[10px] text-slate-400 font-sans uppercase tracking-wider block mb-4">Active Roster Specialists</span>
                   <div className="space-y-3">
                     {[
-                      { name: "Sarah", role: "Research & Strategy", avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Chloe", role: "Visual Aesthetics", avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Elena", role: "Publishing Router", avatar: "https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Maya", role: "Campaign Scheduler", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Zack", role: "Objection Handling", avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Victor", role: "WhatsApp Commander", avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=100&h=100" },
-                      { name: "Max", role: "Autopilot Monitor", avatar: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&q=80&w=100&h=100" }
+                      { name: "Sarah", role: "Research & Strategy", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png" },
+                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png" },
+                      { name: "Chloe", role: "Visual Aesthetics", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png" },
+                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png" },
+                      { name: "Elena", role: "Publishing Router", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png" },
+                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png" },
+                      { name: "Maya", role: "Campaign Scheduler", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png" },
+                      { name: "Zack", role: "Objection Handling", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png" },
+                      { name: "Victor", role: "WhatsApp Commander", avatar: "/agents_img/Gemini_Generated_Image_victor.png" },
+                      { name: "Max", role: "Autopilot Monitor", avatar: "/agents_img/Gemini_Generated_Image_max.png" }
                     ].map((agent, i) => (
                       <div key={i} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">

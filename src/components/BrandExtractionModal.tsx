@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { BrainCircuit, AlertTriangle, Palette } from 'lucide-react';
+import { ProductDNA } from '../types';
+import { DnaModel } from './DnaModel';
 
 type InputType = 'website' | 'document' | 'description';
 
@@ -16,6 +18,7 @@ interface BrandExtractionModalProps {
   extractionProgress: number;
   onClose: () => void;
   onSaveAndContinue: () => void;
+  dna?: Partial<ProductDNA>;
 }
 
 const terminalLogs = {
@@ -88,8 +91,15 @@ const stepsData = {
   ]
 };
 
-export function BrandExtractionModal({ isOpen, inputType, isComplete, screenshotUrl, extractionLogs, extractionProgress, onClose, onSaveAndContinue }: BrandExtractionModalProps) {
+export function BrandExtractionModal({ isOpen, inputType, isComplete, screenshotUrl, extractionLogs, extractionProgress, onClose, onSaveAndContinue, dna }: BrandExtractionModalProps) {
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [dismissCompleteOverlay, setDismissCompleteOverlay] = useState(false);
+
+  useEffect(() => {
+    if (!isComplete) {
+      setDismissCompleteOverlay(false);
+    }
+  }, [isComplete]);
 
   const currentSteps = stepsData[inputType] || stepsData.website;
   
@@ -112,10 +122,10 @@ export function BrandExtractionModal({ isOpen, inputType, isComplete, screenshot
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white border border-slate-200/80 rounded-[22px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-4xl overflow-hidden flex flex-col md:flex-row"
+        className="bg-white border border-slate-200/80 rounded-[22px] shadow-[0_20px_60px_rgba(0,0,0,0.12)] w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col md:flex-row"
       >
         {/* Left Panel: Status & Steps */}
-        <div className="p-8 border-b md:border-b-0 md:border-r border-slate-100 w-full md:w-[45%] relative flex flex-col bg-slate-50/50">
+        <div className="p-8 border-b md:border-b-0 md:border-r border-slate-100 w-full md:w-[45%] relative flex flex-col bg-slate-50/50 overflow-y-auto">
           
           <div className="relative z-10 flex flex-col h-full">
              <div className="flex items-center gap-4 mb-8">
@@ -190,72 +200,44 @@ export function BrandExtractionModal({ isOpen, inputType, isComplete, screenshot
           </div>
         </div>
 
-        {/* Right Panel: Terminal Output */}
-        <div className="w-full md:w-[55%] bg-slate-900 font-mono text-xs md:text-sm flex flex-col relative h-[400px] md:h-[500px] overflow-hidden">
-           <div className="relative z-10 p-6 flex flex-col h-full pointer-events-auto">
-              <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-805/80">
-                 <div className="flex items-center gap-2 text-slate-400">
-                   <Terminal className="w-4 h-4" />
-                   <span>agent.stdout</span>
-                 </div>
-                 <div className="text-emerald-400 text-xs flex items-center gap-2 font-semibold">
-                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                   {progressPercent}%
-                 </div>
-              </div>
-              
-              {screenshotUrl && (
-                 <motion.div 
-                   initial={{ opacity: 0, scale: 0.95 }}
-                   animate={{ opacity: 1, scale: 1 }}
-                   className="mb-4 rounded-xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.25)] relative aspect-[16/9] w-full shrink-0 border border-slate-800"
-                 >
-                    <img referrerPolicy="no-referrer" src={screenshotUrl || undefined} alt="Website Screenshot" className="w-full h-full object-cover" />
-                    <div className="absolute inset-x-0 bottom-0 bg-black/75 backdrop-blur-md p-2 text-[11px] text-center text-white font-sans tracking-wide border-t border-white/5">
-                      Target Site Snapshot Acquired
-                    </div>
-                 </motion.div>
-              )}
+        {/* Right Panel: DNA Helix Model Visualizer */}
+        <div className="w-full md:w-[55%] bg-[#FAF9F6] border-l border-slate-900/10 flex flex-col relative h-[450px] md:h-auto md:self-stretch overflow-hidden">
+          {/* Floating Progress HUD Indicator */}
+          <div className="absolute top-4 right-4 z-30 flex items-center gap-2 px-3 py-1.5 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg text-emerald-600 text-[10px] font-mono font-bold tracking-wider shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse animate-duration-1000"></span>
+            <span>DNA_SYNTHESIS: {progressPercent}%</span>
+          </div>
 
-              <div className="flex-1 overflow-y-auto space-y-2 text-slate-300 pr-2 scrollbar-thin scrollbar-thumb-white/10">
-                 {displayedLogs.map((log, i) => (
-                   <motion.div 
-                      key={i}
-                      initial={{ opacity: 0, x: -5 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className={`${log.startsWith('>') ? 'text-[#a78bfa] ml-4 font-semibold' : 'text-slate-405'}`}
+          <DnaModel progress={extractionProgress} dna={dna} isComplete={isComplete} />
+
+          {/* Overlay when complete */}
+          <AnimatePresence>
+            {isComplete && !dismissCompleteOverlay && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-[#FAF9F6]/70 backdrop-blur-sm flex items-center justify-center p-8 text-center z-30 pointer-events-none"
+              >
+                <motion.div 
+                  initial={{ scale: 0.95 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0.95 }}
+                  className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xl max-w-xs w-full text-center pointer-events-auto"
+                >
+                   <Database className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+                   <h3 className="text-slate-900 font-bold font-display text-base mb-1">Extraction Complete</h3>
+                   <p className="text-slate-600 text-xs font-light mb-4">Brand DNA Matrix successfully compiled and synchronized.</p>
+                   <button
+                     onClick={() => setDismissCompleteOverlay(true)}
+                     className="w-full py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs font-bold shadow-sm transition-all"
                    >
-                     <span className="text-slate-600 mr-2">[{String(i+1).padStart(2, '0')}]</span>
-                     {log}
-                   </motion.div>
-                 ))}
-                 
-                 {!isComplete && (
-                   <div className="flex items-center gap-2 mt-4 text-[#a78bfa] opacity-80">
-                      <div className="w-1.5 h-3 bg-[#a78bfa] animate-pulse" />
-                      Processing...
-                   </div>
-                 )}
-                 <div ref={logsEndRef} className="pb-8" />
-              </div>
-           </div>
-
-           {/* Overlay overlay when complete */}
-           <AnimatePresence>
-             {isComplete && (
-               <motion.div 
-                 initial={{ opacity: 0 }}
-                 animate={{ opacity: 1 }}
-                 className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-8 text-center"
-               >
-                 <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-2xl max-w-xs w-full text-center">
-                    <Database className="w-10 h-10 text-emerald-500 mx-auto mb-3 animate-bounce" />
-                    <h3 className="text-slate-850 font-bold font-display text-base mb-1">Extraction Complete</h3>
-                    <p className="text-slate-500 text-xs font-light">Brand context graph synchronized.</p>
-                 </div>
-               </motion.div>
-             )}
-           </AnimatePresence>
+                     Explore 3D DNA Model
+                   </button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
     </div>,

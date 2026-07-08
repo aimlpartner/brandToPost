@@ -1124,6 +1124,7 @@ export function ProductDNA() {
         extractionProgress={extractionProgress}
         onClose={() => setIsExtractionModalOpen(false)}
         onSaveAndContinue={() => { setIsExtractionModalOpen(false); navigate("/dashboard/campaigns"); }}
+        dna={dna}
       />
 
       {/* Page Header */}

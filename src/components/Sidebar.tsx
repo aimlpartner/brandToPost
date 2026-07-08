@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Settings, FileText, Megaphone, CalendarClock, ChevronDown, Plus, LogOut, Image as ImageIcon, UserCircle, Clapperboard, Gauge, MessageSquare, Brain, Trash2 } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Megaphone, CalendarClock, ChevronDown, Plus, LogOut, Image as ImageIcon, UserCircle, Clapperboard, Gauge, MessageSquare, Brain, Sparkles } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -16,7 +16,7 @@ const navigation = [
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
- const { products, activeProduct, setActiveProductId, addProduct, deleteProduct } = useProducts();
+ const { products, activeProduct, setActiveProductId, addProduct } = useProducts();
  const { user, logout } = useAuth();
  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
  const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -63,35 +63,19 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     <div className="absolute top-full left-3 right-3 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden mt-1">
     <div className="max-h-48 overflow-y-auto py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
     {products.map(p => (
-    <div
-    key={p.id}
-    className={cn(
-    "group w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors",
-    activeProduct?.id === p.id ? "text-[#7C3AED] font-semibold bg-[#7C3AED]/5" : "text-slate-600"
-    )}
-    >
     <button
+    key={p.id}
     onClick={() => {
     setActiveProductId(p.id);
     setIsDropdownOpen(false);
     }}
-    className="flex-1 text-left truncate mr-2"
+    className={cn(
+    "w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors",
+    activeProduct?.id === p.id ? "text-[#7C3AED] font-semibold bg-[#7C3AED]/5" : "text-slate-600"
+    )}
     >
     {p.name}
     </button>
-    <button
-    onClick={async (e) => {
-    e.stopPropagation();
-    if (confirm(`Are you sure you want to permanently delete "${p.name}"? This will delete all of its campaigns and assets.`)) {
-    await deleteProduct(p.id);
-    }
-    }}
-    className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 hover:bg-rose-50 rounded text-rose-500 hover:text-rose-600 transition-all shrink-0"
-    title={`Delete ${p.name}`}
-    >
-    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-    </button>
-    </div>
     ))}
     </div>
    <div className="border-t border-slate-100 p-1">
@@ -196,6 +180,28 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             )}
           </>
         )}
+      </NavLink>
+    </div>
+
+    {/* DNA Visualizer Demo Link */}
+    <div className="mt-2">
+      <NavLink
+        to="/dna-demo"
+        onClick={onClose}
+        className={({ isActive }) =>
+          cn(
+            "flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all duration-200 shadow-sm border",
+            isActive
+              ? "bg-[#7C3AED] text-white border-[#7C3AED]"
+              : "text-slate-600 bg-slate-50 border-slate-100 hover:bg-slate-100"
+          )
+        }
+      >
+        <Sparkles
+          className="h-[18px] w-[18px] shrink-0 text-slate-400"
+          strokeWidth={1.8}
+        />
+        <span className="font-bold flex-1 min-w-0 truncate text-[12px] sm:text-[13px]">DNA Demo Studio</span>
       </NavLink>
     </div>
    </nav>
