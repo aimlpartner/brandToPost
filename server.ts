@@ -2577,21 +2577,39 @@ ${htmlContent}
   // --- AI Proxy Endpoint WITHOUT Caching ---
   console.log(`[AI Proxy] GEMINI_API_KEY loaded: ${!!process.env.GEMINI_API_KEY} (${process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.length + ' chars' : 'missing'})`);
   app.post('/api/ai/generate', requireAuth, routeRateLimiter(15, 60 * 1000), async (req, res) => {
+    const { model, contents, config } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      console.error('[AI Proxy] GEMINI_API_KEY is not set in process.env at request time.');
+      return res.status(500).json({ error: 'Server API key not configured. Please configure GEMINI_API_KEY in the server environment.' });
+    }
+    
+    const abortController = new AbortController();
+    let aborted = false;
+    
+    const handleAbort = () => {
+      aborted = true;
+      console.log(`[AI Proxy] Connection closed by client. Aborting Gemini API call for model: ${model}`);
+      abortController.abort();
+    };
+    
+    req.on('close', handleAbort);
+    
     try {
-      const { model, contents, config } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
-      
-      if (!apiKey) {
-        console.error('[AI Proxy] GEMINI_API_KEY is not set in process.env at request time.');
-        return res.status(500).json({ error: 'Server API key not configured. Please configure GEMINI_API_KEY in the server environment.' });
-      }
-      
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model,
         contents,
-        config
+        config: {
+          ...config,
+          abortSignal: abortController.signal
+        }
       });
+      
+      if (aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
       
       const responseData = {
         text: response.text,
@@ -2601,11 +2619,20 @@ ${htmlContent}
       
       res.json(responseData);
     } catch (error: any) {
-      console.error('[AI Proxy] Error:', error.message || error);
-      // Provide more specific error messages based on the error type
-      const msg = error.message || 'Unknown AI generation error';
-      const statusCode = msg.includes('429') || msg.includes('credits') || msg.includes('quota') ? 429 : 500;
-      res.status(statusCode).json({ error: msg });
+      if (aborted || error.name === 'AbortError' || error.message?.includes('aborted') || error.message?.includes('Cancel')) {
+        console.log(`[AI Proxy] Gemini request aborted successfully.`);
+        if (!res.headersSent) {
+          res.status(499).json({ error: 'Client closed request' });
+        }
+      } else {
+        console.error('[AI Proxy] Error:', error.message || error);
+        // Provide more specific error messages based on the error type
+        const msg = error.message || 'Unknown AI generation error';
+        const statusCode = msg.includes('429') || msg.includes('credits') || msg.includes('quota') ? 429 : 500;
+        res.status(statusCode).json({ error: msg });
+      }
+    } finally {
+      req.off('close', handleAbort);
     }
   });
 
@@ -5211,14 +5238,47 @@ However, if they ask to make a campaign or send a product photo, and they have n
       return res.status(400).json({ error: 'URL is required' });
     }
 
+    let page: any = null;
+    let aborted = false;
+
+    const handleAbort = async () => {
+      aborted = true;
+      console.log(`[api/scrape] Connection closed by client. Aborting Puppeteer page for URL: ${url}`);
+      if (page) {
+        try {
+          await page.close().catch(() => {});
+        } catch (err) {
+          // ignore
+        }
+      }
+    };
+
+    req.on('close', handleAbort);
+
     try {
       const scrapeData: any = await runWithRenderLock(async (browser) => {
-        const page = await browser.newPage();
+        if (aborted) {
+          throw new DOMException("The user aborted a request.", "AbortError");
+        }
+        page = await browser.newPage();
         try {
           await page.setViewport({ width: 1280, height: 800 });
           
+          if (aborted) {
+            throw new DOMException("The user aborted a request.", "AbortError");
+          }
+          
           // Go to the URL and wait until the DOM is loaded to ensure styles are available
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(e => console.error("Goto timeout: ", e));
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(e => {
+            if (aborted) {
+              throw new DOMException("The user aborted a request.", "AbortError");
+            }
+            console.error("Goto timeout: ", e);
+          });
+          
+          if (aborted) {
+            throw new DOMException("The user aborted a request.", "AbortError");
+          }
           
           return await page.evaluate(() => {
             const textContent = document.body.innerText.substring(0, 20000);
@@ -5318,94 +5378,72 @@ However, if they ask to make a campaign or send a product photo, and they have n
               if (classAltSrc.includes('logo')) score += 20;
               if (classAltSrc.includes('brand')) score += 10;
               
-              // Inside header or nav
-              if (img.closest('header') || img.closest('nav') || img.closest('.header') || img.closest('.nav') || img.closest('[role="navigation"]')) {
-                score += 35;
-              }
-              
-              // Direct homepage link
-              const link = img.closest('a');
-              if (link) {
-                const href = link.getAttribute('href') || '';
-                if (href === '/' || href === window.location.origin || href === window.location.href || href.endsWith(window.location.host)) {
-                  score += 25;
+              // Boost score if parent is an anchor linking to root
+              let parent = img.parentElement;
+              while (parent && parent.tagName !== 'BODY') {
+                if (parent.tagName === 'A') {
+                  const href = parent.getAttribute('href');
+                  if (href === '/' || href === window.location.origin || href === window.location.pathname) {
+                    score += 15;
+                  }
+                  break;
                 }
+                parent = parent.parentElement;
               }
-              
-              if (src.toLowerCase().includes('.svg')) score += 12;
-              
-              // Avoid microscopic ones
-              if (img.naturalWidth && img.naturalWidth < 18) return;
-              if (img.naturalHeight && img.naturalHeight < 18) return;
               
               candidates.push({ score, src });
             });
 
-            // Find inline SVGs in Header/Nav or with logo classes (extremely high quality)
-            const svgElements = Array.from(document.querySelectorAll('header svg, nav svg, .header svg, .nav svg, svg[class*="logo" i], svg[id*="logo" i]'));
-            svgElements.forEach((svg: SVGElement) => {
-              if (isExcluded(svg)) return; // Skip client SVGs
+            // Find SVG logos in header/nav
+            const svgs = Array.from(document.querySelectorAll('header svg, nav svg, a svg'));
+            svgs.forEach((svg: SVGElement) => {
+              if (isExcluded(svg)) return;
               
-              let score = 15;
-              const classId = (svg.className + ' ' + (svg.id || '') + ' ' + (svg.getAttribute('class') || '')).toLowerCase();
-              if (classId.includes('logo')) score += 25;
-              if (classId.includes('brand')) score += 12;
+              const classId = ((svg.className as any)?.baseVal || '') + ' ' + (svg.id || '');
+              const classIdLower = classId.toLowerCase();
+              let score = 5; // Base score for header/nav svgs
+              if (classIdLower.includes('logo')) score += 15;
+              if (classIdLower.includes('brand')) score += 10;
               
-              if (svg.closest('header') || svg.closest('nav') || svg.closest('.header') || svg.closest('.nav')) {
-                score += 35;
-              }
-              
-              const link = svg.closest('a');
-              if (link) {
-                const href = link.getAttribute('href') || '';
-                if (href === '/' || href === window.location.origin || href === window.location.href || href.endsWith(window.location.host)) {
-                  score += 25;
-                }
-              }
-              
+              // Convert SVG to Data URL for uniform output
               try {
-                // Serialize SVG
                 const svgString = new XMLSerializer().serializeToString(svg);
-                const completeSvgString = svgString.includes('xmlns=') 
-                  ? svgString 
-                  : svgString.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-                const svgSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(completeSvgString);
-                candidates.push({ score: score + 10, src: svgSrc }); // Prioritize vector SVG naturally
-              } catch (e) {
-                console.error("Failed to serialize SVG:", e);
-              }
+                const svgBase64 = window.btoa(unescape(encodeURIComponent(svgString)));
+                const dataUrl = `data:image/svg+xml;base64,${svgBase64}`;
+                candidates.push({ score, src: dataUrl });
+              } catch (e) {}
             });
 
-            // Select highest scored candidate
-            if (candidates.length > 0) {
-              candidates.sort((a, b) => b.score - a.score);
-              const bestCandidate = candidates[0];
-              if (bestCandidate.score > 15) {
-                logoUrl = bestCandidate.src;
+            // Sort and pick highest score candidate
+            candidates.sort((a, b) => b.score - a.score);
+            const bestCandidate = candidates[0];
+            if (bestCandidate && bestCandidate.score > 0) {
+              logoUrl = bestCandidate.src;
+            } else {
+              // Final fallback to favicon
+              const favicon = document.querySelector("link[rel*='icon']");
+              if (favicon) {
+                logoUrl = (favicon as HTMLLinkElement).href;
+              } else {
+                logoUrl = window.location.origin + '/favicon.ico';
               }
-            }
-
-            // Fallback strategy 1: Look for og:image with 'logo' in it
-            if (!logoUrl) {
-                const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
-                if (ogImage && ogImage.toLowerCase().includes('logo')) {
-                    logoUrl = ogImage;
-                }
-            }
-
-            // Fallback strategy 2: Look for high res apple touch icon
-            if (!logoUrl) {
-               const appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href');
-               if (appleTouchIcon) logoUrl = new URL(appleTouchIcon, window.location.href).href;
             }
 
             return { textContent, fontCounts, colorCounts, bgColorCounts, mediaImages: uniqueMediaImages, logoUrl };
           });
         } finally {
-          await page.close().catch(() => {});
+          if (page) {
+            const tempPage = page;
+            page = null;
+            await tempPage.close().catch(() => {});
+          }
         }
       });
       
+      if (aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
+
       const extractedFonts = Object.entries(scrapeData.fontCounts || {})
          .sort((a: [string, any], b: [string, any]) => (b[1] as number) - (a[1] as number))
          .map(entry => entry[0])
@@ -5443,8 +5481,17 @@ However, if they ask to make a campaign or send a product photo, and they have n
         cssContent: `Most Used Text Colors (RGB/HEX): ${extractedColors.join(', ')}\nMost Used Background Colors: ${extractedBgColors.join(', ')}`
       });
     } catch (error: any) {
-      console.error("Scraping error:", error);
-      res.status(500).json({ error: error.message });
+      if (aborted || error.name === 'AbortError' || error.message?.includes('aborted')) {
+        console.log(`[api/scrape] Scrape aborted successfully for URL: ${url}`);
+        if (!res.headersSent) {
+          res.status(499).json({ error: 'Client closed request' });
+        }
+      } else {
+        console.error("Scraping error:", error);
+        res.status(500).json({ error: error.message });
+      }
+    } finally {
+      req.off('close', handleAbort);
     }
   });
 

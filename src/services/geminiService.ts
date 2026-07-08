@@ -107,6 +107,9 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, de
   try {
     const response = await fetch(url, options);
     if (!response.ok) {
+      if (options.signal?.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
       if ((response.status >= 500 || response.status === 429) && retries > 0) {
         console.warn(`Fetch returned status ${response.status}. Retrying in ${delay}ms... (${retries} retries left)`);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -114,7 +117,10 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, de
       }
     }
     return response;
-  } catch (error) {
+  } catch (error: any) {
+    if (options.signal?.aborted || error.name === 'AbortError') {
+      throw error;
+    }
     if (retries > 0) {
       console.warn(`Fetch threw error: ${error}. Retrying in ${delay}ms... (${retries} retries left)`);
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -147,7 +153,7 @@ function extractJSON(text: string): string {
   return text;
 }
 
-async function generateContentProxy(model: string, contents: any, config?: any) {
+async function generateContentProxy(model: string, contents: any, config?: any, signal?: AbortSignal) {
   const token = await auth.currentUser?.getIdToken();
   const userId = auth.currentUser?.uid;
   const activeProductId = userId ? localStorage.getItem(`activeProductId_${userId}`) : null;
@@ -159,7 +165,8 @@ async function generateContentProxy(model: string, contents: any, config?: any) 
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(activeProductId ? { 'X-Product-Id': activeProductId } : {})
     },
-    body: JSON.stringify({ model, contents, config })
+    body: JSON.stringify({ model, contents, config }),
+    signal
   });
   
   if (!response.ok) {
@@ -233,7 +240,8 @@ export async function researchProductDNA(
   document?: { data: string, mimeType: string } | null, 
   userId?: string, 
   screenshot?: { data: string, mimeType: string },
-  microlinkMetadata?: any
+  microlinkMetadata?: any,
+  signal?: AbortSignal
 ): Promise<Partial<ProductDNA>> {
   const hasWebsite = website && website.trim() !== "";
   const hasDescription = currentDna?.description && currentDna.description.trim() !== "";
@@ -264,10 +272,24 @@ export async function researchProductDNA(
     
     // Attempt to scrape the website for better context, especially for typography
     try {
+      if (signal?.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
       const token = await auth.currentUser?.getIdToken();
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second total timeout for scraping endpoint
       
+      const onAbort = () => {
+        controller.abort();
+      };
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(timeoutId);
+          throw new DOMException("The user aborted a request.", "AbortError");
+        }
+        signal.addEventListener('abort', onAbort);
+      }
+
       const scrapeRes = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 
@@ -278,6 +300,9 @@ export async function researchProductDNA(
         signal: controller.signal
       });
       clearTimeout(timeoutId);
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
       
       if (scrapeRes.ok) {
         const scrapeData = await scrapeRes.json();
@@ -295,7 +320,10 @@ export async function researchProductDNA(
           sourceContext += `----------------------------\n`;
         }
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (signal?.aborted || e.name === 'AbortError') {
+        throw e;
+      }
       console.error("Failed to scrape website for context:", e);
     }
   }
@@ -367,6 +395,10 @@ export async function researchProductDNA(
         mimeType: screenshot.mimeType
       }
     });
+  }
+
+  if (signal?.aborted) {
+    throw new DOMException("The user aborted a request.", "AbortError");
   }
 
   const response = await generateContentProxy(

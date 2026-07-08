@@ -306,6 +306,7 @@ export function ProductDNA() {
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [extractionLogs, setExtractionLogs] = useState<string[]>([]);
   const [extractionProgress, setExtractionProgress] = useState(0);
+  const extractionAbortControllerRef = useRef<AbortController | null>(null);
 
   const [fontSearch, setFontSearch] = useState("");
   const filteredFonts = useMemo(() => {
@@ -452,6 +453,10 @@ export function ProductDNA() {
     setExtractionProgress(5);
     setIsExtractionModalOpen(true);
 
+    const abortController = new AbortController();
+    extractionAbortControllerRef.current = abortController;
+    const signal = abortController.signal;
+
     try {
       let screenshotData: { data: string; mimeType: string; url: string } | null = null;
       let microlinkMetadata: any = null;
@@ -461,7 +466,12 @@ export function ProductDNA() {
           setExtractionProgress(15);
           const targetUrl = dna.website.startsWith("http") ? dna.website : `https://${dna.website}`;
           const encodedUrl = encodeURIComponent(targetUrl);
-          const mLinkRes = await fetch(`https://api.microlink.io?url=${encodedUrl}&screenshot=true&meta=true&palette=true&animations=false&waitForTimeout=4500`);
+          
+          if (signal.aborted) {
+            throw new DOMException("The user aborted a request.", "AbortError");
+          }
+
+          const mLinkRes = await fetch(`https://api.microlink.io?url=${encodedUrl}&screenshot=true&meta=true&palette=true&animations=false&waitForTimeout=4500`, { signal });
           if (mLinkRes.ok) {
             const mLinkData = await mLinkRes.json();
             microlinkMetadata = mLinkData?.data;
@@ -470,25 +480,54 @@ export function ProductDNA() {
               setScreenshotUrl(mLinkUrl);
               setExtractionLogs((prev) => [...prev, "> Snapshot Acquired."]);
               setExtractionProgress(30);
+              
+              if (signal.aborted) {
+                throw new DOMException("The user aborted a request.", "AbortError");
+              }
+
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 12000);
-              const res = await fetch(mLinkUrl, { signal: controller.signal });
-              clearTimeout(timeoutId);
-              if (res.ok) {
-                const blob = await res.blob();
-                const base64 = await new Promise<string>((resolve) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result as string);
-                  reader.readAsDataURL(blob);
-                });
-                screenshotData = { data: base64.split(",")[1], mimeType: blob.type, url: mLinkUrl };
-                setExtractionProgress(45);
+              
+              const onAbort = () => {
+                controller.abort();
+              };
+              signal.addEventListener('abort', onAbort);
+              
+              try {
+                const res = await fetch(mLinkUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                signal.removeEventListener('abort', onAbort);
+                if (res.ok) {
+                  const blob = await res.blob();
+                  const base64 = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = (e) => reject(e);
+                    reader.readAsDataURL(blob);
+                  });
+                  screenshotData = { data: base64.split(",")[1], mimeType: blob.type, url: mLinkUrl };
+                  setExtractionProgress(45);
+                }
+              } catch (eImg: any) {
+                clearTimeout(timeoutId);
+                signal.removeEventListener('abort', onAbort);
+                if (signal.aborted || eImg.name === 'AbortError') {
+                  throw new DOMException("The user aborted a request.", "AbortError");
+                }
+                console.warn("Screenshot download failed:", eImg);
               }
             }
           }
-        } catch (err) {
+        } catch (err: any) {
+          if (signal.aborted || err.name === 'AbortError') {
+            throw err;
+          }
           console.warn("Screenshot capture failed:", err);
         }
+      }
+
+      if (signal.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
       }
 
       setExtractionLogs((prev) => [...prev, "Parsing DOM tree and semantic HTML...", "Extracting <H1> through <H3> hierarchy...", "Mapping CSS variables & theme tokens...", "Running psychographic NLP processing..."]);
@@ -499,7 +538,12 @@ export function ProductDNA() {
         user?.uid,
         screenshotData ? { data: screenshotData.data, mimeType: screenshotData.mimeType } : undefined,
         microlinkMetadata,
+        signal
       );
+
+      if (signal.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
 
       setExtractionLogs((prev) => [...prev, '> "Hell State" quantified.', "Structuring DNA JSON payload...", "Finalizing Tror Memory Graph..."]);
       setExtractionProgress(100);
@@ -546,13 +590,31 @@ export function ProductDNA() {
       setExtractionComplete(true);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
+      if (signal.aborted || err.name === 'AbortError') {
+        console.log("Brand extraction aborted by user.");
+        setExtractionLogs((prev) => [...prev, "Extraction cancelled by user."]);
+        setIsExtractionModalOpen(false);
+        return;
+      }
       logSilentError(err as Error, { context: "handleResearch" });
       setError("Failed to research. Please check your API key or document format.");
       setIsExtractionModalOpen(false);
     } finally {
       setIsResearching(false);
+      if (extractionAbortControllerRef.current === abortController) {
+        extractionAbortControllerRef.current = null;
+      }
     }
+  };
+
+  const handleCloseExtractionModal = () => {
+    if (isResearching && extractionAbortControllerRef.current) {
+      extractionAbortControllerRef.current.abort();
+      extractionAbortControllerRef.current = null;
+      setIsResearching(false);
+    }
+    setIsExtractionModalOpen(false);
   };
 
   const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1122,7 +1184,7 @@ export function ProductDNA() {
         screenshotUrl={screenshotUrl}
         extractionLogs={extractionLogs}
         extractionProgress={extractionProgress}
-        onClose={() => setIsExtractionModalOpen(false)}
+        onClose={handleCloseExtractionModal}
         onSaveAndContinue={() => { setIsExtractionModalOpen(false); navigate("/dashboard/campaigns"); }}
         dna={dna}
       />

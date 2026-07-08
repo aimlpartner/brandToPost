@@ -194,6 +194,7 @@ export function Onboarding() {
   const [scanProgress, setScanProgress] = useState(0);
   const [scanLogs, setScanLogs] = useState<string[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const scanAbortControllerRef = useRef<AbortController | null>(null);
 
   // Extracted Brand DNA state
   const [dna, setDna] = useState<any>({
@@ -303,7 +304,6 @@ export function Onboarding() {
       setError("Please enter either a Website URL or a Brand Description to scan.");
       return;
     }
-
     setError(null);
     setIsScanning(true);
     setScanProgress(5);
@@ -313,6 +313,10 @@ export function Onboarding() {
       "Booting Strategist Agent...",
       "Gathering brand context matrix..."
     ]);
+
+    const abortController = new AbortController();
+    scanAbortControllerRef.current = abortController;
+    const signal = abortController.signal;
 
     try {
       let screenshotData: any = null;
@@ -330,7 +334,12 @@ export function Onboarding() {
         try {
           const finalUrl = targetWebsite.startsWith("http") ? targetWebsite : `https://${targetWebsite}`;
           const encoded = encodeURIComponent(finalUrl);
-          const response = await fetch(`https://api.microlink.io?url=${encoded}&screenshot=true&meta=true&palette=true`);
+          
+          if (signal.aborted) {
+            throw new DOMException("The user aborted a request.", "AbortError");
+          }
+
+          const response = await fetch(`https://api.microlink.io?url=${encoded}&screenshot=true&meta=true&palette=true`, { signal });
           
           if (!response.ok) {
             let errMsg = `HTTP status ${response.status}`;
@@ -353,12 +362,21 @@ export function Onboarding() {
             setScanLogs((prev) => [...prev, "> Page Snapshot acquired successfully."]);
             setScanProgress(35);
 
+            if (signal.aborted) {
+              throw new DOMException("The user aborted a request.", "AbortError");
+            }
+
             // Fetch screenshot base64
-            const res = await fetch(snapUrl);
+            const res = await fetch(snapUrl, { signal });
             if (!res.ok) {
               throw new Error(`Failed to download page screenshot from Microlink proxy (status ${res.status})`);
             }
             const blob = await res.blob();
+            
+            if (signal.aborted) {
+              throw new DOMException("The user aborted a request.", "AbortError");
+            }
+
             const base64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
               reader.onloadend = () => resolve(reader.result as string);
@@ -373,9 +391,16 @@ export function Onboarding() {
             throw new Error("No screenshot image was captured by the scraper service.");
           }
         } catch (snapErr: any) {
+          if (signal.aborted || snapErr.name === 'AbortError') {
+            throw snapErr;
+          }
           console.error("Screenshot capture failed:", snapErr);
           throw new Error(snapErr.message || snapErr);
         }
+      }
+
+      if (signal.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
       }
 
       setScanLogs((prev) => [
@@ -392,8 +417,13 @@ export function Onboarding() {
         null,
         user.uid,
         screenshotData,
-        microlinkMetadata
+        microlinkMetadata,
+        signal
       );
+
+      if (signal.aborted) {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }
 
       setScanLogs((prev) => [
         ...prev,
@@ -438,8 +468,26 @@ export function Onboarding() {
       }, 1000);
 
     } catch (err: any) {
+      if (signal.aborted || err.name === 'AbortError') {
+        console.log("Onboarding scan aborted by user.");
+        setScanLogs((prev) => [...prev, "Scan cancelled by user."]);
+        setIsScanning(false);
+        return;
+      }
       logSilentError(err as Error, { context: "handleBrandScanOnboarding" });
       setError("Brand scan extraction failed: " + (err.message || "Please verify URL or try with description."));
+      setIsScanning(false);
+    } finally {
+      if (scanAbortControllerRef.current === abortController) {
+        scanAbortControllerRef.current = null;
+      }
+    }
+  };
+
+  const handleCancelScan = () => {
+    if (isScanning && scanAbortControllerRef.current) {
+      scanAbortControllerRef.current.abort();
+      scanAbortControllerRef.current = null;
       setIsScanning(false);
     }
   };
@@ -884,21 +932,22 @@ export function Onboarding() {
                       />
                     </div>
 
-                    <button
-                      type="submit"
-                      disabled={isScanning}
-                      className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:shadow-[#7C3AED]/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm cursor-pointer"
-                    >
-                      {isScanning ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" /> Analyzing Site...
-                        </>
-                      ) : (
-                        <>
-                          Scan & Extract DNA <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
+                    {isScanning ? (
+                      <button
+                        type="button"
+                        onClick={handleCancelScan}
+                        className="w-full bg-slate-100 hover:bg-slate-200/80 text-slate-650 font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all text-sm cursor-pointer"
+                      >
+                        Cancel scan
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:shadow-[#7C3AED]/20 active:scale-[0.98] transition-all text-sm cursor-pointer"
+                      >
+                        Scan & Extract DNA <ArrowRight className="w-4 h-4" />
+                      </button>
+                    )}
                   </form>
                 </div>
               </div>

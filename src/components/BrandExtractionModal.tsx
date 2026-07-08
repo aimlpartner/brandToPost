@@ -175,28 +175,45 @@ export function BrandExtractionModal({ isOpen, inputType, isComplete, screenshot
                  })}
              </div>
 
-             <AnimatePresence>
-               {isComplete && (
-                 <motion.div 
-                   initial={{ opacity: 0, y: 10 }}
-                   animate={{ opacity: 1, y: 0 }}
-                   className="mt-8 pt-6 border-t border-slate-200/60 space-y-3"
-                 >
-                     <button 
-                       onClick={onSaveAndContinue}
-                       className="w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-[0_10px_20px_rgba(124,58,237,0.15)] transition-all"
-                     >
-                       <Sparkles className="w-4 h-4" /> Save DNA Matrix <ArrowRight className="w-4 h-4" />
-                     </button>
-                     <button 
-                       onClick={onClose}
-                       className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors text-sm"
-                     >
-                       Review & Edit Parameters
-                     </button>
-                 </motion.div>
-               )}
-             </AnimatePresence>
+              <AnimatePresence mode="wait">
+                {isComplete ? (
+                  <motion.div 
+                    key="complete-buttons"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mt-8 pt-6 border-t border-slate-200/60 space-y-3"
+                  >
+                      <button 
+                        onClick={onSaveAndContinue}
+                        className="w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-[0_10px_20px_rgba(124,58,237,0.15)] transition-all"
+                      >
+                        <Sparkles className="w-4 h-4" /> Save DNA Matrix <ArrowRight className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={onClose}
+                        className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors text-sm"
+                      >
+                        Review & Edit Parameters
+                      </button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="cancel-button"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mt-8 pt-6 border-t border-slate-100"
+                  >
+                    <button 
+                      onClick={onClose}
+                      className="w-full py-3 bg-slate-100 hover:bg-slate-200/80 text-slate-650 rounded-xl font-medium transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      Cancel extraction
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
           </div>
         </div>
 
