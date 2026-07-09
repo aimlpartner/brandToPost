@@ -22,6 +22,7 @@ import {
   Info,
   Layers,
   HeartHandshake,
+  LogOut,
   Pencil
 } from "lucide-react";
 import { researchProductDNA, researchFocus, generateCampaign } from "../services/geminiService";
@@ -166,7 +167,7 @@ function SmartSelect({ label, value, options, onChange }: SmartSelectProps) {
 }
 
 export function Onboarding() {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, logout } = useAuth();
   const { activeProduct, updateProduct, addProduct, products, isLoaded } = useProducts();
   const navigate = useNavigate();
 
@@ -864,6 +865,13 @@ export function Onboarding() {
               BrandToPost
             </span>
           </div>
+          <button
+            onClick={() => logout()}
+            className="text-xs text-slate-500 hover:text-slate-850 hover:bg-slate-200/50 py-1.5 px-3 border border-slate-350 bg-white/70 hover:border-slate-450 rounded-lg font-bold transition-all duration-300 flex items-center gap-1.5 cursor-pointer hover:shadow-sm"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
         </div>
 
         {error && (

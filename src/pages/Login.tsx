@@ -44,8 +44,8 @@ export function Login() {
         navigate('/dashboard');
       } else {
         // If the user loaded the login page with an existing session that is NOT onboarded,
-        // sign them out so they are not trapped and can sign in to their actual account.
-        logout();
+        // redirect them to onboarding so they can complete it.
+        navigate('/onboarding');
       }
     }
   }, [user, userProfile, loading, navigate, logout, mode]);
