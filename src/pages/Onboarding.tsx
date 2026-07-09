@@ -30,6 +30,7 @@ import { collection, addDoc, setDoc, doc } from "firebase/firestore";
 import { logSilentError, handleFirestoreError, OperationType } from "../lib/firestore-error";
 import { motion, AnimatePresence } from "motion/react";
 import { BrandExtractionModal } from "../components/BrandExtractionModal";
+import { DnaModel } from "../components/DnaModel";
 
 // --- SmartField component for onboarding (matches ProductDNA.tsx) ---
 interface SmartFieldProps {
@@ -418,6 +419,8 @@ export function Onboarding() {
       ]);
       setScanProgress(60);
 
+      const idToken = await user.getIdToken(true);
+
       const scanResult = await researchProductDNA(
         targetWebsite,
         { name: brandName || activeProduct.name, description: brandDesc },
@@ -425,7 +428,8 @@ export function Onboarding() {
         user.uid,
         screenshotData,
         microlinkMetadata,
-        signal
+        signal,
+        idToken
       );
 
       if (signal.aborted) {
@@ -689,11 +693,14 @@ export function Onboarding() {
       ]);
       setGenProgress(30);
 
+      const idToken = await user.getIdToken(true);
+
       const insightsResult = await researchFocus(
         focusTopic,
         selectedChannels,
         subcategory,
-        user.uid
+        user.uid,
+        idToken
       );
 
       setGenLogs((prev) => [
@@ -719,7 +726,8 @@ export function Onboarding() {
         (currentStep, total, msg) => {
           setGenProgress(Math.min(60 + Math.floor((currentStep / total) * 30), 95));
           setGenLogs((prev) => [...prev, msg]);
-        }
+        },
+        idToken
       );
 
       // Auto-assign dates to start next Monday
@@ -838,33 +846,6 @@ export function Onboarding() {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-start p-4 sm:p-8 pt-6 sm:pt-10 relative selection:bg-[#7C3AED] selection:text-white select-none">
-      <BrandExtractionModal
-        isOpen={isExtractionModalOpen}
-        inputType={extractionInputType}
-        isComplete={extractionComplete}
-        screenshotUrl={screenshotUrl}
-        extractionLogs={scanLogs}
-        extractionProgress={scanProgress}
-        onClose={handleCancelScan}
-        onSaveAndContinue={async () => {
-          setIsExtractionModalOpen(false);
-          setIsScanning(false);
-          if (activeProduct && user) {
-            try {
-              await updateProduct(activeProduct.id, {
-                ...dna,
-                logoUrl: dna.logoUrl || null,
-                logoDarkUrl: dna.logoDarkUrl || null,
-                logoLightUrl: dna.logoLightUrl || null,
-              });
-            } catch (err) {
-              console.error("Failed to save initial DNA scan:", err);
-            }
-          }
-          setStep(2);
-        }}
-        dna={dna}
-      />
 
       {/* Background decoration */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 bg-slate-50">
@@ -991,7 +972,29 @@ export function Onboarding() {
                       />
                     </div>
 
-                    {isScanning ? (
+                    {extractionComplete ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (activeProduct && user) {
+                            try {
+                              await updateProduct(activeProduct.id, {
+                                ...dna,
+                                logoUrl: dna.logoUrl || null,
+                                logoDarkUrl: dna.logoDarkUrl || null,
+                                logoLightUrl: dna.logoLightUrl || null,
+                              });
+                            } catch (err) {
+                              console.error("Failed to save initial DNA scan:", err);
+                            }
+                          }
+                          setStep(2);
+                        }}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:shadow-emerald-600/20 active:scale-[0.98] transition-all text-sm cursor-pointer"
+                      >
+                        Save & Continue <ArrowRight className="w-4 h-4" />
+                      </button>
+                    ) : isScanning ? (
                       <button
                         type="button"
                         onClick={handleCancelScan}
@@ -1011,62 +1014,35 @@ export function Onboarding() {
                 </div>
               </div>
 
-              {/* Right Terminal Log Console */}
-              <div className="w-full lg:w-[45%] bg-slate-950/80 font-mono text-xs p-6 flex flex-col justify-between h-[350px] lg:h-auto overflow-hidden">
-                <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Terminal className="w-4 h-4" />
-                    <span>brand_scanner.stdout</span>
-                  </div>
-                  {isScanning && (
-                    <div className="text-[#a78bfa] flex items-center gap-1.5 font-semibold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#a78bfa] animate-ping" />
-                      {scanProgress}%
-                    </div>
-                  )}
-                </div>
-
-                {screenshotUrl && (
-                  <div className="mb-4 rounded-lg overflow-hidden border border-white/10 aspect-[16/10] relative shadow-lg shrink-0">
-                    <img
-                      referrerPolicy="no-referrer"
-                      src={screenshotUrl}
-                      alt="Scan Snapshot"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-black/60 backdrop-blur-sm p-1.5 text-[10px] text-center text-white font-sans tracking-wide">
-                      DOM Screenshot Ingested
+              {/* Right panel: Terminal logs initially, then inline DNA Model visualizer during/after scanning */}
+              {!(isScanning || scanProgress > 0) ? (
+                /* Right Terminal Log Console */
+                <div className="w-full lg:w-[45%] bg-slate-950/80 font-mono text-xs p-6 flex flex-col justify-between h-[350px] lg:h-auto overflow-hidden">
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Terminal className="w-4 h-4" />
+                      <span>brand_scanner.stdout</span>
                     </div>
                   </div>
-                )}
 
-                <div className="flex-1 overflow-y-auto space-y-2 text-slate-300 pr-1 scrollbar-thin scrollbar-thumb-white/10 min-h-[120px]">
-                  {scanLogs.length === 0 ? (
+                  <div className="flex-1 overflow-y-auto space-y-2 text-slate-300 pr-1 scrollbar-thin scrollbar-thumb-white/10 min-h-[120px]">
                     <div className="text-slate-500 italic h-full flex items-center justify-center text-center">
                       Waiting for website scan parameters...
                     </div>
-                  ) : (
-                    scanLogs.map((log, i) => (
-                      <div
-                        key={i}
-                        className={`transition-all ${
-                          log.startsWith(">") ? "text-[#a78bfa] ml-3 font-semibold" : "text-slate-400"
-                        }`}
-                      >
-                        <span className="text-slate-600 mr-2">[{String(i + 1).padStart(2, "0")}]</span>
-                        {log}
-                      </div>
-                    ))
-                  )}
-                  {isScanning && (
-                    <div className="flex items-center gap-1.5 mt-2 text-[#a78bfa]">
-                      <div className="w-1 h-3 bg-[#a78bfa] animate-pulse" />
-                      Ingesting payload...
-                    </div>
-                  )}
-                  <div ref={logsEndRef} />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* Inline 3D DNA Model visualizer */
+                <div className="w-full lg:w-[45%] bg-[#FAF9F6] border-l border-slate-900/10 flex flex-col relative h-[450px] lg:h-auto overflow-hidden min-h-[350px] self-stretch">
+                  {/* Floating Progress HUD Indicator */}
+                  <div className="absolute top-4 right-4 z-30 flex items-center gap-2 px-3 py-1.5 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg text-emerald-600 text-[10px] font-mono font-bold tracking-wider shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>DNA_SYNTHESIS: {scanProgress}%</span>
+                  </div>
+
+                  <DnaModel progress={scanProgress} dna={dna} isComplete={extractionComplete} />
+                </div>
+              )}
             </div>
           )}
 

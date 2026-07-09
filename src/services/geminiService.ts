@@ -167,8 +167,8 @@ function extractJSON(text: string): string {
   return text;
 }
 
-async function generateContentProxy(model: string, contents: any, config?: any, signal?: AbortSignal) {
-  const token = await auth.currentUser?.getIdToken();
+async function generateContentProxy(model: string, contents: any, config?: any, signal?: AbortSignal, customToken?: string) {
+  const token = customToken || (await auth.currentUser?.getIdToken());
   const userId = auth.currentUser?.uid;
   const activeProductId = userId ? localStorage.getItem(`activeProductId_${userId}`) : null;
 
@@ -255,7 +255,8 @@ export async function researchProductDNA(
   userId?: string, 
   screenshot?: { data: string, mimeType: string },
   microlinkMetadata?: any,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  customToken?: string
 ): Promise<Partial<ProductDNA>> {
   const normalizedWebsite = website ? normalizeWebsiteUrl(website) : "";
   const hasWebsite = normalizedWebsite !== "";
@@ -290,7 +291,7 @@ export async function researchProductDNA(
       if (signal?.aborted) {
         throw new DOMException("The user aborted a request.", "AbortError");
       }
-      const token = await auth.currentUser?.getIdToken();
+      const token = customToken || (await auth.currentUser?.getIdToken());
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second total timeout for scraping endpoint
       
@@ -488,7 +489,9 @@ export async function researchProductDNA(
         },
         required: ["positioning", "audience", "tone", "stage", "visualStyle", "visualData", "contentPillars", "targetIcps", "recommendedThemes"]
       }
-    }
+    },
+    undefined,
+    customToken
   );
 
   if (response.usageMetadata) {
@@ -575,7 +578,7 @@ export async function regeneratePostWithFeedback(
   return text.trim();
 }
 
-export async function researchFocus(focus: string, channels: string[] = [], subCategory?: string, userId?: string): Promise<string[]> {
+export async function researchFocus(focus: string, channels: string[] = [], subCategory?: string, userId?: string, customToken?: string): Promise<string[]> {
   const channelsText = channels.length > 0 ? `Focus your research specifically on these channels/platforms: ${channels.join(', ')}.` : '';
   const prompt = `
     You are an expert market researcher.
@@ -617,7 +620,7 @@ export async function researchFocus(focus: string, channels: string[] = [], subC
         config.tools = [{ googleSearch: {} }];
       }
 
-      const response = await generateContentProxy(strategy.model, prompt, config);
+      const response = await generateContentProxy(strategy.model, prompt, config, undefined, customToken);
 
       if (response.usageMetadata && userId) {
         await logTokenUsage(userId, "researchFocus", strategy.model, response.usageMetadata);
@@ -725,7 +728,7 @@ const campaignSchema = {
   required: ["theme", "targetAudience", "coreMessage", "hook", "cta", "contentFormat", "dailyPosts", "repurposingNotes", "confidenceScore", "pillar", "researchSummary"]
 };
 
-export async function generateCampaign(dna: ProductDNA, focus: string, insights: string[], generateImages: boolean = false, feedback?: string, previousDraft?: Omit<WeeklyCampaign, 'id' | 'createdAt'>, channels: string[] = ['LinkedIn', 'X', 'Instagram', 'Facebook', 'Reddit'], campaignTheme?: string, subCategory?: string, userId?: string, aspectRatio?: string, onProgress?: (step: number, total: number, msg: string) => void): Promise<Omit<WeeklyCampaign, 'id' | 'createdAt'>> {
+export async function generateCampaign(dna: ProductDNA, focus: string, insights: string[], generateImages: boolean = false, feedback?: string, previousDraft?: Omit<WeeklyCampaign, 'id' | 'createdAt'>, channels: string[] = ['LinkedIn', 'X', 'Instagram', 'Facebook', 'Reddit'], campaignTheme?: string, subCategory?: string, userId?: string, aspectRatio?: string, onProgress?: (step: number, total: number, msg: string) => void, customToken?: string): Promise<Omit<WeeklyCampaign, 'id' | 'createdAt'>> {
   // Fetch creatives if generateImages is false
   let creatives: Creative[] = [];
   if (!generateImages && dna.id && userId) {
@@ -847,7 +850,9 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
         {
           responseMimeType: "application/json",
           responseSchema: campaignSchema
-        }
+        },
+        undefined,
+        customToken
       );
       
       if (response.usageMetadata && userId) {
