@@ -29,6 +29,7 @@ import { db } from "../firebase";
 import { collection, addDoc, setDoc, doc } from "firebase/firestore";
 import { logSilentError, handleFirestoreError, OperationType } from "../lib/firestore-error";
 import { motion, AnimatePresence } from "motion/react";
+import { BrandExtractionModal } from "../components/BrandExtractionModal";
 
 // --- SmartField component for onboarding (matches ProductDNA.tsx) ---
 interface SmartFieldProps {
@@ -195,6 +196,9 @@ export function Onboarding() {
   const [scanLogs, setScanLogs] = useState<string[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
+  const [isExtractionModalOpen, setIsExtractionModalOpen] = useState(false);
+  const [extractionComplete, setExtractionComplete] = useState(false);
+  const [extractionInputType, setExtractionInputType] = useState<"website" | "description" | "document">("website");
 
   // Extracted Brand DNA state
   const [dna, setDna] = useState<any>({
@@ -306,6 +310,9 @@ export function Onboarding() {
     }
     setError(null);
     setIsScanning(true);
+    setExtractionInputType(website.trim() ? "website" : "description");
+    setIsExtractionModalOpen(true);
+    setExtractionComplete(false);
     setScanProgress(5);
     setScreenshotUrl(null);
     setScanLogs([
@@ -339,7 +346,7 @@ export function Onboarding() {
             throw new DOMException("The user aborted a request.", "AbortError");
           }
 
-          const response = await fetch(`https://api.microlink.io?url=${encoded}&screenshot=true&meta=true&palette=true`, { signal });
+          const response = await fetch(`https://api.microlink.io?url=${encoded}&screenshot=true&meta=true&palette=true&animations=false&waitForTimeout=4500`, { signal });
           
           if (!response.ok) {
             let errMsg = `HTTP status ${response.status}`;
@@ -455,16 +462,34 @@ export function Onboarding() {
 
       // Set fallback logo if found
       if (microlinkMetadata?.logo?.url) {
-        parsedDna.logoUrl = microlinkMetadata.logo.url;
-        parsedDna.logoLightUrl = microlinkMetadata.logo.url;
-        parsedDna.logoDarkUrl = microlinkMetadata.logo.url;
+        if (!parsedDna.logoUrl) parsedDna.logoUrl = microlinkMetadata.logo.url;
+        if (!parsedDna.logoLightUrl) parsedDna.logoLightUrl = microlinkMetadata.logo.url;
+        if (!parsedDna.logoDarkUrl) parsedDna.logoDarkUrl = microlinkMetadata.logo.url;
+      }
+
+      // Add media images to creatives if found
+      if (user && scanResult.extractedMediaImages && Array.isArray(scanResult.extractedMediaImages)) {
+        try {
+          const mediaImages = scanResult.extractedMediaImages as string[];
+          for (let i = 0; i < mediaImages.length; i++) {
+            await addDoc(collection(db, "creatives"), {
+              productId: activeProduct.id, userId: user.uid, url: mediaImages[i],
+              name: `Website Image ${i + 1}`, createdAt: new Date().toISOString(),
+            });
+          }
+          setUploadedCreatives((prev) => [
+            ...prev,
+            ...mediaImages.map((url, i) => ({ name: `Website Image ${i + 1}`, url }))
+          ]);
+        } catch (err) {
+          logSilentError(err as Error, { context: "addExtractedMediaImagesToCreativesOnboarding" });
+        }
       }
 
       // Add delay to show complete state
       setTimeout(() => {
         setDna(parsedDna);
-        setIsScanning(false);
-        setStep(2); // Go to step 2: Refine DNA
+        setExtractionComplete(true);
       }, 1000);
 
     } catch (err: any) {
@@ -472,14 +497,16 @@ export function Onboarding() {
         console.log("Onboarding scan aborted by user.");
         setScanLogs((prev) => [...prev, "Scan cancelled by user."]);
         setIsScanning(false);
+        setIsExtractionModalOpen(false);
         return;
       }
       logSilentError(err as Error, { context: "handleBrandScanOnboarding" });
       setError("Brand scan extraction failed: " + (err.message || "Please verify URL or try with description."));
       setIsScanning(false);
+      setIsExtractionModalOpen(false);
     } finally {
       if (scanAbortControllerRef.current === abortController) {
-        scanAbortControllerRef.current = null;
+         scanAbortControllerRef.current = null;
       }
     }
   };
@@ -490,6 +517,7 @@ export function Onboarding() {
       scanAbortControllerRef.current = null;
       setIsScanning(false);
     }
+    setIsExtractionModalOpen(false);
   };
 
   // Step 2 DNA refine change handlers
@@ -548,6 +576,9 @@ export function Onboarding() {
         stage: dna.stage,
         visualStyle: dna.visualStyle || `Palette: ${dna.visualData.colors.join(", ")}`,
         visualData: dna.visualData,
+        logoUrl: dna.logoUrl || null,
+        logoDarkUrl: dna.logoDarkUrl || null,
+        logoLightUrl: dna.logoLightUrl || null,
         enemy: dna.enemy,
         earnedSecret: dna.earnedSecret,
         originStory: dna.originStory,
@@ -807,6 +838,34 @@ export function Onboarding() {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-start p-4 sm:p-8 pt-6 sm:pt-10 relative selection:bg-[#7C3AED] selection:text-white select-none">
+      <BrandExtractionModal
+        isOpen={isExtractionModalOpen}
+        inputType={extractionInputType}
+        isComplete={extractionComplete}
+        screenshotUrl={screenshotUrl}
+        extractionLogs={scanLogs}
+        extractionProgress={scanProgress}
+        onClose={handleCancelScan}
+        onSaveAndContinue={async () => {
+          setIsExtractionModalOpen(false);
+          setIsScanning(false);
+          if (activeProduct && user) {
+            try {
+              await updateProduct(activeProduct.id, {
+                ...dna,
+                logoUrl: dna.logoUrl || null,
+                logoDarkUrl: dna.logoDarkUrl || null,
+                logoLightUrl: dna.logoLightUrl || null,
+              });
+            } catch (err) {
+              console.error("Failed to save initial DNA scan:", err);
+            }
+          }
+          setStep(2);
+        }}
+        dna={dna}
+      />
+
       {/* Background decoration */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 bg-slate-50">
       </div>
