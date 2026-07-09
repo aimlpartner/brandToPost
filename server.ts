@@ -8,6 +8,14 @@ import { GoogleGenAI, Type } from '@google/genai';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
+// Look for .env files relative to the bundle's directory first, then default to CWD
+try {
+  const rootPath = path.resolve(__dirname, '..');
+  dotenv.config({ path: path.join(rootPath, '.env.local') });
+  dotenv.config({ path: path.join(rootPath, '.env') });
+} catch (e) {
+  console.warn('[Dotenv] Failed to load relative to __dirname, falling back to CWD:', e);
+}
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
