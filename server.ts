@@ -25,30 +25,52 @@ requiredEnvVars.forEach(v => {
 
 // --- Firebase Admin Initialization ---
 function safeParseServiceAccount(raw: string | undefined): any {
+  console.log('[Firebase Init Debug] safeParseServiceAccount start. raw exists:', !!raw, 'length:', raw ? raw.length : 0);
   if (!raw) return null;
+  
+  console.log('[Firebase Init Debug] Raw string sample (first 100 chars):', JSON.stringify(raw.slice(0, 100)));
+  console.log('[Firebase Init Debug] Raw string sample (last 100 chars):', JSON.stringify(raw.slice(-100)));
+
   let cleaned = raw.trim();
+  console.log('[Firebase Init Debug] Trimmed. Starts with:', JSON.stringify(cleaned.slice(0, 5)), 'Ends with:', JSON.stringify(cleaned.slice(-5)));
 
   // Strip wrapping single or double quotes
   if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
     cleaned = cleaned.slice(1, -1).trim();
+    console.log('[Firebase Init Debug] Stripped outer double quotes. New length:', cleaned.length);
   } else if (cleaned.startsWith("'") && cleaned.endsWith("'")) {
     cleaned = cleaned.slice(1, -1).trim();
+    console.log('[Firebase Init Debug] Stripped outer single quotes. New length:', cleaned.length);
   }
 
   // If there are backslashes, fix escaping issues safely
+  console.log('[Firebase Init Debug] Contains backslashes:', cleaned.includes('\\'));
   if (cleaned.includes('\\')) {
+    const backslashCount = (cleaned.match(/\\/g) || []).length;
+    console.log('[Firebase Init Debug] Found', backslashCount, 'backslashes.');
+
     cleaned = cleaned.replace(/\\\{/g, '{').replace(/\\\}/g, '}');
+    console.log('[Firebase Init Debug] After unescaping braces. Starts with:', JSON.stringify(cleaned.slice(0, 5)), 'Ends with:', JSON.stringify(cleaned.slice(-5)));
+
     cleaned = cleaned.replace(/\\"/g, '"');
+    console.log('[Firebase Init Debug] After unescaping quotes. Starts with:', JSON.stringify(cleaned.slice(0, 30)));
   }
+
+  console.log('[Firebase Init Debug] Attempting JSON.parse. Final cleaned string (first 150 chars):', JSON.stringify(cleaned.slice(0, 150)));
 
   try {
     const parsed = JSON.parse(cleaned);
+    console.log('[Firebase Init Debug] JSON.parse succeeded! Keys present:', Object.keys(parsed));
     if (parsed && typeof parsed.private_key === 'string') {
+      const hasBackslashN = parsed.private_key.includes('\\n');
+      console.log('[Firebase Init Debug] Private key contains \\n string:', hasBackslashN);
       parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+      console.log('[Firebase Init Debug] Private key normalized. Length:', parsed.private_key.length);
     }
     return parsed;
   } catch (err: any) {
-    console.error('[Firebase Admin] safeParseServiceAccount failed standard JSON parsing:', err.message);
+    console.error('[Firebase Init Debug] JSON.parse failed. Error message:', err.message);
+    console.error('[Firebase Init Debug] Cleaned string (full):', cleaned);
     throw err;
   }
 }
@@ -2312,17 +2334,20 @@ async function startServer() {
   const MAX_CONCURRENT_RENDERS = 1; // Strict 1 browser viewport to avoid memory overloading on Cloud Run
 
   async function runWithRenderLock<T>(task: (browser: any) => Promise<T>): Promise<T> {
+    console.log(`[runWithRenderLock] Started task queue check. activeRendersCount: ${activeRendersCount}`);
     if (activeRendersCount >= MAX_CONCURRENT_RENDERS) {
       throttledRequestsCount++;
       console.log(`[SCALABILITY GUARD] Maximum concurrent renders reached. Request queued.`);
       return new Promise((resolve, reject) => {
         activeRenderQueue.push({ resolve, reject });
       }).then(async () => {
+        console.log(`[SCALABILITY GUARD] Request dequeued, executing task...`);
         return runWithRenderLock(task);
       });
     }
 
     activeRendersCount++;
+    console.log(`[runWithRenderLock] Incrementing activeRendersCount: ${activeRendersCount}`);
     try {
       const fs = await import('fs');
       const { execSync } = await import('child_process');
@@ -2332,18 +2357,23 @@ async function startServer() {
       const chromeExecutable = path.join(workspaceCache, 'chrome/linux-147.0.7727.57/chrome-linux64/chrome');
 
       let hasInstall = fs.existsSync(chromeExecutable);
+      console.log(`[runWithRenderLock] Checking Chrome at ${chromeExecutable}. exists: ${hasInstall}`);
       if (!hasInstall) {
         console.log(`[PUPPETEER POOL] Local Chrome executable not found at ${chromeExecutable}. Installing browser...`);
         try {
           execSync('npx puppeteer browsers install chrome', {
             env: { ...process.env, PUPPETEER_CACHE_DIR: workspaceCache },
-            stdio: 'ignore'
+            stdio: 'inherit'
           });
           try {
+            console.log(`[PUPPETEER POOL] Setting permissions on ${workspaceCache}...`);
             execSync(`chmod -R 755 ${workspaceCache}`);
-          } catch (eChmod) {}
+          } catch (eChmod: any) {
+            console.error(`[PUPPETEER POOL] chmod failed:`, eChmod.message);
+          }
           console.log(`[PUPPETEER POOL] Local Chrome auto-installation completed under /tmp/puppeteer-cache.`);
           hasInstall = fs.existsSync(chromeExecutable);
+          console.log(`[runWithRenderLock] Re-checking Chrome after installation. exists: ${hasInstall}`);
         } catch (eInstall: any) {
           console.error(`[PUPPETEER POOL] Local Chrome auto-installation failed: ${eInstall.message}`);
         }
@@ -2362,15 +2392,31 @@ async function startServer() {
         } else {
           console.warn(`[PUPPETEER POOL] Chrome missing at ${chromeExecutable}. Checking other default fallback paths.`);
         }
-        sharedBrowser = await puppeteer.default.launch(launchOptions);
+        console.log(`[PUPPETEER POOL] Launching browser with options:`, JSON.stringify(launchOptions));
+        try {
+          sharedBrowser = await puppeteer.default.launch(launchOptions);
+          console.log(`[PUPPETEER POOL] Browser launched successfully!`);
+        } catch (launchErr: any) {
+          console.error(`[PUPPETEER POOL] Browser launch failed:`, launchErr.message || launchErr);
+          throw launchErr;
+        }
       }
+      console.log(`[runWithRenderLock] Calling task function...`);
       const result = await task(sharedBrowser);
+      console.log(`[runWithRenderLock] Task function completed successfully.`);
       return result;
+    } catch (err: any) {
+      console.error(`[runWithRenderLock] Error inside block:`, err.message || err);
+      throw err;
     } finally {
       activeRendersCount--;
+      console.log(`[runWithRenderLock] Decremented activeRendersCount: ${activeRendersCount}`);
       if (activeRenderQueue.length > 0) {
         const next = activeRenderQueue.shift();
-        if (next) next.resolve(true);
+        if (next) {
+          console.log(`[runWithRenderLock] Releasing next queued render.`);
+          next.resolve(true);
+        }
       }
     }
   }
@@ -5287,10 +5333,13 @@ However, if they ask to make a campaign or send a product photo, and they have n
   // Scraping Endpoint for Brand DNA with Guarded Browser Lock to halt OOM Crashes
   app.post('/api/scrape', requireAuth, routeRateLimiter(3, 60 * 1000), async (req, res) => {
     const { url } = req.body;
+    console.log(`[api/scrape] Received request for URL: ${url}`);
     let targetUrl: string;
     try {
       targetUrl = normalizePublicHttpUrl(url);
+      console.log(`[api/scrape] Normalized target URL to: ${targetUrl}`);
     } catch (error: any) {
+      console.error(`[api/scrape] URL normalization failed for input "${url}":`, error.message);
       return res.status(400).json({ error: error.message || 'Invalid URL' });
     }
 
@@ -5312,31 +5361,38 @@ However, if they ask to make a campaign or send a product photo, and they have n
     req.on('close', handleAbort);
 
     try {
+      console.log(`[api/scrape] Initiating runWithRenderLock for ${targetUrl}...`);
       const scrapeData: any = await runWithRenderLock(async (browser) => {
         if (aborted) {
+          console.log(`[api/scrape] Abort detected before browser page creation.`);
           throw new DOMException("The user aborted a request.", "AbortError");
         }
+        console.log(`[api/scrape] Creating new browser page...`);
         page = await browser.newPage();
         try {
+          console.log(`[api/scrape] Setting viewport for ${targetUrl}...`);
           await page.setViewport({ width: 1280, height: 800 });
           
           if (aborted) {
+            console.log(`[api/scrape] Abort detected before navigation.`);
             throw new DOMException("The user aborted a request.", "AbortError");
           }
           
-          // Go to the URL and wait until the DOM is loaded to ensure styles are available
+          console.log(`[api/scrape] Navigating to target URL: ${targetUrl}...`);
           await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(e => {
             if (aborted) {
               throw new DOMException("The user aborted a request.", "AbortError");
             }
-            console.error("Goto timeout: ", e);
+            console.error("[api/scrape] Goto timeout or error: ", e.message || e);
           });
           
           if (aborted) {
+            console.log(`[api/scrape] Abort detected after navigation.`);
             throw new DOMException("The user aborted a request.", "AbortError");
           }
           
-          return await page.evaluate(() => {
+          console.log(`[api/scrape] Evaluating page document to extract Brand DNA...`);
+          const evaluationResult = await page.evaluate(() => {
             const textContent = document.body.innerText.substring(0, 20000);
             
             const fontCounts: Record<string, number> = {};
@@ -5487,11 +5543,15 @@ However, if they ask to make a campaign or send a product photo, and they have n
 
             return { textContent, fontCounts, colorCounts, bgColorCounts, mediaImages: uniqueMediaImages, logoUrl };
           });
+          console.log(`[api/scrape] Page evaluation completed successfully.`);
+          return evaluationResult;
         } finally {
           if (page) {
+            console.log(`[api/scrape] Closing page instance...`);
             const tempPage = page;
             page = null;
             await tempPage.close().catch(() => {});
+            console.log(`[api/scrape] Page instance closed.`);
           }
         }
       });
@@ -5500,6 +5560,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
         throw new DOMException("The user aborted a request.", "AbortError");
       }
 
+      console.log(`[api/scrape] Sorting and formatting extracted data...`);
       const extractedFonts = Object.entries(scrapeData.fontCounts || {})
          .sort((a: [string, any], b: [string, any]) => (b[1] as number) - (a[1] as number))
          .map(entry => entry[0])
@@ -5515,6 +5576,12 @@ However, if they ask to make a campaign or send a product photo, and they have n
          .map(entry => entry[0])
          .slice(0, 5);
 
+      console.log(`[api/scrape] Extracted fonts:`, JSON.stringify(extractedFonts));
+      console.log(`[api/scrape] Extracted colors:`, JSON.stringify(extractedColors));
+      console.log(`[api/scrape] Extracted bgColors:`, JSON.stringify(extractedBgColors));
+      console.log(`[api/scrape] Extracted media images count:`, scrapeData.mediaImages?.length || 0);
+      console.log(`[api/scrape] Extracted logo URL:`, scrapeData.logoUrl ? scrapeData.logoUrl.slice(0, 100) + '...' : 'none');
+
       // Log Puppeteer web scrape cost usage
       const userId = (req as any).user?.uid;
       if (userId) {
@@ -5525,6 +5592,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
         });
       }
 
+      console.log(`[api/scrape] Sending successful response.`);
       res.json({
         success: true,
         textContent: scrapeData.textContent,
@@ -5543,7 +5611,8 @@ However, if they ask to make a campaign or send a product photo, and they have n
           res.status(499).json({ error: 'Client closed request' });
         }
       } else {
-        console.error("Scraping error:", error);
+        console.error("[api/scrape] Scraping error caught:", error.message || error);
+        console.error("[api/scrape] Full error detail:", error);
         res.status(500).json({ error: error.message });
       }
     } finally {
