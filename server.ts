@@ -2502,6 +2502,82 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
   app.use(cookieParser());
 
+  // --- TEMPORARY DIAGNOSTIC ENDPOINT (remove after debugging) ---
+  app.get('/api/debug/env', (req, res) => {
+    const fsSync = require('fs');
+    const envPaths = [
+      { label: 'cwd/.env', path: path.join(process.cwd(), '.env') },
+      { label: 'cwd/.env.local', path: path.join(process.cwd(), '.env.local') },
+      { label: '__dirname/../.env', path: path.resolve(__dirname, '..', '.env') },
+      { label: '__dirname/.env', path: path.resolve(__dirname, '.env') },
+    ];
+
+    const fileChecks = envPaths.map(p => ({
+      label: p.label,
+      absolutePath: p.path,
+      exists: fsSync.existsSync(p.path),
+    }));
+
+    // List all files in cwd to see what's deployed
+    let cwdFiles: string[] = [];
+    try {
+      cwdFiles = fsSync.readdirSync(process.cwd()).slice(0, 50);
+    } catch (e: any) {
+      cwdFiles = [`Error reading cwd: ${e.message}`];
+    }
+
+    let dirFiles: string[] = [];
+    try {
+      dirFiles = fsSync.readdirSync(__dirname).slice(0, 50);
+    } catch (e: any) {
+      dirFiles = [`Error reading __dirname: ${e.message}`];
+    }
+
+    let parentFiles: string[] = [];
+    try {
+      parentFiles = fsSync.readdirSync(path.resolve(__dirname, '..')).slice(0, 50);
+    } catch (e: any) {
+      parentFiles = [`Error reading parent: ${e.message}`];
+    }
+
+    const diagnostic = {
+      timestamp: new Date().toISOString(),
+      processInfo: {
+        cwd: process.cwd(),
+        __dirname,
+        __filename: __filename,
+        nodeVersion: process.version,
+        platform: process.platform,
+        pid: process.pid,
+      },
+      envVars: {
+        GEMINI_API_KEY: process.env.GEMINI_API_KEY ? `SET (${process.env.GEMINI_API_KEY.length} chars, starts: ${process.env.GEMINI_API_KEY.slice(0, 5)}...)` : 'NOT SET',
+        FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT ? `SET (${process.env.FIREBASE_SERVICE_ACCOUNT.length} chars, starts: ${process.env.FIREBASE_SERVICE_ACCOUNT.slice(0, 10)}...)` : 'NOT SET',
+        APP_URL: process.env.APP_URL || 'NOT SET',
+        NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+        SMTP_HOST: process.env.SMTP_HOST ? 'SET' : 'NOT SET',
+        SMTP_USER: process.env.SMTP_USER ? 'SET' : 'NOT SET',
+      },
+      envFileChecks: fileChecks,
+      filesInCwd: cwdFiles,
+      filesInDirname: dirFiles,
+      filesInParent: parentFiles,
+      firebaseAdminInitialized: !!admin.apps?.length,
+      firestoreConnected: !!db,
+    };
+
+    // Also write to a file for later review
+    try {
+      const logPath = path.join(process.cwd(), 'env-debug.log');
+      fsSync.writeFileSync(logPath, JSON.stringify(diagnostic, null, 2));
+      (diagnostic as any).logWrittenTo = logPath;
+    } catch (e: any) {
+      (diagnostic as any).logWriteError = e.message;
+    }
+
+    res.json(diagnostic);
+  });
+
   app.use((req, res, next) => {
     if (!lastKnownHost) {
       const proto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
