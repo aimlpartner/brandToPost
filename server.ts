@@ -2540,6 +2540,13 @@ async function startServer() {
       parentFiles = [`Error reading parent: ${e.message}`];
     }
 
+    let htaccessContent = '';
+    try {
+      htaccessContent = fsSync.readFileSync(path.join(process.cwd(), '.htaccess'), 'utf8');
+    } catch (e: any) {
+      htaccessContent = `Error reading .htaccess: ${e.message}`;
+    }
+
     const diagnostic = {
       timestamp: new Date().toISOString(),
       processInfo: {
@@ -2550,6 +2557,7 @@ async function startServer() {
         platform: process.platform,
         pid: process.pid,
       },
+      htaccess: htaccessContent,
       envVars: {
         GEMINI_API_KEY: process.env.GEMINI_API_KEY ? `SET (${process.env.GEMINI_API_KEY.length} chars, starts: ${process.env.GEMINI_API_KEY.slice(0, 5)}...)` : 'NOT SET',
         FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT ? `SET (${process.env.FIREBASE_SERVICE_ACCOUNT.length} chars, starts: ${process.env.FIREBASE_SERVICE_ACCOUNT.slice(0, 10)}...)` : 'NOT SET',
