@@ -2631,6 +2631,7 @@ ${htmlContent}
   app.post('/api/ai/generate', requireAuth, routeRateLimiter(15, 60 * 1000), async (req, res) => {
     const { model, contents, config } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log('key present:', !!process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY?.length);
     
     if (!apiKey) {
       console.error('[AI Proxy] GEMINI_API_KEY is not set in process.env at request time.');
