@@ -8,18 +8,48 @@ import { GoogleGenAI, Type } from '@google/genai';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Look for .env files relative to the bundle's directory first, then default to CWD
-try {
-  const rootPath = path.resolve(__dirname, '..');
-  dotenv.config({ path: path.join(rootPath, '.env.local') });
-  dotenv.config({ path: path.join(rootPath, '.env') });
-} catch (e) {
-  console.warn('[Dotenv] Failed to load relative to __dirname, falling back to CWD:', e);
+// --- Environment Loading Diagnostics ---
+console.log('[ENV DEBUG] process.cwd():', process.cwd());
+console.log('[ENV DEBUG] __dirname:', __dirname);
+console.log('[ENV DEBUG] __filename:', __filename);
+
+// Check what env vars exist BEFORE dotenv loads anything
+console.log('[ENV DEBUG] GEMINI_API_KEY in process.env BEFORE dotenv:', !!process.env.GEMINI_API_KEY, 'length:', process.env.GEMINI_API_KEY?.length || 0);
+console.log('[ENV DEBUG] FIREBASE_SERVICE_ACCOUNT in process.env BEFORE dotenv:', !!process.env.FIREBASE_SERVICE_ACCOUNT, 'length:', process.env.FIREBASE_SERVICE_ACCOUNT?.length || 0);
+console.log('[ENV DEBUG] APP_URL in process.env BEFORE dotenv:', !!process.env.APP_URL, 'value:', process.env.APP_URL || '(not set)');
+
+// Try loading .env files from multiple locations
+const dotenvPaths = [
+  path.join(process.cwd(), '.env'),
+  path.join(process.cwd(), '.env.local'),
+  path.resolve(__dirname, '..', '.env'),
+  path.resolve(__dirname, '..', '.env.local'),
+  path.resolve(__dirname, '.env'),
+  path.resolve(__dirname, '.env.local'),
+];
+
+for (const envPath of dotenvPaths) {
+  try {
+    const fsSync = require('fs');
+    const exists = fsSync.existsSync(envPath);
+    console.log(`[ENV DEBUG] Checking ${envPath} -> exists: ${exists}`);
+    if (exists) {
+      const result = dotenv.config({ path: envPath });
+      console.log(`[ENV DEBUG] Loaded ${envPath}: error=${result.error ? result.error.message : 'none'}, keys=${result.parsed ? Object.keys(result.parsed).length : 0}`);
+    }
+  } catch (e: any) {
+    console.warn(`[ENV DEBUG] Failed to check/load ${envPath}:`, e.message);
+  }
 }
-dotenv.config({ path: '.env.local' });
+
+// Final fallback
 dotenv.config();
 
 // --- Environment Variable Validation ---
+console.log('[ENV DEBUG] GEMINI_API_KEY in process.env AFTER dotenv:', !!process.env.GEMINI_API_KEY, 'length:', process.env.GEMINI_API_KEY?.length || 0);
+console.log('[ENV DEBUG] FIREBASE_SERVICE_ACCOUNT in process.env AFTER dotenv:', !!process.env.FIREBASE_SERVICE_ACCOUNT, 'length:', process.env.FIREBASE_SERVICE_ACCOUNT?.length || 0);
+console.log('[ENV DEBUG] APP_URL in process.env AFTER dotenv:', !!process.env.APP_URL, 'value:', process.env.APP_URL || '(not set)');
+
 const requiredEnvVars = [
   'GEMINI_API_KEY',
   'APP_URL',
@@ -2371,7 +2401,7 @@ async function startServer() {
         try {
           execSync('npx puppeteer browsers install chrome', {
             env: { ...process.env, PUPPETEER_CACHE_DIR: workspaceCache },
-            stdio: 'inherit'
+            stdio: 'pipe'
           });
           try {
             console.log(`[PUPPETEER POOL] Setting permissions on ${workspaceCache}...`);
