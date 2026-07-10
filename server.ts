@@ -2419,23 +2419,34 @@ async function startServer() {
       const fs = await import('fs');
       const { execSync } = await import('child_process');
 
-      // Set and verify the persistent world-accessible cache for Puppeteer Chrome
-      const workspaceCache = '/tmp/puppeteer-cache';
-
       const findDynamicChrome = (): string | null => {
-        try {
-          const chromeDir = path.join(workspaceCache, 'chrome');
-          if (fs.existsSync(chromeDir)) {
-            const versions = fs.readdirSync(chromeDir);
-            for (const v of versions) {
-              const candidate = path.join(chromeDir, v, 'chrome-linux64', 'chrome');
-              if (fs.existsSync(candidate)) {
-                return candidate;
+        const candidateDirs = [
+          path.join(process.cwd(), '.cache', 'puppeteer'),
+          path.join(esmDirname, '..', '.cache', 'puppeteer'),
+          path.join(esmDirname, '.cache', 'puppeteer'),
+          '/tmp/puppeteer-cache',
+          path.join(process.cwd(), '.puppeteer-cache'),
+          path.join(esmDirname, '..', '.puppeteer-cache'),
+          path.join(esmDirname, '.puppeteer-cache'),
+          '/home/u769235882/domains/brandtopost.com/public_html/.cache/puppeteer'
+        ];
+
+        for (const baseDir of candidateDirs) {
+          try {
+            const chromeDir = path.join(baseDir, 'chrome');
+            if (fs.existsSync(chromeDir)) {
+              const versions = fs.readdirSync(chromeDir);
+              for (const v of versions) {
+                const candidate = path.join(chromeDir, v, 'chrome-linux64', 'chrome');
+                if (fs.existsSync(candidate)) {
+                  console.log(`[PUPPETEER POOL] Found Chrome at: ${candidate}`);
+                  return candidate;
+                }
               }
             }
+          } catch (err) {
+            // ignore folder-specific scanning errors
           }
-        } catch (err) {
-          console.error('[PUPPETEER POOL] Scan error:', err);
         }
         return null;
       };
@@ -2445,24 +2456,42 @@ async function startServer() {
       console.log(`[runWithRenderLock] Checking Chrome. exists: ${hasInstall}, path: ${chromeExecutable}`);
 
       if (!hasInstall) {
-        console.log(`[PUPPETEER POOL] Local Chrome executable not found. Installing browser...`);
+        const installCacheDir = path.join(process.cwd(), '.cache', 'puppeteer');
+        console.log(`[PUPPETEER POOL] Local Chrome executable not found. Running auto-installer into ${installCacheDir}...`);
         try {
           execSync('npx puppeteer browsers install chrome', {
-            env: { ...process.env, PUPPETEER_CACHE_DIR: workspaceCache },
+            env: { ...process.env, PUPPETEER_CACHE_DIR: installCacheDir },
             stdio: 'pipe'
           });
           try {
-            console.log(`[PUPPETEER POOL] Setting permissions on ${workspaceCache}...`);
-            execSync(`chmod -R 755 ${workspaceCache}`);
+            console.log(`[PUPPETEER POOL] Setting permissions on ${installCacheDir}...`);
+            execSync(`chmod -R 755 ${installCacheDir}`);
           } catch (eChmod: any) {
             console.error(`[PUPPETEER POOL] chmod failed:`, eChmod.message);
           }
-          console.log(`[PUPPETEER POOL] Local Chrome auto-installation completed under /tmp/puppeteer-cache.`);
           chromeExecutable = findDynamicChrome();
           hasInstall = !!chromeExecutable;
           console.log(`[runWithRenderLock] Re-checking Chrome after installation. exists: ${hasInstall}, path: ${chromeExecutable}`);
         } catch (eInstall: any) {
-          console.error(`[PUPPETEER POOL] Local Chrome auto-installation failed: ${eInstall.message}`);
+          console.error(`[PUPPETEER POOL] Local Chrome auto-installation to ${installCacheDir} failed: ${eInstall.message}`);
+          
+          // Fallback to /tmp/puppeteer-cache if main workspace install fails
+          const fallbackCacheDir = '/tmp/puppeteer-cache';
+          console.log(`[PUPPETEER POOL] Attempting fallback auto-installation to ${fallbackCacheDir}...`);
+          try {
+            execSync('npx puppeteer browsers install chrome', {
+              env: { ...process.env, PUPPETEER_CACHE_DIR: fallbackCacheDir },
+              stdio: 'pipe'
+            });
+            try {
+              execSync(`chmod -R 755 ${fallbackCacheDir}`);
+            } catch (eChmod: any) {}
+            chromeExecutable = findDynamicChrome();
+            hasInstall = !!chromeExecutable;
+            console.log(`[runWithRenderLock] Re-checking Chrome after fallback installation. exists: ${hasInstall}, path: ${chromeExecutable}`);
+          } catch (eFallback: any) {
+            console.error(`[PUPPETEER POOL] Fallback installation also failed: ${eFallback.message}`);
+          }
         }
       }
 
