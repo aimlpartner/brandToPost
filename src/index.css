@@ -204,25 +204,24 @@ h1, h2, h3, h4, h5, h6 {
 /* Scrollbar */
 @media (min-width: 769px) {
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #08080C;
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #1E1B4B; /* Deep indigo */
-    border: 2px solid #08080C;
-    border-radius: 5px;
+    background: rgba(15, 23, 42, 0.2);
+    border-radius: 100px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #312E81;
+    background: rgba(15, 23, 42, 0.4);
   }
   
   /* Firefox */
   html {
     scrollbar-width: thin;
-    scrollbar-color: #1E1B4B #08080C;
+    scrollbar-color: rgba(15, 23, 42, 0.2) transparent;
   }
 }
 

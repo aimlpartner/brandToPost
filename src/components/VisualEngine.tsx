@@ -30,6 +30,27 @@ function uniqueName(name: string) {
   return <div className="text-gray-400 tracking-widest uppercase font-bold text-[min(3vw,16px)]">{name}</div>;
 }
 
+const replaceLogoPlaceholder = (html: string, logoUrl: string | null | undefined): string => {
+  if (!html || !logoUrl) return html;
+  return html.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
+    const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
+    if (isLogo) {
+      return `<img${p1}src="${logoUrl}"${p3}>`;
+    }
+    return match;
+  });
+};
+
+const getProxiedImageUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/') || url.startsWith('http://localhost') || url.startsWith('https://localhost')) {
+    return url;
+  }
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+};
+
+
+
 export function VisualEngine({ visualType, visualData, imageUrl, dna, className, fallbackText, onImageGenerated, activeLogo: propsActiveLogo }: VisualEngineProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -59,7 +80,8 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
   }
 
   const isDarkTemplate = ["creative-story", "powerful-quote", "abstract-announcement", "custom-overlay"].includes(safeVisualType);
-  const activeLogo = propsActiveLogo || (isDarkTemplate ? dna?.logoLightUrl : dna?.logoDarkUrl) || dna?.logoUrl;
+  const rawLogo = propsActiveLogo || (isDarkTemplate ? dna?.logoLightUrl : dna?.logoDarkUrl) || dna?.logoUrl;
+  const activeLogo = getProxiedImageUrl(rawLogo);
 
   useEffect(() => {
     let mounted = true;
@@ -308,7 +330,7 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
               {visualData?.customHtml ? (
                 <div 
                   className="absolute inset-0 w-full h-full mix-blend-normal"
-                  dangerouslySetInnerHTML={{ __html: visualData.customHtml }} 
+                  dangerouslySetInnerHTML={{ __html: replaceLogoPlaceholder(visualData.customHtml, activeLogo) }} 
                 />
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-end p-24 text-center bg-black/60">

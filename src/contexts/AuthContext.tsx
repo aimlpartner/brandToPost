@@ -110,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               profileInitAttempted = true;
               // Initialize default profile document for new signup
               setDoc(userRef, {
+                uid: currentUser.uid,
                 email: currentUser.email || '',
                 name: currentUser.displayName || '',
                 role: '',

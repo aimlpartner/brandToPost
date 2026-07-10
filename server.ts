@@ -3,15 +3,22 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import nodemailer from 'nodemailer';
 import { GoogleGenAI, Type } from '@google/genai';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
+import { fileURLToPath } from 'url';
+
+// ESM compatibility wrapper for __dirname and __filename
+const esmFilename = typeof __filename !== 'undefined' ? __filename : fileURLToPath(import.meta.url);
+const esmDirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(esmFilename);
+
 // --- Environment Loading Diagnostics ---
 console.log('[ENV DEBUG] process.cwd():', process.cwd());
-console.log('[ENV DEBUG] __dirname:', __dirname);
-console.log('[ENV DEBUG] __filename:', __filename);
+console.log('[ENV DEBUG] esmDirname:', esmDirname);
+console.log('[ENV DEBUG] esmFilename:', esmFilename);
 
 // Check what env vars exist BEFORE dotenv loads anything
 console.log('[ENV DEBUG] GEMINI_API_KEY in process.env BEFORE dotenv:', !!process.env.GEMINI_API_KEY, 'length:', process.env.GEMINI_API_KEY?.length || 0);
@@ -22,15 +29,14 @@ console.log('[ENV DEBUG] APP_URL in process.env BEFORE dotenv:', !!process.env.A
 const dotenvPaths = [
   path.join(process.cwd(), '.env'),
   path.join(process.cwd(), '.env.local'),
-  path.resolve(__dirname, '..', '.env'),
-  path.resolve(__dirname, '..', '.env.local'),
-  path.resolve(__dirname, '.env'),
-  path.resolve(__dirname, '.env.local'),
+  path.resolve(esmDirname, '..', '.env'),
+  path.resolve(esmDirname, '..', '.env.local'),
+  path.resolve(esmDirname, '.env'),
+  path.resolve(esmDirname, '.env.local'),
 ];
 
 for (const envPath of dotenvPaths) {
   try {
-    const fsSync = require('fs');
     const exists = fsSync.existsSync(envPath);
     console.log(`[ENV DEBUG] Checking ${envPath} -> exists: ${exists}`);
     if (exists) {
@@ -2504,12 +2510,11 @@ async function startServer() {
 
   // --- TEMPORARY DIAGNOSTIC ENDPOINT (remove after debugging) ---
   app.get('/api/debug/env', (req, res) => {
-    const fsSync = require('fs');
     const envPaths = [
       { label: 'cwd/.env', path: path.join(process.cwd(), '.env') },
       { label: 'cwd/.env.local', path: path.join(process.cwd(), '.env.local') },
-      { label: '__dirname/../.env', path: path.resolve(__dirname, '..', '.env') },
-      { label: '__dirname/.env', path: path.resolve(__dirname, '.env') },
+      { label: 'esmDirname/../.env', path: path.resolve(esmDirname, '..', '.env') },
+      { label: 'esmDirname/.env', path: path.resolve(esmDirname, '.env') },
     ];
 
     const fileChecks = envPaths.map(p => ({
@@ -2528,14 +2533,14 @@ async function startServer() {
 
     let dirFiles: string[] = [];
     try {
-      dirFiles = fsSync.readdirSync(__dirname).slice(0, 50);
+      dirFiles = fsSync.readdirSync(esmDirname).slice(0, 50);
     } catch (e: any) {
-      dirFiles = [`Error reading __dirname: ${e.message}`];
+      dirFiles = [`Error reading esmDirname: ${e.message}`];
     }
 
     let parentFiles: string[] = [];
     try {
-      parentFiles = fsSync.readdirSync(path.resolve(__dirname, '..')).slice(0, 50);
+      parentFiles = fsSync.readdirSync(path.resolve(esmDirname, '..')).slice(0, 50);
     } catch (e: any) {
       parentFiles = [`Error reading parent: ${e.message}`];
     }
@@ -2551,8 +2556,8 @@ async function startServer() {
       timestamp: new Date().toISOString(),
       processInfo: {
         cwd: process.cwd(),
-        __dirname,
-        __filename: __filename,
+        esmDirname,
+        esmFilename,
         nodeVersion: process.version,
         platform: process.platform,
         pid: process.pid,
@@ -2673,6 +2678,17 @@ async function startServer() {
       let htmlContent = "";
       const textShadowDeep = "0 8px 32px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.6)";
 
+      let processedCustomHtml = visualData?.customHtml || "";
+      if (processedCustomHtml && activeLogo) {
+        processedCustomHtml = processedCustomHtml.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
+          const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
+          if (isLogo) {
+            return `<img${p1}src="${activeLogo}"${p3}>`;
+          }
+          return match;
+        });
+      }
+
       if (safeVisualType === "creative-story") {
         htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #111; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
 ${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; z-index: 0;" />` : ''}
@@ -2723,8 +2739,8 @@ ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><i
       } else {
         htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #000; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
 ${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; z-index: 1;" />` : ''}
-${visualData?.customHtml 
-  ? `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; mix-blend-mode: normal; z-index: 5;">${visualData.customHtml}</div>` 
+${processedCustomHtml 
+  ? `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; mix-blend-mode: normal; z-index: 5;">${processedCustomHtml}</div>` 
   : `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 40%, rgba(0,0,0,0.9) 100%); z-index: 2;"></div>
      <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 100px; text-align: center; box-sizing: border-box; z-index: 5;">
        <h2 style="color: white; font-weight: 800; line-height: 1.15; font-size: clamp(48px, 6vw, 90px); margin: 0 0 24px 0; text-shadow: ${textShadowDeep}; text-wrap: balance; overflow-wrap: break-word; width: 100%;">${headline}</h2>
@@ -2756,7 +2772,7 @@ ${htmlContent}
         const page = await browser.newPage();
         try {
           await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
-          await page.setContent(fullHtml, { waitUntil: 'load', timeout: 25000 });
+          await page.setContent(fullHtml, { waitUntil: 'domcontentloaded', timeout: 10000 });
           
           await page.evaluate(async () => {
             await document.fonts.ready;
@@ -2790,6 +2806,22 @@ ${htmlContent}
       res.json({ url: renderResult });
     } catch (e: any) {
       console.error("[PUPPETEER POOL ERROR]:", e);
+      try {
+        const userId = (req as any).user?.uid || 'unknown';
+        const userEmail = (req as any).user?.email || 'unknown';
+        await db.collection("generation_logs").add({
+          userId,
+          userEmail,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          level: "error",
+          section: "overlay",
+          message: `Puppeteer render failed: ${e.message}`,
+          details: e.stack || null,
+          clientTimestamp: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error("Failed to write render error to Firestore logs:", logErr);
+      }
       res.status(500).json({ error: e.message, retry: true });
     }
   });
@@ -5418,8 +5450,37 @@ However, if they ask to make a campaign or send a product photo, and they have n
     }
   });
 
+  app.get('/api/proxy-image', async (req, res) => {
+    const { url } = req.query;
+    if (!url || typeof url !== 'string') {
+      return res.status(400).send('URL query parameter is required');
+    }
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Remote server responded with: ${response.status}`);
+      }
+      const contentType = response.headers.get('content-type') || 'image/png';
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.send(buffer);
+    } catch (e: any) {
+      console.error("CORS proxy failed for image:", url, e.message);
+      res.status(500).send(e.message);
+    }
+  });
+
   // Public Proxy Route for bypassing browser CORS/canvas blocks during logo downloads
   app.get('/api/download-logo', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
     const { url, filename } = req.query;
     if (!url || typeof url !== 'string') {
       return res.status(400).send('URL query parameter is required');

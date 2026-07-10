@@ -186,6 +186,14 @@ interface VisualEditorModalProps {
   onSave: (newImageUrl: string, revertableOriginalUrl: string, newVisualData?: any) => void;
 }
 
+const getProxiedImageUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/') || url.startsWith('http://localhost') || url.startsWith('https://localhost')) {
+    return url;
+  }
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+};
+
 export function VisualEditorModal({
   isOpen,
   onClose,
@@ -194,9 +202,10 @@ export function VisualEditorModal({
   visualData,
   visualType,
   creatives = [],
-  activeLogo,
+  activeLogo: rawActiveLogo,
   onSave
 }: VisualEditorModalProps) {
+  const activeLogo = getProxiedImageUrl(rawActiveLogo);
   // --- Layers State ---
   
   // Background
@@ -370,6 +379,22 @@ export function VisualEditorModal({
       };
       div.childNodes.forEach(walk);
       
+      // Replace logo placeholder inside the div
+      const logoImgs = div.querySelectorAll('img');
+      logoImgs.forEach((img) => {
+        const src = img.getAttribute('src') || '';
+        const alt = img.getAttribute('alt') || '';
+        const isLogo = src.toLowerCase().includes('logo') || alt.toLowerCase().includes('logo');
+        if (isLogo && activeLogo) {
+          img.setAttribute('src', activeLogo);
+          if (activeLogo.startsWith('data:')) {
+            img.removeAttribute('crossOrigin');
+          } else {
+            img.setAttribute('crossOrigin', 'anonymous');
+          }
+        }
+      });
+      
       const root = div.firstElementChild as HTMLElement;
       if (root) {
         root.style.position = 'absolute';
@@ -377,13 +402,30 @@ export function VisualEditorModal({
         root.style.width = '1080px';
         root.style.height = '1080px';
         root.style.pointerEvents = 'none';
+        // Strip baked-in overlay so the user-controlled scrim handles darkness
+        root.style.background = 'none';
+        root.style.backgroundColor = 'transparent';
+        root.style.backdropFilter = 'none';
+        // Also strip from direct children that are full-bleed overlay wrappers
+        Array.from(root.children).forEach((child) => {
+          const el = child as HTMLElement;
+          if (!el.style) return;
+          const bg = el.style.background || el.style.backgroundColor || '';
+          if (bg && (bg.includes('rgba') || bg.includes('gradient') || bg.includes('hsla'))) {
+            el.style.background = 'none';
+            el.style.backgroundColor = 'transparent';
+          }
+          if (el.style.backdropFilter) {
+            el.style.backdropFilter = 'none';
+          }
+        });
       }
 
       return div.innerHTML;
     } catch(e) {
       return visualData.customHtml;
     }
-  }, [visualData, title, titleSize, titleColor, fontFamily, textAlign, subtitle, subtitleSize, subtitleColor, extraTextBlocks]);
+  }, [visualData, title, titleSize, titleColor, fontFamily, textAlign, subtitle, subtitleSize, subtitleColor, extraTextBlocks, activeLogo]);
 
   const [showLogo, setShowLogo] = useState(visualData?.editorState?.showLogo ?? true);
   const [logoScale, setLogoScale] = useState(visualData?.editorState?.logoScale ?? 1);
@@ -432,8 +474,16 @@ export function VisualEditorModal({
   const logoX = useMotionValue(getSmartInitialLogoX());
   const logoY = useMotionValue(getSmartInitialLogoY());
 
+  const hasInitializedRef = useRef(false);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      hasInitializedRef.current = false;
+      return;
+    }
+
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
 
     // 1. Background Image
     const initialBaseBg = visualData?.baseImage || originalImageUrl || imageUrl;
@@ -917,20 +967,18 @@ export function VisualEditorModal({
                     />
                   )}
                   {/* Scrim Overlay */}
-                  {!patchedHtml && (
-                    <div 
-                      style={{ 
-                        position: 'absolute', 
-                        left: 0, 
-                        right: 0, 
-                        bottom: 0, 
-                        height: `${scrimHeight}%`, 
-                        background: `rgba(${parseInt(scrimColor.slice(1,3), 16) || 0},${parseInt(scrimColor.slice(3,5), 16) || 0},${parseInt(scrimColor.slice(5,7), 16) || 0},${scrimOpacity})`, 
-                        zIndex: 1,
-                        pointerEvents: 'none'
-                      }} 
-                    />
-                  )}
+                  <div 
+                    style={{ 
+                      position: 'absolute', 
+                      left: 0, 
+                      right: 0, 
+                      bottom: 0, 
+                      height: `${scrimHeight}%`, 
+                      background: `rgba(${parseInt(scrimColor.slice(1,3), 16) || 0},${parseInt(scrimColor.slice(3,5), 16) || 0},${parseInt(scrimColor.slice(5,7), 16) || 0},${scrimOpacity})`, 
+                      zIndex: 1,
+                      pointerEvents: 'none'
+                    }} 
+                  />
                   
                   {/* Custom HTML Extracted Background */}
                   {!patchedHtml && customOverlayBg && (

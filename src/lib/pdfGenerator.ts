@@ -2,6 +2,31 @@ import { jsPDF } from 'jspdf';
 import { WeeklyCampaign, ProductDNA } from '../types';
 import { logSilentError } from './firestore-error';
 
+const convertLogoToBase64 = async (url: string): Promise<string> => {
+  if (!url) return '';
+  if (url.startsWith('data:')) return url;
+  
+  let proxiedUrl = url;
+  if (!url.startsWith('blob:') && !url.startsWith('/') && !url.startsWith('http://localhost') && !url.startsWith('https://localhost')) {
+    proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
+  }
+  
+  try {
+    const res = await fetch(proxiedUrl);
+    if (!res.ok) throw new Error(`Failed to fetch logo: ${res.statusText}`);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Failed to read blob as data URL"));
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.error("Failed to convert logo to base64 via proxy:", err);
+    return url;
+  }
+};
+
 export const generateCampaignPDF = async (campaign: WeeklyCampaign, product: ProductDNA): Promise<jsPDF> => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -15,7 +40,8 @@ export const generateCampaignPDF = async (campaign: WeeklyCampaign, product: Pro
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
 
   // Logo
-  const activeLogo = product.logoDarkUrl || product.logoUrl || product.logoLightUrl;
+  const rawLogo = product.logoDarkUrl || product.logoUrl || product.logoLightUrl;
+  const activeLogo = rawLogo ? await convertLogoToBase64(rawLogo) : '';
   let logoBottomY = pageHeight / 3;
   if (activeLogo) {
     try {
