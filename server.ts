@@ -8,8 +8,31 @@ import nodemailer from 'nodemailer';
 import { GoogleGenAI, Type } from '@google/genai';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-
 import { fileURLToPath } from 'url';
+import { Readable } from 'stream';
+
+// --- Stdio / Stdin EEXIST Error Workaround for Restricted Hosting Environments (like cPanel/Passenger) ---
+try {
+  // Test if accessing process.stdin throws
+  const testStdin = process.stdin;
+} catch (stdinErr: any) {
+  console.warn(`[SYSTEM WORKAROUND] process.stdin is inaccessible in this environment (${stdinErr.message}). Redefining to dummy stream to prevent Puppeteer/Socket crash...`);
+  try {
+    const dummyStdin = new Readable({
+      read() {
+        this.push(null);
+      }
+    });
+    Object.defineProperty(process, 'stdin', {
+      value: dummyStdin,
+      configurable: true,
+      writable: true
+    });
+    console.log('[SYSTEM WORKAROUND] process.stdin successfully redefined to dummy Readable stream.');
+  } catch (redefineErr: any) {
+    console.error('[SYSTEM WORKAROUND] Failed to redefine process.stdin:', redefineErr);
+  }
+}
 
 // ESM compatibility wrapper for __dirname and __filename
 const esmFilename = typeof __filename !== 'undefined' ? __filename : fileURLToPath(import.meta.url);
