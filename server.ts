@@ -2421,12 +2421,31 @@ async function startServer() {
 
       // Set and verify the persistent world-accessible cache for Puppeteer Chrome
       const workspaceCache = '/tmp/puppeteer-cache';
-      const chromeExecutable = path.join(workspaceCache, 'chrome/linux-147.0.7727.57/chrome-linux64/chrome');
 
-      let hasInstall = fs.existsSync(chromeExecutable);
-      console.log(`[runWithRenderLock] Checking Chrome at ${chromeExecutable}. exists: ${hasInstall}`);
+      const findDynamicChrome = (): string | null => {
+        try {
+          const chromeDir = path.join(workspaceCache, 'chrome');
+          if (fs.existsSync(chromeDir)) {
+            const versions = fs.readdirSync(chromeDir);
+            for (const v of versions) {
+              const candidate = path.join(chromeDir, v, 'chrome-linux64', 'chrome');
+              if (fs.existsSync(candidate)) {
+                return candidate;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[PUPPETEER POOL] Scan error:', err);
+        }
+        return null;
+      };
+
+      let chromeExecutable = findDynamicChrome();
+      let hasInstall = !!chromeExecutable;
+      console.log(`[runWithRenderLock] Checking Chrome. exists: ${hasInstall}, path: ${chromeExecutable}`);
+
       if (!hasInstall) {
-        console.log(`[PUPPETEER POOL] Local Chrome executable not found at ${chromeExecutable}. Installing browser...`);
+        console.log(`[PUPPETEER POOL] Local Chrome executable not found. Installing browser...`);
         try {
           execSync('npx puppeteer browsers install chrome', {
             env: { ...process.env, PUPPETEER_CACHE_DIR: workspaceCache },
@@ -2439,8 +2458,9 @@ async function startServer() {
             console.error(`[PUPPETEER POOL] chmod failed:`, eChmod.message);
           }
           console.log(`[PUPPETEER POOL] Local Chrome auto-installation completed under /tmp/puppeteer-cache.`);
-          hasInstall = fs.existsSync(chromeExecutable);
-          console.log(`[runWithRenderLock] Re-checking Chrome after installation. exists: ${hasInstall}`);
+          chromeExecutable = findDynamicChrome();
+          hasInstall = !!chromeExecutable;
+          console.log(`[runWithRenderLock] Re-checking Chrome after installation. exists: ${hasInstall}, path: ${chromeExecutable}`);
         } catch (eInstall: any) {
           console.error(`[PUPPETEER POOL] Local Chrome auto-installation failed: ${eInstall.message}`);
         }
@@ -2453,11 +2473,11 @@ async function startServer() {
           headless: true,
           args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
         };
-        if (hasInstall) {
+        if (hasInstall && chromeExecutable) {
           console.log(`[PUPPETEER POOL] Specifying explicit Chrome executable path: ${chromeExecutable}`);
           launchOptions.executablePath = chromeExecutable;
         } else {
-          console.warn(`[PUPPETEER POOL] Chrome missing at ${chromeExecutable}. Checking other default fallback paths.`);
+          console.warn(`[PUPPETEER POOL] Chrome missing. Checking other default fallback paths.`);
         }
         console.log(`[PUPPETEER POOL] Launching browser with options:`, JSON.stringify(launchOptions));
         try {
