@@ -217,7 +217,7 @@ export const ImmersiveHero = ({
                     initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 0.8, type: "spring" }}
                     className="pointer-events-auto flex flex-col sm:flex-row gap-6 relative"
                 >
-                    <Link to="/login" className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 rounded-full bg-white text-black font-semibold text-lg overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(255,255,255,0.2)]">
+                    <Link to="/login?mode=signup" className="group relative inline-flex items-center justify-center gap-3 px-10 py-5 rounded-full bg-white text-black font-semibold text-lg overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(255,255,255,0.2)]">
                         <span className="relative z-10">Deploy Your Agents</span>
                         <ArrowRight className="h-5 w-5 relative z-10 group-hover:translate-x-1 transition-transform" />
                         <div className="absolute inset-0 bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity" />

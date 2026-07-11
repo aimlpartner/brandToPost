@@ -306,13 +306,25 @@ export function Onboarding() {
       setError("Active product or user credentials not loaded.");
       return;
     }
-    if (!website && !brandDesc) {
-      setError("Please enter either a Website URL or a Brand Description to scan.");
+
+    const targetWebsite = extractionInputType === "website" ? website.trim() : "";
+    const targetDesc = extractionInputType === "description" ? brandDesc.trim() : "";
+
+    if (extractionInputType === "website" && !targetWebsite) {
+      setError("Please enter a Website URL to scan.");
       return;
     }
+    if (extractionInputType === "description" && !targetDesc) {
+      setError("Please enter a Brand Description to extract DNA.");
+      return;
+    }
+    if (!brandName.trim()) {
+      setError("Please enter a Brand Name.");
+      return;
+    }
+
     setError(null);
     setIsScanning(true);
-    setExtractionInputType(website.trim() ? "website" : "description");
     setIsExtractionModalOpen(true);
     setExtractionComplete(false);
     setScanProgress(5);
@@ -424,7 +436,7 @@ export function Onboarding() {
 
       const scanResult = await researchProductDNA(
         targetWebsite,
-        { name: brandName || activeProduct.name, description: brandDesc },
+        { name: brandName || activeProduct.name, description: targetDesc },
         null,
         user.uid,
         screenshotData,
@@ -888,7 +900,7 @@ export function Onboarding() {
               {[
                 { label: "1. Scan Brand", s: 1 },
                 { label: "2. Refine DNA", s: 2 },
-                { label: "3. Creatives", s: 3 },
+                { label: "3. Brand Assets", s: 3 },
                 { label: "4. Setup Campaign", s: 4 }
               ].map((item) => (
                 <div
@@ -945,40 +957,88 @@ export function Onboarding() {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                        Website URL
-                      </label>
-                      <input
-                        type="text"
-                        value={website}
-                        onChange={(e) => setWebsite(e.target.value)}
-                        placeholder="e.g. stripe.com"
-                        className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all"
-                      />
+                    {/* Tab Switcher for Scan Method */}
+                    <div className="bg-slate-100 p-1 rounded-xl flex gap-1 border border-slate-200/60">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExtractionInputType("website");
+                          setError(null);
+                        }}
+                        className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          extractionInputType === "website"
+                            ? "bg-white text-slate-800 shadow-sm border border-slate-200/20"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        <Globe className="w-3.5 h-3.5" />
+                        Scan Website
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExtractionInputType("description");
+                          setError(null);
+                        }}
+                        className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          extractionInputType === "description"
+                            ? "bg-white text-slate-800 shadow-sm border border-slate-200/20"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Describe Brand
+                      </button>
                     </div>
 
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                        <div className="w-full border-t border-slate-200"></div>
-                      </div>
-                      <div className="relative flex justify-center text-xs">
-                        <span className="bg-white px-3 text-slate-400 font-sans font-bold">OR</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                        Brand / Product Description
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={brandDesc}
-                        onChange={(e) => setBrandDesc(e.target.value)}
-                        placeholder="Describe what your brand does, who it targets, and key features..."
-                        className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all"
-                      />
-                    </div>
+                    {/* Conditional Input Rendering with smooth entry */}
+                    <AnimatePresence mode="wait">
+                      {extractionInputType === "website" ? (
+                        <motion.div
+                          key="website"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.15 }}
+                          className="space-y-4"
+                        >
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Website URL
+                            </label>
+                            <input
+                              type="text"
+                              value={website}
+                              onChange={(e) => setWebsite(e.target.value)}
+                              placeholder="e.g. stripe.com"
+                              className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all"
+                            />
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="description"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.15 }}
+                          className="space-y-4"
+                        >
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Brand / Product Description
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={brandDesc}
+                              onChange={(e) => setBrandDesc(e.target.value)}
+                              placeholder="Describe what your brand does, who it targets, and key features..."
+                              className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all"
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     {extractionComplete ? (
                       <button
@@ -1015,7 +1075,7 @@ export function Onboarding() {
                         type="submit"
                         className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:shadow-[#7C3AED]/20 active:scale-[0.98] transition-all text-sm cursor-pointer"
                       >
-                        Scan & Extract DNA <ArrowRight className="w-4 h-4" />
+                        {extractionInputType === "website" ? "Scan & Extract DNA" : "Extract Brand DNA"} <ArrowRight className="w-4 h-4" />
                       </button>
                     )}
                   </form>
@@ -1254,14 +1314,14 @@ export function Onboarding() {
             </div>
           )}
 
-          {/* STEP 3: Brand Creatives (Upload assets) */}
+          {/* STEP 3: Brand Assets (Upload files) */}
           {step === 3 && (
             <div className="p-6 sm:p-10 flex flex-col justify-between flex-1">
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-2xl font-bold font-display text-slate-800 mb-2">Upload Brand Creatives</h2>
+                  <h2 className="text-2xl font-bold font-display text-slate-800 mb-2">Upload Brand Assets</h2>
                   <p className="text-sm text-slate-500 font-light leading-relaxed">
-                    Provide creative assets (images, logos, product mockups) that can be embedded inside your campaigns. If you skip this, our engine will generate custom visuals dynamically.
+                    Upload photos of your product, store, logo, or team to use in your social posts. For example: a clear product shot, your store exterior, or a clean logo file. If you skip this, the AI will design custom backdrops for you.
                   </p>
                 </div>
 

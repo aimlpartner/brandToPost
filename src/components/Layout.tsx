@@ -10,7 +10,7 @@ import { GuidedTour } from "./GuidedTour";
 
 const bottomNavItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Creatives", href: "/dashboard/creatives", icon: ImageIcon },
+  { name: "Brand Assets", href: "/dashboard/creatives", icon: ImageIcon },
   { name: "Schedule", href: "/dashboard/schedule", icon: Calendar },
   { name: "DNA", href: "/dashboard/dna", icon: FileText },
   { name: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },

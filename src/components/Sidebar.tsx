@@ -8,7 +8,7 @@ import { useState, useRef, useEffect } from "react";
 const navigation = [
  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
  { name: "Brand Position", href: "/dashboard/dna", icon: FileText },
- { name: "Brand Creatives", href: "/dashboard/creatives", icon: ImageIcon },
+ { name: "Brand Assets", href: "/dashboard/creatives", icon: ImageIcon },
  { name: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },
  { name: "Script Studio", href: "/dashboard/scripts", icon: Clapperboard },
  { name: "Schedule", href: "/dashboard/schedule", icon: CalendarClock },

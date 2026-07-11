@@ -264,7 +264,7 @@ export function Creatives() {
  <div className="text-center p-8 glass-panel max-w-sm">
  <ImageIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
  <h2 className="text-xl font-bold text-slate-800 mb-2 font-display">No Product Selected</h2>
- <p className="text-sm text-slate-500 font-light">Please select or create a product to manage creatives.</p>
+ <p className="text-sm text-slate-500 font-light">Please select or create a product to manage assets.</p>
  </div>
  </div>
  );
@@ -273,9 +273,9 @@ export function Creatives() {
  return (
  <div className="flex flex-col bg-transparent">
  <div className="tour-creatives-header px-4 md:px-8 py-4 md:py-6 border-b border-slate-200/50 bg-white/30 backdrop-blur-md">
- <h1 className="text-xl md:text-2xl font-bold text-slate-800 font-display">Brand Creatives</h1>
+ <h1 className="text-xl md:text-2xl font-bold text-slate-800 font-display">Brand Assets</h1>
  <p className="text-xs md:text-sm text-slate-500 mt-1 font-light">
- Connect your Google Drive to import images. We'll use these instead of AI-generated images and automatically overlay your campaign text and logo.
+ Connect your Google Drive to import photos or brand graphics. We'll use these images instead of AI-generated backgrounds and automatically overlay your campaign text and logo.
  </p>
  </div>
 
@@ -300,7 +300,7 @@ export function Creatives() {
  <div className="flex flex-col items-center justify-center py-6 md:py-8 px-4 border-2 border-dashed border-slate-200/80 rounded-xl bg-slate-50/40 backdrop-blur-sm">
  <DownloadCloud className="h-8 md:h-10 w-8 md:w-10 text-slate-400 mb-2 md:mb-3" />
  <p className="text-xs md:text-sm text-slate-500 mb-4 text-center max-w-md font-light">
- Connect your Google account to browse your Drive folders and import images directly into your creatives library.
+ Connect your Google account to browse your Drive folders and import images directly into your brand assets library.
  </p>
  <button
  onClick={handleConnectDrive}

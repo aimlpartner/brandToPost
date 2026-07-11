@@ -3403,10 +3403,10 @@ export function Campaigns() {
                           <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#7C3AED]"></div>
                         </div>
                         <ImageIcon className="h-5 w-5 text-slate-400" />
-                        Generate Creatives
+                        Generate AI Background Images
                       </label>
-                      <p className="text-xs text-slate-500 font-light pl-[3.25rem]">
-                        Automatically generate images for your campaign posts.
+                      <p className="text-xs text-slate-500 font-light pl-[3.25rem] leading-relaxed">
+                        When enabled, the AI will generate brand new backgrounds for your posts. When disabled, the system will prioritize using your uploaded brand photos and assets.
                       </p>
                     </div>
                   </div>

@@ -372,7 +372,7 @@ export function LandingPage() {
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span> WhatsApp Bot
               </Link>
               <Link to="/login" className={`text-sm font-semibold transition-colors hidden md:block ${isScrolled ? 'text-slate-655 hover:text-slate-900' : 'text-slate-300 hover:text-white'}`}>Sign In</Link>
-              <Link to="/login" className="px-5 py-2.5 rounded-xl text-xs font-semibold tracking-wide uppercase transition-all hover:scale-105 active:scale-95 bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-md whitespace-nowrap">
+              <Link to="/login?mode=signup" className="px-5 py-2.5 rounded-xl text-xs font-semibold tracking-wide uppercase transition-all hover:scale-105 active:scale-95 bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-md whitespace-nowrap">
                 Start Free Trial
               </Link>
             </div>
@@ -415,7 +415,7 @@ export function LandingPage() {
             </p>
             
             <div className="flex flex-col sm:flex-row justify-start items-center gap-4 pt-2">
-              <Link to="/login" className="group flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-base transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#7C3AED]/20 w-full sm:w-auto text-center">
+              <Link to="/login?mode=signup" className="group flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-base transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#7C3AED]/20 w-full sm:w-auto text-center">
                 Start Distribution
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Link>
@@ -1034,7 +1034,7 @@ export function LandingPage() {
             </div>
 
             <Link 
-              to="/login" 
+              to="/login?mode=signup" 
               className="w-full mt-8 py-3 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition-all text-xs font-sans font-semibold text-center rounded-lg shadow-sm block"
             >
               Deploy Starter Grid
@@ -1089,7 +1089,7 @@ export function LandingPage() {
             </div>
 
             <Link 
-              to="/login" 
+              to="/login?mode=signup" 
               className="w-full mt-8 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white transition-all text-xs font-sans font-semibold text-center rounded-lg shadow-md shadow-[#7C3AED]/15 block"
             >
               Deploy Growth Autopilot
@@ -1141,7 +1141,7 @@ export function LandingPage() {
               </div>
 
             <Link 
-              to="/login" 
+              to="/login?mode=signup" 
               className="w-full mt-8 py-3 bg-white border border-slate-200 text-slate-800 hover:bg-slate-50 transition-all text-xs font-sans font-semibold text-center rounded-lg shadow-sm block"
             >
               Deploy Agency Console
@@ -1246,7 +1246,7 @@ export function LandingPage() {
 
             <div className="flex flex-col sm:flex-row gap-4 pt-2">
               <Link 
-                to="/login"
+                to="/login?mode=signup"
                 className="px-8 py-4 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#7C3AED]/20 text-center block"
               >
                 Start Free Trial

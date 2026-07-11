@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   LogIn, Sparkles, ShieldCheck, Zap, Mail, Lock, ArrowRight, Loader2, ArrowLeft,
@@ -13,14 +13,44 @@ import { motion } from 'motion/react';
 export function Login() {
   const { user, userProfile, loading, logout, signInWithGoogle, signInWithFacebook, signInWithApple, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const hasActioned = useRef(false);
 
-  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
+  // Determine initial mode from query parameter
+  const queryMode = searchParams.get('mode');
+  const initialMode = queryMode === 'signup' ? 'signup' : queryMode === 'forgot' ? 'forgot' : 'signin';
+
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorError, setErrorError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // Update mode state if search parameter changes (e.g. user clicks nav link again)
+  useEffect(() => {
+    const currentQueryMode = searchParams.get('mode');
+    if (currentQueryMode === 'signup' && mode !== 'signup') {
+      setMode('signup');
+    } else if (currentQueryMode === 'forgot' && mode !== 'forgot') {
+      setMode('forgot');
+    } else if ((!currentQueryMode || currentQueryMode === 'signin') && mode !== 'signin') {
+      setMode('signin');
+    }
+  }, [searchParams]);
+
+  const handleModeChange = (newMode: 'signin' | 'signup' | 'forgot') => {
+    setMode(newMode);
+    setErrorError(null);
+    setMsg(null);
+    if (newMode === 'signup') {
+      setSearchParams({ mode: 'signup' }, { replace: true });
+    } else if (newMode === 'forgot') {
+      setSearchParams({ mode: 'forgot' }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
 
   useEffect(() => {
     if (user && !loading) {
@@ -168,8 +198,8 @@ export function Login() {
         >
           {/* Heading */}
           <div className="mb-6">
-            <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight text-center mb-2">
-              {mode === 'signin' ? 'Welcome to BrandToPost!' : mode === 'signup' ? 'Welcome to BrandToPost!' : 'Reset password'}
+            <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight text-center mb-2 font-display">
+              {mode === 'signin' ? 'Welcome to BrandToPost!' : mode === 'signup' ? 'Create your Account' : 'Reset password'}
             </h2>
             <div className="text-center text-sm font-semibold">
               {mode === 'signin' ? (
@@ -177,7 +207,7 @@ export function Login() {
                   <span className="text-slate-400">Don't have an account? </span>
                   <button 
                     type="button" 
-                    onClick={() => { setMode('signup'); setErrorError(null); setMsg(null); }}
+                    onClick={() => handleModeChange('signup')}
                     className="text-slate-650 hover:text-slate-800 underline focus:outline-none transition-colors"
                   >
                     Sign up
@@ -188,10 +218,10 @@ export function Login() {
                   <span className="text-slate-400">Already have an account? </span>
                   <button 
                     type="button" 
-                    onClick={() => { setMode('signin'); setErrorError(null); setMsg(null); }}
+                    onClick={() => handleModeChange('signin')}
                     className="text-slate-650 hover:text-slate-800 underline focus:outline-none transition-colors"
                   >
-                    Login
+                    Sign In
                   </button>
                 </>
               ) : (
@@ -235,7 +265,7 @@ export function Login() {
             {mode === 'forgot' && (
               <button
                 type="button"
-                onClick={() => { setMode('signin'); setErrorError(null); setMsg(null); }}
+                onClick={() => handleModeChange('signin')}
                 className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 font-bold mb-5 transition-colors group focus:outline-none"
               >
                 <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
@@ -303,7 +333,9 @@ export function Login() {
                   <div className="w-full border-t border-slate-200"></div>
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-white px-3 text-slate-400 font-semibold">Or continue with email</span>
+                  <span className="bg-white px-3 text-slate-400 font-semibold">
+                    {mode === 'signup' ? 'Or create account with email' : 'Or sign in with email'}
+                  </span>
                 </div>
               </div>
             )}
@@ -319,7 +351,7 @@ export function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     className="w-full bg-white border border-slate-300 rounded-xl py-3 px-4 text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED]/20 transition-all placeholder:text-slate-400 text-sm font-semibold shadow-sm"
-                    placeholder="Continue with Email"
+                    placeholder="you@example.com"
                   />
                 </div>
               </div>
@@ -331,7 +363,7 @@ export function Login() {
                     {mode === 'signin' && (
                       <button 
                         type="button" 
-                        onClick={() => { setMode('forgot'); setErrorError(null); setMsg(null); }}
+                        onClick={() => handleModeChange('forgot')}
                         className="text-xs text-[#7C3AED] hover:text-[#6d28d9] font-semibold transition-colors focus:outline-none"
                       >
                         Forgot password?
@@ -362,7 +394,7 @@ export function Login() {
               >
                 {isLoading ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : (
                   <>
-                    {mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Sign up' : 'Send Reset Link'}
+                    {mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
                   </>
                 )}
               </button>
