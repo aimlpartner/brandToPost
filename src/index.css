@@ -204,26 +204,47 @@ h1, h2, h3, h4, h5, h6 {
 /* Scrollbar */
 @media (min-width: 769px) {
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(15, 23, 42, 0.2);
-    border-radius: 100px;
+    background: rgba(15, 23, 42, 0.12);
+    border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(15, 23, 42, 0.4);
+    background: rgba(15, 23, 42, 0.3);
   }
   
   /* Firefox */
   html {
     scrollbar-width: thin;
-    scrollbar-color: rgba(15, 23, 42, 0.2) transparent;
+    scrollbar-color: rgba(15, 23, 42, 0.12) transparent;
   }
 }
+
+/* Custom Scrollbar Helper Utilities */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thumb-white\/10::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+.scrollbar-thumb-white\/10::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+.scrollbar-thumb-gray-800::-webkit-scrollbar-thumb {
+  background: rgba(31, 41, 55, 0.2);
+  border-radius: 9999px;
+}
+.scrollbar-thumb-gray-800::-webkit-scrollbar-thumb:hover {
+  background: rgba(31, 41, 55, 0.4);
+}
+
 
 @media (max-width: 768px) {
   ::-webkit-scrollbar {

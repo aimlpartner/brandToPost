@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom';
 import React, { useState, useEffect } from 'react';
 import { X, Heart, MessageCircle, Share2, Repeat2, MoreHorizontal, ThumbsUp, Send, Edit, Bookmark } from 'lucide-react';
 import { VisualEditorModal } from './VisualEditorModal';
+import { VisualEngine } from './VisualEngine';
 import { ProductDNA } from '../types';
 
 interface PostPreviewModalProps {
@@ -59,6 +60,31 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
       );
     }
     if (!currentImageUrl) return null;
+
+    if (visualType && visualType !== 'none') {
+      return (
+        <div className="w-full relative group">
+          <VisualEngine
+            visualType={visualType}
+            visualData={visualData}
+            imageUrl={visualData?.baseImage || currentImageUrl}
+            dna={dna || null}
+            fallbackText={productName}
+            activeLogo={productLogo}
+          />
+          {/* Only show Edit button if it's a custom-overlay or we have original image to edit text on */}
+          {(visualType === 'custom-overlay' || originalUrl) && (
+            <button 
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setIsVisualEditorOpen(true); }}
+              className="absolute top-3 right-3 bg-black/70 hover:bg-black/90 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-xl z-20"
+            >
+               <Edit className="w-3.5 h-3.5" /> Edit Visual
+            </button>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div className="w-full relative group">
