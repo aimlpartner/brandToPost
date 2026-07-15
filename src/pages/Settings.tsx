@@ -76,7 +76,7 @@ export function Settings() {
   const [showRedditDev, setShowRedditDev] = useState(false);
 
   // Blog Integration States
-  const [blogPlatform, setBlogPlatform] = useState<"none" | "wordpress" | "webhook">("none");
+  const [blogPlatform, setBlogPlatform] = useState<"none" | "wordpress" | "webhook" | "brandtopost">("none");
   const [wpUrl, setWpUrl] = useState("");
   const [wpUsername, setWpUsername] = useState("");
   const [wpPassword, setWpPassword] = useState("");
@@ -481,6 +481,8 @@ export function Settings() {
 
       if (blogPlatform === 'wordpress') {
         setBlogSuccessMsg(`WordPress test post published successfully! Link: ${data.url}`);
+      } else if (blogPlatform === 'brandtopost') {
+        setBlogSuccessMsg(`Local blog post published successfully! Link: ${data.url}`);
       } else {
         setBlogSuccessMsg('Webhook test payload sent successfully!');
       }
@@ -747,10 +749,18 @@ export function Settings() {
           className="w-full sm:max-w-xs border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
         >
           <option value="none">None / Disabled</option>
+          <option value="brandtopost">BrandToPost Website (Local Blogs)</option>
           <option value="wordpress">WordPress (Self-Hosted)</option>
           <option value="webhook">Custom Webhook (Wix, Ghost, Custom, Zapier)</option>
         </select>
       </div>
+
+      {blogPlatform === "brandtopost" && (
+        <div className="text-xs text-slate-550 bg-[#FAF9F6] border border-slate-900/10 p-4 rounded-xl space-y-1 animate-in slide-in-from-top-2 duration-200 text-left">
+          <p className="font-semibold text-slate-900 font-sans">Local Blog Publishing:</p>
+          <p className="font-light">No configuration needed! Your generated blogs will be published directly to your website's public <strong>/blog</strong> section.</p>
+        </div>
+      )}
 
       {blogPlatform === "wordpress" && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-in slide-in-from-top-2 duration-200">

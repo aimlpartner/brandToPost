@@ -368,6 +368,7 @@ export function LandingPage() {
             </div>
             
             <div className="flex items-center gap-4 sm:gap-6">
+              <Link to="/blog" className={`text-sm font-semibold transition-colors ${isScrolled ? 'text-slate-600 hover:text-slate-900' : 'text-slate-300 hover:text-white'}`}>Blog</Link>
               <Link to="/whatsapp/login" className="text-sm font-semibold text-emerald-450 hover:text-emerald-350 transition-colors flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span> WhatsApp Bot
               </Link>
@@ -1358,6 +1359,7 @@ export function LandingPage() {
             &copy; {new Date().getFullYear()} BrandToPost Systems. All rights reserved.
           </p>
           <div className="flex gap-8 font-light">
+            <Link to="/blog" className="hover:text-slate-600 transition-colors">Blog</Link>
             <Link to="/privacy" className="hover:text-slate-600 transition-colors">Privacy Policy</Link>
             <Link to="/terms" className="hover:text-slate-600 transition-colors">Terms of Service</Link>
           </div>

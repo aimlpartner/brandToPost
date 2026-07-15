@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { doc, updateDoc, collection, query, orderBy, getDocs, deleteDoc, setDoc } from "firebase/firestore";
 import { logSilentError } from "../lib/firestore-error";
 import { synthesizeFounderAgent, generateGeneralFounderPost, generateFounderTopicSuggestions, generateBrandedFounderPost } from "../services/geminiService";

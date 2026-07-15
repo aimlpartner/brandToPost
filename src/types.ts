@@ -206,3 +206,22 @@ export interface WeeklyCampaign {
   publishedAt?: string;
   blogPublishError?: string;
 }
+
+export interface Blog {
+  id: string;
+  title: string;
+  slug: string;
+  content: string;
+  imageUrl?: string;
+  imagePrompt?: string;
+  summary?: string;
+  tags?: string[];
+  createdAt: string;
+  publishedAt?: string | null;
+  status: 'draft' | 'published';
+  author?: string;
+  productId?: string;
+  campaignId?: string;
+  targetAudience?: string;
+  cta?: string;
+}

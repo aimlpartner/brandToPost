@@ -31,6 +31,8 @@ import { ProductProvider } from "./contexts/ProductContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CookieConsent } from "./components/CookieConsent";
+import { BlogList } from "./pages/BlogList";
+import { BlogPost } from "./pages/BlogPost";
 
 export default function App() {
   return (
@@ -46,6 +48,10 @@ export default function App() {
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/whatsapp/login" element={<WhatsAppLogin />} />
+            <Route path="/blog" element={<BlogList />} />
+            <Route path="/blogs" element={<BlogList />} />
+            <Route path="/blog/:slug" element={<BlogPost />} />
+            <Route path="/blogs/:slug" element={<BlogPost />} />
             <Route
               path="/whatsapp-system"
               element={
@@ -72,6 +78,7 @@ export default function App() {
                   </ProductProvider>
                 }
               />
+              <Route path="/admin" element={<AdminDashboard />} />
               <Route
                 path="/dashboard"
                 element={
@@ -89,7 +96,6 @@ export default function App() {
                 <Route path="master-founder" element={<MasterFounder />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="profile" element={<div className="p-8 text-white">Profile Page Coming Soon</div>} />
-                <Route path="admin" element={<AdminDashboard />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />

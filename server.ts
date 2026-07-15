@@ -1113,7 +1113,7 @@ Return the result in a JSON object with the following fields:
         publishStatusText = `Success (Published to ${blogSettings.type})`;
         console.log(`[executeAutoDailyBlogGeneration] Auto-publishing succeeded: ${publishedBlogUrl || 'delivery successful'}`);
       } else {
-        blogPublishError = publishRes.message || 'Auto-publishing failed';
+        blogPublishError = (publishRes as any).message || 'Auto-publishing failed';
         publishStatusText = `Success (Saved to Dashboard, Autopost Failed)`;
         console.warn(`[executeAutoDailyBlogGeneration] Auto-publishing failed: ${blogPublishError}`);
       }
@@ -2608,6 +2608,46 @@ async function publishBlogToExternalSite(
     };
     
     return await publishBlogToWebhook(settings, payload);
+  } else if (settings.type === 'brandtopost') {
+    if (!db) {
+      throw new Error('Database connection is not available.');
+    }
+    
+    let slug = title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+      
+    const slugQuery = await db.collection('blogs').where('slug', '==', slug).get();
+    if (!slugQuery.empty) {
+      slug = `${slug}-${Math.random().toString(36).substring(2, 6)}`;
+    }
+    
+    const blogDoc = {
+      title,
+      slug,
+      content,
+      imageUrl: absoluteImageUrl || blogImageUrl || '',
+      summary: extraData.coreMessage || '',
+      targetAudience: extraData.targetAudience || '',
+      cta: extraData.cta || '',
+      productId,
+      campaignId: extraData.campaignId || null,
+      createdAt: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      status: 'published'
+    };
+    
+    const docRef = await db.collection('blogs').add(blogDoc);
+    
+    return {
+      success: true,
+      url: `/blog/${slug}`,
+      id: docRef.id,
+      message: 'Published successfully to BrandToPost website'
+    };
   } else {
     throw new Error(`Unsupported blog platform type: ${settings.type}`);
   }
@@ -3681,155 +3721,7 @@ ${htmlContent}
     }
   });
 
-  // Reusable helper to publish a post with optional image to LinkedIn
-  async function publishPostToLinkedIn(token: string, text: string, imageUrl?: string | null, customAuthorUrn?: string): Promise<void> {
-    let authorUrn = customAuthorUrn;
-
-    if (!authorUrn) {
-      // Fallback to user URN if no custom URN is provided
-      const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (!userRes.ok) {
-        throw new Error('Failed to fetch user info from LinkedIn');
-      }
-      
-      const userData = await userRes.json();
-      authorUrn = `urn:li:person:${userData.sub}`;
-    }
-
-    let specificContent: any = {
-      'com.linkedin.ugc.ShareContent': {
-        shareCommentary: { text },
-        shareMediaCategory: 'NONE'
-      }
-    };
-
-    if (imageUrl) {
-      // Register upload
-      const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          registerUploadRequest: {
-            recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-            owner: authorUrn,
-            serviceRelationships: [
-              {
-                relationshipType: 'OWNER',
-                identifier: 'urn:li:userGeneratedContent'
-              }
-            ]
-          }
-        })
-      });
-
-      if (!registerRes.ok) {
-        const err = await registerRes.text();
-        throw new Error(`Failed to register image upload: ${err}`);
-      }
-
-      const registerData = await registerRes.json();
-      const uploadUrl = registerData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
-      const assetUrn = registerData.value.asset;
-
-      // Prepare image data
-      let imageBuffer: Buffer | ArrayBuffer;
-      let contentType = 'image/jpeg';
-      
-      if (imageUrl.startsWith('data:')) {
-        const matches = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-        if (matches && matches.length === 3) {
-          contentType = matches[1];
-          imageBuffer = Buffer.from(matches[2], 'base64');
-        } else {
-          throw new Error('Invalid base64 image data');
-        }
-      } else if (imageUrl.startsWith('/api/whatsapp/images/')) {
-        const match = imageUrl.match(/\/api\/whatsapp\/images\/([^/.]+)/);
-        if (match) {
-          const imageId = match[1];
-          const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
-          try {
-            imageBuffer = await fs.readFile(localPath);
-            contentType = 'image/png';
-          } catch (e) {
-            if (db) {
-              const doc = await db.collection('whatsapp_images').doc(imageId).get();
-              if (doc.exists && doc.data()?.base64Data) {
-                imageBuffer = Buffer.from(doc.data()!.base64Data, 'base64');
-                contentType = doc.data()!.mimeType || 'image/png';
-              } else {
-                throw new Error(`Image ${imageId} not found in Firestore or local disk`);
-              }
-            } else {
-              throw new Error(`Image ${imageId} not found on local disk and DB is inactive`);
-            }
-          }
-        } else {
-          throw new Error('Invalid local image URL format');
-        }
-      } else {
-        const imgRes = await fetch(imageUrl);
-        if (!imgRes.ok) throw new Error(`Failed to fetch image from URL: ${imageUrl}`);
-        imageBuffer = await imgRes.arrayBuffer();
-        contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-      }
-
-      // Upload image
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': contentType
-        },
-        body: imageBuffer
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error('Failed to upload image to LinkedIn');
-      }
-
-      specificContent = {
-        'com.linkedin.ugc.ShareContent': {
-          shareCommentary: { text },
-          shareMediaCategory: 'IMAGE',
-          media: [
-            {
-              status: 'READY',
-              description: { text: 'Image' },
-              media: assetUrn,
-              title: { text: 'Image' }
-            }
-          ]
-        }
-      };
-    }
-
-    // Create Post
-    const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'X-Restli-Protocol-Version': '2.0.0'
-      },
-      body: JSON.stringify({
-        author: authorUrn,
-        lifecycleState: 'PUBLISHED',
-        specificContent,
-        visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-      })
-    });
-
-    if (!postRes.ok) {
-      const err = await postRes.text();
-      throw new Error(err);
-    }
-  }
+  // publishPostToLinkedIn has been relocated to the bottom of the module scope to be accessible globally.
 
   app.post('/api/linkedin/publish', requireAuth, routeRateLimiter(5, 60 * 1000), async (req, res) => {
     try {
@@ -3995,8 +3887,10 @@ ${htmlContent}
   });
 
   app.post('/api/blog/publish', requireAuth, routeRateLimiter(5, 60 * 1000), async (req, res) => {
+    let campaignId: string | undefined;
     try {
-      const { productId, campaignId } = req.body;
+      const { productId } = req.body;
+      campaignId = req.body.campaignId;
       let { title, content, imageUrl, targetAudience, coreMessage, cta } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId is required' });
 
@@ -6563,6 +6457,156 @@ However, if they ask to make a campaign or send a product photo, and they have n
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+}
+
+// Reusable helper to publish a post with optional image to LinkedIn
+async function publishPostToLinkedIn(token: string, text: string, imageUrl?: string | null, customAuthorUrn?: string): Promise<void> {
+  let authorUrn = customAuthorUrn;
+
+  if (!authorUrn) {
+    // Fallback to user URN if no custom URN is provided
+    const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (!userRes.ok) {
+      throw new Error('Failed to fetch user info from LinkedIn');
+    }
+    
+    const userData = await userRes.json();
+    authorUrn = `urn:li:person:${userData.sub}`;
+  }
+
+  let specificContent: any = {
+    'com.linkedin.ugc.ShareContent': {
+      shareCommentary: { text },
+      shareMediaCategory: 'NONE'
+    }
+  };
+
+  if (imageUrl) {
+    // Register upload
+    const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        registerUploadRequest: {
+          recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+          owner: authorUrn,
+          serviceRelationships: [
+            {
+              relationshipType: 'OWNER',
+              identifier: 'urn:li:userGeneratedContent'
+            }
+          ]
+        }
+      })
+    });
+
+    if (!registerRes.ok) {
+      const err = await registerRes.text();
+      throw new Error(`Failed to register image upload: ${err}`);
+    }
+
+    const registerData = await registerRes.json();
+    const uploadUrl = registerData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
+    const assetUrn = registerData.value.asset;
+
+    // Prepare image data
+    let imageBuffer: Buffer | ArrayBuffer;
+    let contentType = 'image/jpeg';
+    
+    if (imageUrl.startsWith('data:')) {
+      const matches = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        contentType = matches[1];
+        imageBuffer = Buffer.from(matches[2], 'base64');
+      } else {
+        throw new Error('Invalid base64 image data');
+      }
+    } else if (imageUrl.startsWith('/api/whatsapp/images/')) {
+      const match = imageUrl.match(/\/api\/whatsapp\/images\/([^/.]+)/);
+      if (match) {
+        const imageId = match[1];
+        const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
+        try {
+          imageBuffer = await fs.readFile(localPath);
+          contentType = 'image/png';
+        } catch (e) {
+          if (db) {
+            const doc = await db.collection('whatsapp_images').doc(imageId).get();
+            if (doc.exists && doc.data()?.base64Data) {
+              imageBuffer = Buffer.from(doc.data()!.base64Data, 'base64');
+              contentType = doc.data()!.mimeType || 'image/png';
+            } else {
+              throw new Error(`Image ${imageId} not found in Firestore or local disk`);
+            }
+          } else {
+            throw new Error(`Image ${imageId} not found on local disk and DB is inactive`);
+          }
+        }
+      } else {
+        throw new Error('Invalid local image URL format');
+      }
+    } else {
+      const imgRes = await fetch(imageUrl);
+      if (!imgRes.ok) throw new Error(`Failed to fetch image from URL: ${imageUrl}`);
+      imageBuffer = await imgRes.arrayBuffer();
+      contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+    }
+
+    // Upload image
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType
+      },
+      body: imageBuffer
+    });
+
+    if (!uploadRes.ok) {
+      throw new Error('Failed to upload image to LinkedIn');
+    }
+
+    specificContent = {
+      'com.linkedin.ugc.ShareContent': {
+        shareCommentary: { text },
+        shareMediaCategory: 'IMAGE',
+        media: [
+          {
+            status: 'READY',
+            description: { text: 'Image' },
+            media: assetUrn,
+            title: { text: 'Image' }
+          }
+        ]
+      }
+    };
+  }
+
+  // Create Post
+  const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0'
+    },
+    body: JSON.stringify({
+      author: authorUrn,
+      lifecycleState: 'PUBLISHED',
+      specificContent,
+      visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+    })
+  });
+
+  if (!postRes.ok) {
+    const err = await postRes.text();
+    throw new Error(err);
+  }
 }
 
 startServer();

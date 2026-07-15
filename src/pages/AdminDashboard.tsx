@@ -4,6 +4,7 @@ import { collection, getDocs, query, orderBy, limit, where, doc, deleteDoc, addD
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
+import { NotFound } from './NotFound';
 import { 
  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
  PieChart, Pie, Cell, LineChart, Line
@@ -12,7 +13,7 @@ import {
  Loader2, ShieldAlert, Activity, Database, DollarSign, Bug, AlertCircle, Trash2,
  MessageSquare, Plus, Search, Sparkles, RefreshCw, Clock, ShieldCheck, 
  CheckCircle, CheckCircle2, Smartphone, Send, Languages, Zap, Heart, Filter, Laptop,
- Users
+ Users, FileText
 } from 'lucide-react';
 import { logSilentError } from '../lib/firestore-error';
 
@@ -59,8 +60,8 @@ const PRICING = {
 const USD_TO_INR = 83.50; // Exchange rate for INR conversion
 
 export default function AdminDashboard() {
- const { user } = useAuth();
- const [activeTab, setActiveTab] = useState<'tokens' | 'errors' | 'whatsapp' | 'users'>('users');
+ const { user, loading: authLoading } = useAuth();
+ const [activeTab, setActiveTab] = useState<'tokens' | 'errors' | 'whatsapp' | 'users' | 'blogs'>('users');
  const [logs, setLogs] = useState<TokenLog[]>([]);
  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
  const [users, setUsers] = useState<any[]>([]);
@@ -84,8 +85,147 @@ export default function AdminDashboard() {
  const [activeLeadFilter, setActiveLeadFilter] = useState<'ALL' | 'PENDING_OUTREACH' | 'OUTREACH_SENT' | 'INTERACTED'>('ALL');
  const [simulatedMessageStatus, setSimulatedMessageStatus] = useState<string | null>(null);
 
+ // Blogs State
+ const [blogs, setBlogs] = useState<any[]>([]);
+ const [loadingBlogs, setLoadingBlogs] = useState(false);
+ const [selectedBlog, setSelectedBlog] = useState<any | null>(null);
+ const [isEditingBlog, setIsEditingBlog] = useState(false);
+ const [blogTitle, setBlogTitle] = useState('');
+ const [blogSlug, setBlogSlug] = useState('');
+ const [blogContent, setBlogContent] = useState('');
+ const [blogImageUrl, setBlogImageUrl] = useState('');
+ const [blogSummary, setBlogSummary] = useState('');
+ const [blogTargetAudience, setBlogTargetAudience] = useState('');
+ const [blogCta, setBlogCta] = useState('');
+ const [blogStatus, setBlogStatus] = useState<'draft' | 'published'>('draft');
+ const [blogTags, setBlogTags] = useState('');
+ const [isSavingBlog, setIsSavingBlog] = useState(false);
+
  // Check if user is admin
  const isAdmin = user?.email === 'garvitbansal2303@gmail.com';
+
+  useEffect(() => {
+    if (!isAdmin || activeTab !== 'blogs') return;
+    
+    const fetchBlogs = async () => {
+      setLoadingBlogs(true);
+      try {
+        const qBlogs = query(collection(db, 'blogs'), orderBy('createdAt', 'desc'));
+        const blogsSnapshot = await getDocs(qBlogs);
+        const fetchedBlogs: any[] = [];
+        blogsSnapshot.forEach((doc) => {
+          fetchedBlogs.push({ id: doc.id, ...doc.data() });
+        });
+        setBlogs(fetchedBlogs);
+      } catch (err: any) {
+        console.error("Failed to fetch blogs:", err);
+        logSilentError(err as Error, { context: "fetchBlogs" });
+      } finally {
+        setLoadingBlogs(false);
+      }
+    };
+    
+    fetchBlogs();
+  }, [isAdmin, activeTab]);
+
+  const handleOpenBlogEditor = (blog: any = null) => {
+    if (blog) {
+      setSelectedBlog(blog);
+      setBlogTitle(blog.title || '');
+      setBlogSlug(blog.slug || '');
+      setBlogContent(blog.content || '');
+      setBlogImageUrl(blog.imageUrl || '');
+      setBlogSummary(blog.summary || '');
+      setBlogTargetAudience(blog.targetAudience || '');
+      setBlogCta(blog.cta || '');
+      setBlogStatus(blog.status || 'draft');
+      setBlogTags(blog.tags ? blog.tags.join(', ') : '');
+    } else {
+      setSelectedBlog(null);
+      setBlogTitle('');
+      setBlogSlug('');
+      setBlogContent('');
+      setBlogImageUrl('');
+      setBlogSummary('');
+      setBlogTargetAudience('');
+      setBlogCta('');
+      setBlogStatus('draft');
+      setBlogTags('');
+    }
+    setIsEditingBlog(true);
+  };
+
+  const handleSaveBlog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blogTitle.trim() || !blogContent.trim()) {
+      alert("Title and Content are required.");
+      return;
+    }
+
+    setIsSavingBlog(true);
+    try {
+      let slug = blogSlug.trim();
+      if (!slug) {
+        slug = blogTitle
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/[\s_-]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+      }
+
+      const tagsArray = blogTags
+        .split(',')
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+
+      const blogData: any = {
+        title: blogTitle,
+        slug,
+        content: blogContent,
+        imageUrl: blogImageUrl,
+        summary: blogSummary,
+        targetAudience: blogTargetAudience,
+        cta: blogCta,
+        status: blogStatus,
+        tags: tagsArray,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (selectedBlog) {
+        await updateDoc(doc(db, 'blogs', selectedBlog.id), blogData);
+        setBlogs(prev => prev.map(b => b.id === selectedBlog.id ? { ...b, ...blogData } : b));
+        alert("Blog updated successfully.");
+      } else {
+        blogData.createdAt = new Date().toISOString();
+        if (blogStatus === 'published') {
+          blogData.publishedAt = new Date().toISOString();
+        }
+        const docRef = await addDoc(collection(db, 'blogs'), blogData);
+        setBlogs(prev => [{ id: docRef.id, ...blogData }, ...prev]);
+        alert("Blog created successfully.");
+      }
+      setIsEditingBlog(false);
+      setSelectedBlog(null);
+    } catch (err: any) {
+      console.error("Failed to save blog:", err);
+      alert(`Failed to save blog: ${err.message}`);
+    } finally {
+      setIsSavingBlog(false);
+    }
+  };
+
+  const handleDeleteBlog = async (blogId: string) => {
+    if (!confirm("Are you sure you want to delete this blog post?")) return;
+    try {
+      await deleteDoc(doc(db, 'blogs', blogId));
+      setBlogs(prev => prev.filter(b => b.id !== blogId));
+      alert("Blog post deleted successfully.");
+    } catch (err: any) {
+      console.error("Failed to delete blog:", err);
+      alert(`Failed to delete blog: ${err.message}`);
+    }
+  };
 
  const handleDeleteLogs = async () => {
  if (deleteFilter === null) return;
@@ -353,17 +493,29 @@ export default function AdminDashboard() {
     }
   };
 
- if (!isAdmin) {
- return <Navigate to="/dashboard" replace />;
- }
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#FAF9F6]">
+        <VideoLoader className="h-24 w-24 text-[#7C3AED] mx-auto" />
+      </div>
+    );
+  }
 
- if (loading) {
- return (
- <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
- <VideoLoader className="h-24 w-24 text-[#7C3AED] mx-auto" />
- </div>
- );
- }
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: '/admin' }} />;
+  }
+
+  if (!isAdmin) {
+    return <NotFound />;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#FAF9F6]">
+        <VideoLoader className="h-24 w-24 text-[#7C3AED] mx-auto" />
+      </div>
+    );
+  }
 
  if (error) {
  return (
@@ -547,6 +699,17 @@ export default function AdminDashboard() {
                 {errorLogs.length}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab('blogs')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'blogs' 
+                ? 'bg-white text-[#7C3AED] shadow-sm border border-slate-200/50 font-semibold' 
+                : 'text-slate-550 hover:text-slate-800 hover:bg-white/40'
+            }`}
+          >
+            <FileText className="h-4 w-4" />
+            Blogs
           </button>
         </div>
       </div>
@@ -1504,6 +1667,225 @@ export default function AdminDashboard() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'blogs' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="flex justify-between items-center border-b border-slate-900/10 pb-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 font-display">Blogs Section</h2>
+              <p className="text-xs text-slate-500 mt-1">Create, edit, and publish blogs directly on the website</p>
+            </div>
+            {!isEditingBlog && (
+              <button
+                onClick={() => handleOpenBlogEditor(null)}
+                className="inline-flex items-center gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-4 py-2 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer border-none"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New Blog Post
+              </button>
+            )}
+          </div>
+
+          {isEditingBlog ? (
+            <form onSubmit={handleSaveBlog} className="bg-[#FAF9F6] border border-slate-900/10 rounded-xl p-6 space-y-4 text-slate-800">
+              <div className="flex justify-between items-center border-b border-slate-900/10 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 font-mono">
+                  {selectedBlog ? 'Edit Blog Post' : 'Create New Blog Post'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingBlog(false)}
+                  className="text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer border-none bg-transparent"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Title</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter blog title"
+                    value={blogTitle}
+                    onChange={(e) => setBlogTitle(e.target.value)}
+                    className="border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Slug (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. digital-marketing-guide (auto-generated if empty)"
+                    value={blogSlug}
+                    onChange={(e) => setBlogSlug(e.target.value)}
+                    className="border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                  />
+                </div>
+
+                <div className="flex flex-col md:col-span-2 gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Image URL</label>
+                  <input
+                    type="text"
+                    placeholder="Paste image URL or leave empty"
+                    value={blogImageUrl}
+                    onChange={(e) => setBlogImageUrl(e.target.value)}
+                    className="border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                  />
+                </div>
+
+                <div className="flex flex-col md:col-span-2 gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Summary / Core Message</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Brief description showing on index cards"
+                    value={blogSummary}
+                    onChange={(e) => setBlogSummary(e.target.value)}
+                    className="border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED] resize-none"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Target Audience (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. B2B Founders"
+                    value={blogTargetAudience}
+                    onChange={(e) => setBlogTargetAudience(e.target.value)}
+                    className="border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-505 uppercase tracking-wider">CTA text/link (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sign up today!"
+                    value={blogCta}
+                    onChange={(e) => setBlogCta(e.target.value)}
+                    className="border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tags (Comma separated)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. SaaS, Marketing, GTM"
+                    value={blogTags}
+                    onChange={(e) => setBlogTags(e.target.value)}
+                    className="border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Publishing Status</label>
+                  <select
+                    value={blogStatus}
+                    onChange={(e) => setBlogStatus(e.target.value as any)}
+                    className="border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5 pt-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Content (Markdown supported)</label>
+                <textarea
+                  rows={15}
+                  required
+                  placeholder="Write blog content in Markdown format..."
+                  value={blogContent}
+                  onChange={(e) => setBlogContent(e.target.value)}
+                  className="border border-slate-200 bg-white p-3 font-sans text-xs text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingBlog(false)}
+                  className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingBlog}
+                  className="px-4 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer border-none"
+                >
+                  {isSavingBlog ? 'Saving...' : 'Save Blog Post'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="bg-[#FAF9F6] border border-slate-900/10 rounded-xl overflow-hidden text-slate-800">
+              {loadingBlogs ? (
+                <div className="p-12 text-center">
+                  <Loader2 className="h-8 w-8 text-[#7C3AED] animate-spin mx-auto" />
+                  <p className="text-xs text-slate-550 mt-2">Loading blog posts...</p>
+                </div>
+              ) : blogs.length === 0 ? (
+                <div className="p-12 text-center text-slate-500">
+                  <p className="text-xs">No blog posts found. Create your first blog post to get started!</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse font-sans text-slate-700 font-light">
+                    <thead>
+                      <tr className="border-b border-slate-900/10 text-[10px] font-mono text-slate-450 uppercase bg-slate-100/50 font-semibold">
+                        <th className="py-3 px-4">Title</th>
+                        <th className="py-3 px-4">Slug</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Created At</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-xs text-slate-800">
+                      {blogs.map((b) => (
+                        <tr key={b.id} className="hover:bg-slate-100/30 transition-colors">
+                          <td className="py-3.5 px-4 font-bold text-slate-800 max-w-xs truncate">{b.title}</td>
+                          <td className="py-3.5 px-4 font-mono text-slate-500 text-[11px]">{b.slug}</td>
+                          <td className="py-3.5 px-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              b.status === 'published'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}>
+                              {b.status}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                            {new Date(b.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-3.5 px-4 text-right space-x-2 shrink-0">
+                            <button
+                              onClick={() => handleOpenBlogEditor(b)}
+                              className="text-[#7C3AED] hover:underline font-semibold bg-transparent border-none cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBlog(b.id)}
+                              className="text-red-650 hover:underline font-semibold bg-transparent border-none cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

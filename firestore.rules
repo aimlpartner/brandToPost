@@ -228,5 +228,10 @@ service cloud.firestore {
       allow create: if true; // Allow anyone to log errors
       allow read, update, delete: if isAdmin(); // Only admins can read/modify
     }
+
+    match /blogs/{blogId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }
