@@ -1856,6 +1856,39 @@ Rules for Strategy Context Generation:
   return JSON.parse(text);
 }
 
+export async function performSocialTrendResearch(topic: string, customToken?: string): Promise<string> {
+  const prompt = `
+    You are an expert social media strategist and LinkedIn growth hacker.
+    
+    Research current trends, successful post formats, structures, and templates on LinkedIn for the topic: "${topic}".
+    
+    CRITICAL: You must use the Google Search tool to search for:
+    "trending LinkedIn posts formatting templates ${topic}" or similar.
+    Find out:
+    1. What formats, layouts, or hooks are currently viral or highly engaging on LinkedIn (e.g., listicles, contrarian hooks, story-based formats, short templates).
+    2. What specific sub-topics, arguments, or keywords are trending.
+    3. What templates are working best.
+    
+    Synthesize your findings into a concise list of 3-5 platform formatting guidelines and trend insights. Include specific tips on layout (e.g. paragraph spacing, formatting, use of negative space) and content strategy.
+  `;
+  
+  try {
+    const response = await generateContentProxy(
+      "gemini-3.1-pro-preview",
+      [{ text: prompt }],
+      {
+        tools: [{ googleSearch: {} }]
+      },
+      undefined,
+      customToken
+    );
+    return response.text || "";
+  } catch (err) {
+    console.warn("[performSocialTrendResearch] Failed:", err);
+    return "Use standard engaging LinkedIn formats: strong contrarian hook, spaced paragraphs, clear bulleted take-aways, and a thought-provoking final sentence.";
+  }
+}
+
 export async function generateGeneralFounderPost(params: {
   topic: string;
   referencePosts?: string;
@@ -1863,6 +1896,7 @@ export async function generateGeneralFounderPost(params: {
   customImagePrompt?: string;
   founderAgent: any;
   userId?: string;
+  customToken?: string;
 }): Promise<{
   postCopy: string;
   imagePrompt?: string;
@@ -1870,7 +1904,15 @@ export async function generateGeneralFounderPost(params: {
   subtext?: string;
   imageUrl?: string;
 }> {
-  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, userId } = params;
+  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, userId, customToken } = params;
+
+  // Perform social media trend research first
+  let trendResearch = "";
+  try {
+    trendResearch = await performSocialTrendResearch(topic, customToken);
+  } catch (errRes) {
+    console.warn("Trend research failed:", errRes);
+  }
 
   let prompt = `You are a virtual Founder Agent named "${founderAgent.personaName}".
 Your profile:
@@ -1887,7 +1929,10 @@ Strategic Context:
 - Goal: ${founderAgent.goal || ""}
 - Key Content Pillars: ${founderAgent.contentPillars?.join(", ") || ""}
 
-Draft an organic, highly engaging, and completely non-branded social media post for LinkedIn or X.
+LinkedIn Platform Research & Trend Insights:
+${trendResearch || "Focus on a strong hook, concise paragraphs, clean list/spacing formatting, and a strong CTA."}
+
+Draft an organic, highly engaging, and completely non-branded social media post for LinkedIn.
 Topic: "${topic}"
 `;
 
@@ -1900,6 +1945,7 @@ CRITICAL rules:
 1. Do NOT reference any specific products, company names, brands, or websites. This is a personal branding post for the founder's own profile.
 2. Focus purely on general insights, lessons learned, personal stories, or earned secrets.
 3. Sound exactly like the founder's profile (behavioral traits, style, values).
+4. CRITICAL: You must write this post using the platform formatting templates, hook styles, layout structure, and trending insights identified in the LinkedIn Platform Research & Trend Insights above.
 `;
 
   if (attachmentStyle === "image-overlay") {
@@ -2066,6 +2112,7 @@ export async function generateBrandedFounderPost(params: {
   founderAgent: any;
   product: any;
   userId?: string;
+  customToken?: string;
 }): Promise<{
   postCopy: string;
   imagePrompt?: string;
@@ -2073,7 +2120,15 @@ export async function generateBrandedFounderPost(params: {
   subtext?: string;
   imageUrl?: string;
 }> {
-  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, product, userId } = params;
+  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, product, userId, customToken } = params;
+
+  // Perform social media trend research first
+  let trendResearch = "";
+  try {
+    trendResearch = await performSocialTrendResearch(topic, customToken);
+  } catch (errRes) {
+    console.warn("Trend research failed:", errRes);
+  }
 
   let prompt = `You are a virtual Founder Agent named "${founderAgent.personaName}".
 Your profile:
@@ -2101,7 +2156,10 @@ Strategic Personal Branding Context:
 - Mission: ${founderAgent.mission || ""}
 - Goal: ${founderAgent.goal || ""}
 
-Draft an organic, highly engaging social media post for LinkedIn or X.
+LinkedIn Platform Research & Trend Insights:
+${trendResearch || "Focus on a strong hook, concise paragraphs, clean list/spacing formatting, and a strong CTA."}
+
+Draft an organic, highly engaging social media post for LinkedIn.
 This is a BRANDED post written from your perspective as the founder of "${product.name}". 
 Topic or Concept to cover: "${topic}"
 
@@ -2109,6 +2167,7 @@ CRITICAL rules:
 1. Speak as the creator/founder of "${product.name}". You are sharing an insight, story, status quo challenge, or lesson directly related to the problem "${product.name}" solves or the journey of building it.
 2. Blend the product's positioning, audience, and narrative elements smoothly into a high-value personal post. Avoid simple sales pitches—the post must offer real value to the reader.
 3. Sound exactly like the founder's profile (behavioral traits, style, values).
+4. CRITICAL: You must write this post using the platform formatting templates, hook styles, layout structure, and trending insights identified in the LinkedIn Platform Research & Trend Insights above.
 `;
 
   if (referencePosts?.trim()) {

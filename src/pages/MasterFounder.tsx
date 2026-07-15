@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Brain, Cpu, Upload, Loader2, Sparkles, Save, Target, MessageSquare, 
   Zap, Clock, Globe, FileText, CheckCircle2, ChevronRight, Play, Check,
-  Palette, Type, Download, Copy, RefreshCw, FileSignature
+  Palette, Type, Download, Copy, RefreshCw, FileSignature, Linkedin
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
@@ -223,6 +223,120 @@ export function MasterFounder() {
   const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  // Founder LinkedIn integration state
+  const [isLinkedinConnected, setIsLinkedinConnected] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [publishingPostId, setPublishingPostId] = useState<string | null>(null);
+
+  const checkLinkedinStatus = async () => {
+    if (!user) return;
+    setIsCheckingStatus(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const res = await fetch(`/api/linkedin/status?productId=founder_${user.uid}`, {
+        headers: {
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIsLinkedinConnected(!!data.connected);
+      }
+    } catch (err) {
+      console.error("Failed to fetch LinkedIn connection status:", err);
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
+  const handleConnectLinkedin = async () => {
+    if (!user) return;
+    try {
+      setError(null);
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch(`/api/auth/linkedin/url?productId=founder_${user.uid}`, {
+        headers: {
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+        }
+      });
+      if (!response.ok) throw new Error('Failed to get auth URL');
+      const { url } = await response.json();
+      const authWindow = window.open(url, 'oauth_popup', 'width=600,height=700');
+      if (!authWindow) setError('Please allow popups for this site to connect your account.');
+    } catch (error) {
+      logSilentError(error as Error, { context: "handleConnectLinkedinFounder" });
+      setError('Failed to initiate LinkedIn connection.');
+    }
+  };
+
+  const handleDisconnectLinkedin = async () => {
+    if (!user) return;
+    try {
+      setError(null);
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch('/api/disconnect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+        },
+        body: JSON.stringify({ productId: `founder_${user.uid}`, platform: 'linkedin' })
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to disconnect from LinkedIn');
+      }
+      setIsLinkedinConnected(false);
+    } catch (err: any) {
+      logSilentError(err as Error, { context: "handleDisconnectLinkedinFounder" });
+      setError(err.message || 'Failed to disconnect LinkedIn.');
+    }
+  };
+
+  const handleManualPublish = async (postId: string) => {
+    if (!user) return;
+    setPublishingPostId(postId);
+    try {
+      setError(null);
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch('/api/founder/publish', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+        },
+        body: JSON.stringify({ postId })
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to publish post');
+      }
+      alert("Successfully published to LinkedIn!");
+      await fetchAutomatedPosts();
+    } catch (err: any) {
+      logSilentError(err as Error, { context: "handleManualPublishFounder" });
+      setError(err.message || 'Failed to publish post to LinkedIn.');
+    } finally {
+      setPublishingPostId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "generator" && user) {
+      checkLinkedinStatus();
+    }
+  }, [activeTab, user]);
+
+  useEffect(() => {
+    const handleOauthMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        checkLinkedinStatus();
+      }
+    };
+    window.addEventListener('message', handleOauthMessage);
+    return () => window.removeEventListener('message', handleOauthMessage);
+  }, [user]);
 
   // Track run states for products
   const [runningBrandId, setRunningBrandId] = useState<string | null>(null);
@@ -1576,6 +1690,46 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                   </div>
                 </div>
               )}
+
+              {/* Personal Socials Connection Area */}
+              <div className="mt-4 pt-4 border-t border-slate-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
+                    Personal Social Connection (LinkedIn Profile)
+                  </h4>
+                  <p className="text-[10px] text-slate-400 font-light mt-0.5">
+                    Connect your personal LinkedIn account so your virtual founder doppelganger can publish posts directly to your profile.
+                  </p>
+                </div>
+
+                <div>
+                  {isLinkedinConnected ? (
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                        Connected to Profile
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleDisconnectLinkedin}
+                        className="text-[10px] font-bold text-red-500 hover:text-red-650 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-3 py-1.5 rounded-xl transition"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleConnectLinkedin}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold text-white bg-[#0A66C2] hover:bg-[#00509d] transition shadow-sm cursor-pointer"
+                    >
+                      <Linkedin className="h-3 w-3" />
+                      Connect Personal Profile
+                    </button>
+                  )}
+                </div>
+              </div>
             </BentoCard>
 
             {/* 2. Main manual tool container */}
@@ -1609,6 +1763,23 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                           {opt.label}
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Channels Selector (Read-Only LinkedIn for now) */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Target Social Channel
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled
+                        className="flex items-center gap-1.5 py-2 px-3 border border-[#0A66C2]/20 bg-[#0A66C2]/5 text-[#0A66C2] rounded-xl text-xs font-bold shadow-sm cursor-default"
+                      >
+                        <Linkedin className="h-3.5 w-3.5" />
+                        LinkedIn (Selected & Configured)
+                      </button>
                     </div>
                   </div>
 
@@ -1929,15 +2100,51 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                             <span className="text-[10px] text-slate-400 font-mono">
                               Generated: {new Date(post.createdAt).toLocaleDateString()}
                             </span>
+                            {/* Status Badges */}
+                            {post.status === "published" ? (
+                              <span className="text-[9px] font-mono bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                Published
+                              </span>
+                            ) : post.status === "failed" ? (
+                              <span 
+                                title={post.publishError || "Unknown publishing error"} 
+                                className="text-[9px] font-mono bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider cursor-help"
+                              >
+                                Failed
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-mono bg-slate-100 text-slate-655 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                Draft
+                              </span>
+                            )}
                           </div>
                           
                           <div className="flex items-center gap-2">
+                            {post.status !== "published" && (
+                              <button
+                                disabled={!isLinkedinConnected || publishingPostId !== null}
+                                onClick={() => handleManualPublish(post.id)}
+                                title={!isLinkedinConnected ? "Please connect your personal LinkedIn account first" : "Publish to your personal LinkedIn profile"}
+                                className={`inline-flex items-center gap-1.5 text-[10px] font-bold rounded-lg px-2.5 py-1.5 transition shadow-sm border ${
+                                  !isLinkedinConnected
+                                    ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                                    : "bg-white text-[#0A66C2] hover:text-[#00509d] border-[#0A66C2]/30 hover:border-[#0A66C2]/60"
+                                }`}
+                              >
+                                {publishingPostId === post.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin text-[#0A66C2]" />
+                                ) : (
+                                  <Linkedin className="h-3 w-3 text-[#0A66C2]" />
+                                )}
+                                <span>Publish to LinkedIn</span>
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 navigator.clipboard.writeText(post.postCopy);
                                 alert("Copied to clipboard!");
                               }}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-[#7C3AED] hover:text-[#6D28D9] border border-slate-200/85 rounded-lg px-2.5 py-1.5 bg-white transition shadow-sm"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-slate-800 border border-slate-200/85 rounded-lg px-2.5 py-1.5 bg-white transition shadow-sm"
                             >
                               <Copy className="h-3 w-3" />
                               <span>Copy Text</span>

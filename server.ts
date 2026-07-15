@@ -1197,6 +1197,39 @@ async function executeAutoDailyGeneration(productId: string, automatePosts: bool
   }
 }
 
+async function performBackendSocialTrendResearch(ai: any, topic: string, userId: string): Promise<string> {
+  const prompt = `
+    You are an expert social media strategist and LinkedIn growth hacker.
+    
+    Research current trends, successful post formats, structures, and templates on LinkedIn for the topic: "${topic}".
+    
+    CRITICAL: You must use the Google Search tool to search for:
+    "trending LinkedIn posts formatting templates ${topic}" or similar.
+    Find out:
+    1. What formats, layouts, or hooks are currently viral or highly engaging on LinkedIn (e.g., listicles, contrarian hooks, story-based formats, short templates).
+    2. What specific sub-topics, arguments, or keywords are trending.
+    3. What templates are working best.
+    
+    Synthesize your findings into a concise list of 3-5 platform formatting guidelines and trend insights. Include specific tips on layout (e.g. paragraph spacing, formatting, use of negative space) and content strategy.
+  `;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-pro-preview",
+      contents: [{ text: prompt }],
+      config: {
+        tools: [{ googleSearch: {} }]
+      }
+    });
+    
+    await logBackendTokenUsage(userId, "founder_post_research", "gemini-3.1-pro-preview", response.usageMetadata);
+    return response.text || "";
+  } catch (err) {
+    console.warn("[performBackendSocialTrendResearch] Failed:", err);
+    return "Use standard engaging LinkedIn formats: strong contrarian hook, spaced paragraphs, clear bulleted take-aways, and a thought-provoking final sentence.";
+  }
+}
+
 async function executeAutoFounderPostGeneration(userId: string) {
   if (!db) throw new Error("Database connection is not active.");
 
@@ -1218,6 +1251,56 @@ async function executeAutoFounderPostGeneration(userId: string) {
   const attachmentStyle = user.founderPostAttachmentStyle || "text-only";
   const postType = user.founderPostType || "general"; // 'general' | 'branded' | 'both'
   console.log(`[executeAutoFounderPostGeneration] Run for user ${userId}. Type: ${postType}, Style: ${attachmentStyle}...`);
+
+  // 1. Generate topic to focus on today based on pillars and strategic context
+  let selectedTopic = "entrepreneurship and personal lessons from building startups";
+  let trendResearch = "";
+
+  try {
+    const topicPrompt = `
+      You are a virtual Founder Agent named "${founderAgent.personaName}".
+      Your profile:
+      - Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
+      - Core Values: ${founderAgent.coreValues?.join(", ") || ""}
+      - Key Content Pillars: ${founderAgent.contentPillars?.join(", ") || ""}
+      - Target Industry: ${founderAgent.targetIndustry || "General Entrepreneurship"}
+      - Target Audience: ${founderAgent.targetAudience || "General Public/Professionals"}
+      
+      Determine a single high-impact, highly relevant topic or core thought to write about today on LinkedIn. It should align with your content pillars and target industry.
+      Return a JSON object containing:
+      - topic: A short, specific post topic or focus area (e.g. "why remote work is failing for juniors" or "the hidden cost of premature scaling").
+    `;
+
+    const topicRes = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: [{ text: topicPrompt }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            topic: { type: Type.STRING }
+          },
+          required: ["topic"]
+        }
+      }
+    });
+
+    const topicData = JSON.parse(topicRes.text || "{}");
+    if (topicData.topic) {
+      selectedTopic = topicData.topic;
+    }
+  } catch (errTopic) {
+    console.warn("[executeAutoFounderPostGeneration] Failed to generate custom topic suggestion. Falling back to default:", errTopic);
+  }
+
+  // 2. Perform live platform/social trend research using Google Search
+  try {
+    console.log(`[executeAutoFounderPostGeneration] Performing live LinkedIn trend research for topic: "${selectedTopic}"...`);
+    trendResearch = await performBackendSocialTrendResearch(ai, selectedTopic, userId);
+  } catch (errRes) {
+    console.warn("[executeAutoFounderPostGeneration] Niche trend research failed:", errRes);
+  }
 
   // Helper to generate and save a single post
   const generateAndSavePost = async (productData?: any) => {
@@ -1250,11 +1333,18 @@ Strategic Personal Branding Context:
 - Mission: ${founderAgent.mission || ""}
 - Goal: ${founderAgent.goal || ""}
 
+LinkedIn Platform Research & Trend Insights:
+${trendResearch || "Focus on a strong hook, concise paragraphs, clean list/spacing formatting, and a strong CTA."}
+
 Write an organic, highly engaging, and thought-provoking personal social media post for your profile.
+This is a BRANDED post written from your perspective as the founder of "${productData.name}".
+Post Topic of the Day: "${selectedTopic}"
+
 CRITICAL RULES:
 1. Speak as the creator/founder of "${productData.name}". You are sharing an insight, story, status quo challenge, or lesson directly related to the problem "${productData.name}" solves or the journey of building it.
 2. Blend the product's positioning, audience, and narrative elements smoothly into a high-value personal post. Avoid simple sales pitches—the post must offer real value to the reader.
 3. Sound exactly like the founder's profile (behavioral traits, style, values).
+4. CRITICAL: You must write this post using the platform formatting templates, hook styles, layout structure, and trending insights identified in the LinkedIn Platform Research & Trend Insights above.
 
 Return a JSON object containing:
 - postCopy: The full post copy (formatted with clean spacing and paragraph breaks).
@@ -1279,10 +1369,16 @@ Strategic Context:
 - Mission: ${founderAgent.mission || ""}
 - Goal: ${founderAgent.goal || ""}
 
+LinkedIn Platform Research & Trend Insights:
+${trendResearch || "Focus on a strong hook, concise paragraphs, clean list/spacing formatting, and a strong CTA."}
+
 Write an organic, highly engaging, and thought-provoking personal social media post for your profile.
+Post Topic of the Day: "${selectedTopic}"
+
 CRITICAL RULES:
 1. Do NOT talk about, mention, or name any specific products, brands, or commercial projects. This post must be strictly non-branded, educational, narrative-driven, or a personal lesson.
 2. Adopt a natural, expert human voice matching your profile. Avoid marketing fluff or generic corporate listicles.
+3. CRITICAL: You must write this post using the platform formatting templates, hook styles, layout structure, and trending insights identified in the LinkedIn Platform Research & Trend Insights above.
 
 Return a JSON object containing:
 - postCopy: The full post copy (formatted with clean spacing and paragraph breaks).
@@ -1367,6 +1463,26 @@ Return a JSON object containing:
 
     await db.collection('users').doc(userId).collection('founder_posts').doc(newPostId).set(newPost);
     console.log(`[executeAutoFounderPostGeneration] Saved post ${newPostId} (branded: ${!!productData}).`);
+
+    // Attempt auto-publishing if personal LinkedIn is connected
+    try {
+      const token = await getToken(`founder_${userId}`, 'linkedin');
+      if (token) {
+        console.log(`[executeAutoFounderPostGeneration] Personal LinkedIn connected. Auto-publishing post ${newPostId} to personal profile...`);
+        await publishPostToLinkedIn(token, newPost.postCopy, newPost.imageUrl);
+        newPost.status = "published";
+        (newPost as any).publishedAt = new Date().toISOString();
+        await db.collection('users').doc(userId).collection('founder_posts').doc(newPostId).set(newPost);
+        console.log(`[executeAutoFounderPostGeneration] Post ${newPostId} successfully auto-published to LinkedIn.`);
+      } else {
+        console.log(`[executeAutoFounderPostGeneration] Personal LinkedIn not connected. Post ${newPostId} left as draft/scheduled.`);
+      }
+    } catch (pubErr: any) {
+      console.error(`[executeAutoFounderPostGeneration] Auto-publishing failed for post ${newPostId}:`, pubErr);
+      newPost.status = "failed";
+      (newPost as any).publishError = pubErr.message || String(pubErr);
+      await db.collection('users').doc(userId).collection('founder_posts').doc(newPostId).set(newPost);
+    }
   };
 
   // Run general post generation if applicable
@@ -3565,6 +3681,156 @@ ${htmlContent}
     }
   });
 
+  // Reusable helper to publish a post with optional image to LinkedIn
+  async function publishPostToLinkedIn(token: string, text: string, imageUrl?: string | null, customAuthorUrn?: string): Promise<void> {
+    let authorUrn = customAuthorUrn;
+
+    if (!authorUrn) {
+      // Fallback to user URN if no custom URN is provided
+      const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!userRes.ok) {
+        throw new Error('Failed to fetch user info from LinkedIn');
+      }
+      
+      const userData = await userRes.json();
+      authorUrn = `urn:li:person:${userData.sub}`;
+    }
+
+    let specificContent: any = {
+      'com.linkedin.ugc.ShareContent': {
+        shareCommentary: { text },
+        shareMediaCategory: 'NONE'
+      }
+    };
+
+    if (imageUrl) {
+      // Register upload
+      const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          registerUploadRequest: {
+            recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+            owner: authorUrn,
+            serviceRelationships: [
+              {
+                relationshipType: 'OWNER',
+                identifier: 'urn:li:userGeneratedContent'
+              }
+            ]
+          }
+        })
+      });
+
+      if (!registerRes.ok) {
+        const err = await registerRes.text();
+        throw new Error(`Failed to register image upload: ${err}`);
+      }
+
+      const registerData = await registerRes.json();
+      const uploadUrl = registerData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
+      const assetUrn = registerData.value.asset;
+
+      // Prepare image data
+      let imageBuffer: Buffer | ArrayBuffer;
+      let contentType = 'image/jpeg';
+      
+      if (imageUrl.startsWith('data:')) {
+        const matches = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          contentType = matches[1];
+          imageBuffer = Buffer.from(matches[2], 'base64');
+        } else {
+          throw new Error('Invalid base64 image data');
+        }
+      } else if (imageUrl.startsWith('/api/whatsapp/images/')) {
+        const match = imageUrl.match(/\/api\/whatsapp\/images\/([^/.]+)/);
+        if (match) {
+          const imageId = match[1];
+          const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
+          try {
+            imageBuffer = await fs.readFile(localPath);
+            contentType = 'image/png';
+          } catch (e) {
+            if (db) {
+              const doc = await db.collection('whatsapp_images').doc(imageId).get();
+              if (doc.exists && doc.data()?.base64Data) {
+                imageBuffer = Buffer.from(doc.data()!.base64Data, 'base64');
+                contentType = doc.data()!.mimeType || 'image/png';
+              } else {
+                throw new Error(`Image ${imageId} not found in Firestore or local disk`);
+              }
+            } else {
+              throw new Error(`Image ${imageId} not found on local disk and DB is inactive`);
+            }
+          }
+        } else {
+          throw new Error('Invalid local image URL format');
+        }
+      } else {
+        const imgRes = await fetch(imageUrl);
+        if (!imgRes.ok) throw new Error(`Failed to fetch image from URL: ${imageUrl}`);
+        imageBuffer = await imgRes.arrayBuffer();
+        contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+      }
+
+      // Upload image
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': contentType
+        },
+        body: imageBuffer
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error('Failed to upload image to LinkedIn');
+      }
+
+      specificContent = {
+        'com.linkedin.ugc.ShareContent': {
+          shareCommentary: { text },
+          shareMediaCategory: 'IMAGE',
+          media: [
+            {
+              status: 'READY',
+              description: { text: 'Image' },
+              media: assetUrn,
+              title: { text: 'Image' }
+            }
+          ]
+        }
+      };
+    }
+
+    // Create Post
+    const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0'
+      },
+      body: JSON.stringify({
+        author: authorUrn,
+        lifecycleState: 'PUBLISHED',
+        specificContent,
+        visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+      })
+    });
+
+    if (!postRes.ok) {
+      const err = await postRes.text();
+      throw new Error(err);
+    }
+  }
+
   app.post('/api/linkedin/publish', requireAuth, routeRateLimiter(5, 60 * 1000), async (req, res) => {
     try {
       const { text, productId, imageUrl } = req.body;
@@ -3573,133 +3839,51 @@ ${htmlContent}
       
       // Check if an organization is selected for this product
       const orgUrn = await getToken(productId, 'linkedin_org');
-      let authorUrn = orgUrn;
+      
+      await publishPostToLinkedIn(token, text, imageUrl, orgUrn || undefined);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
-      if (!authorUrn) {
-        // Fallback to user URN if no organization is selected
-        const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (!userRes.ok) {
-          throw new Error('Failed to fetch user info from LinkedIn');
-        }
-        
-        const userData = await userRes.json();
-        authorUrn = `urn:li:person:${userData.sub}`;
+  app.post('/api/founder/publish', requireAuth, async (req, res) => {
+    try {
+      const { postId } = req.body;
+      const userId = (req as any).user?.uid;
+      if (!userId || !postId) {
+        return res.status(400).json({ error: 'Missing userId or postId' });
       }
 
-      let specificContent: any = {
-        'com.linkedin.ugc.ShareContent': {
-          shareCommentary: { text },
-          shareMediaCategory: 'NONE'
-        }
-      };
-
-      // 2. Handle image upload if imageUrl is provided
-      if (imageUrl) {
-        // Register upload
-        const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            registerUploadRequest: {
-              recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-              owner: authorUrn,
-              serviceRelationships: [
-                {
-                  relationshipType: 'OWNER',
-                  identifier: 'urn:li:userGeneratedContent'
-                }
-              ]
-            }
-          })
-        });
-
-        if (!registerRes.ok) {
-          const err = await registerRes.text();
-          throw new Error(`Failed to register image upload: ${err}`);
-        }
-
-        const registerData = await registerRes.json();
-        const uploadUrl = registerData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
-        const assetUrn = registerData.value.asset;
-
-        // Prepare image data
-        let imageBuffer: Buffer | ArrayBuffer;
-        let contentType = 'image/jpeg';
-        
-        if (imageUrl.startsWith('data:')) {
-          const matches = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-          if (matches && matches.length === 3) {
-            contentType = matches[1];
-            imageBuffer = Buffer.from(matches[2], 'base64');
-          } else {
-            throw new Error('Invalid base64 image data');
-          }
-        } else {
-          const imgRes = await fetch(imageUrl);
-          if (!imgRes.ok) throw new Error('Failed to fetch image from URL');
-          imageBuffer = await imgRes.arrayBuffer();
-          contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-        }
-
-        // Upload image
-        const uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': contentType
-          },
-          body: imageBuffer
-        });
-
-        if (!uploadRes.ok) {
-          throw new Error('Failed to upload image to LinkedIn');
-        }
-
-        // Update specificContent for image
-        specificContent = {
-          'com.linkedin.ugc.ShareContent': {
-            shareCommentary: { text },
-            shareMediaCategory: 'IMAGE',
-            media: [
-              {
-                status: 'READY',
-                description: { text: 'Image' },
-                media: assetUrn,
-                title: { text: 'Image' }
-              }
-            ]
-          }
-        };
+      if (!db) {
+        return res.status(500).json({ error: 'Database connection is not active' });
       }
 
-      // 3. Create Post
-      const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-Restli-Protocol-Version': '2.0.0'
-        },
-        body: JSON.stringify({
-          author: authorUrn,
-          lifecycleState: 'PUBLISHED',
-          specificContent,
-          visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-        })
+      const postRef = db.collection('users').doc(userId).collection('founder_posts').doc(postId);
+      const postDoc = await postRef.get();
+      if (!postDoc.exists) {
+        return res.status(404).json({ error: 'Founder post not found' });
+      }
+      const post = postDoc.data()!;
+
+      // Load personal LinkedIn token
+      const token = await getToken(`founder_${userId}`, 'linkedin');
+      if (!token) {
+        return res.status(400).json({ error: 'Personal LinkedIn account not connected' });
+      }
+
+      // Publish using our helper
+      await publishPostToLinkedIn(token, post.postCopy, post.imageUrl);
+
+      // Update post status in Firestore
+      await postRef.update({
+        status: 'published',
+        publishedAt: new Date().toISOString()
       });
-
-      if (!postRes.ok) {
-        const err = await postRes.text();
-        throw new Error(err);
-      }
 
       res.json({ success: true });
     } catch (e: any) {
+      console.error("[Founder Manual Publish Error]:", e);
       res.status(500).json({ error: e.message });
     }
   });
