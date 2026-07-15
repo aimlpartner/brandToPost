@@ -68,6 +68,7 @@ export interface ProductDNA {
   targetIcps?: { name: string, painPoints: string[] }[];
   recommendedThemes?: string[];
   extractedMediaImages?: string[];
+  crawledUrls?: string[];
 
   // Founder Voice & Agent Doppelganger
   founderVoiceDescription?: string;
@@ -106,6 +107,7 @@ export interface ProductDNA {
   mascotShowcase?: string;
   mascotPreview?: string;
   activeScript?: ScriptData;
+  scriptInstructions?: string;
 }
 
 export interface Creative {
@@ -125,6 +127,8 @@ export interface PlatformPost {
   imageId?: string;
   improvedViaFeedback?: boolean;
   visualData?: any;
+  /** When true, imageUrl/imageId points to a fully composited JPEG with all overlays baked in */
+  isFlattened?: boolean;
 }
 
 export interface DailyPost {
@@ -136,13 +140,21 @@ export interface DailyPost {
   imageUrl?: string;
   imageId?: string;
   overlayText?: string;
-  visualType?: 'creative-story' | 'data-infographic' | 'powerful-quote' | 'abstract-announcement';
+  visualType?: 'creative-story' | 'data-infographic' | 'powerful-quote' | 'abstract-announcement' | 'custom-overlay' | string;
   visualData?: {
     headline?: string;
     subtext?: string;
     stats?: Array<{ label: string; value: string }>;
     cinematicPrompt?: string;
+    customHtml?: string;
+    baseImage?: string;
+    baseImageId?: string;
+    layout?: any;
+    editorState?: any;
+    fonts?: { primary: string; secondary?: string };
   };
+  /** When true, imageUrl/imageId points to a fully composited JPEG with all overlays baked in */
+  isFlattened?: boolean;
 }
 
 export interface Feedback {
@@ -190,4 +202,7 @@ export interface WeeklyCampaign {
   blogContent?: string;
   blogImageUrl?: string;
   blogImagePrompt?: string;
+  publishedBlogUrl?: string;
+  publishedAt?: string;
+  blogPublishError?: string;
 }

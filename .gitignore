@@ -7,5 +7,6 @@ coverage/
 .env*
 !.env.example
 .puppeteer-cache/
+.cache/
 scripts/*.json
 .htaccess

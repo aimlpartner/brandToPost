@@ -291,6 +291,7 @@ export function ProductDNA() {
   const [isResearching, setIsResearching] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [productDocument, setProductDocument] = useState<{
     data: string;
     mimeType: string;
@@ -441,11 +442,27 @@ export function ProductDNA() {
       return;
     }
     setError(null);
-    setIsResearching(true);
+    setUrlError(null);
+
     let inputType: "website" | "document" | "description" = "website";
     if (dna.website) inputType = "website";
     else if (productDocument) inputType = "document";
     else if (dna.description) inputType = "description";
+
+    if (inputType === "website") {
+      const targetWebsite = dna.website.trim();
+      
+      const hasEmailIndicator = targetWebsite.includes('@');
+      const hasDot = targetWebsite.includes('.');
+      const tld = targetWebsite.split('.').pop() || '';
+      
+      if (hasEmailIndicator || !hasDot || tld.length < 2) {
+        setUrlError("Please enter a valid website URL (e.g. stripe.com).");
+        return;
+      }
+    }
+
+    setIsResearching(true);
     setExtractionInputType(inputType);
     setExtractionComplete(false);
     setScreenshotUrl(null);
@@ -832,10 +849,19 @@ export function ProductDNA() {
             </label>
             <div className="h-px bg-slate-200 mb-3" />
             <input
-              type="url" name="website" value={dna.website} onChange={handleChange}
-              className="w-full bg-white border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-300 outline-none transition-colors"
-              placeholder="https://your-saas.com"
+              type="text" name="website" value={dna.website} 
+              onChange={(e) => {
+                handleChange(e);
+                if (urlError) setUrlError(null);
+              }}
+              className={`w-full bg-white border ${urlError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-[#7C3AED]"} rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-300 outline-none transition-colors`}
+              placeholder="stripe.com"
             />
+            {urlError && (
+              <p className="mt-1.5 text-[11px] font-semibold text-red-500 leading-normal">
+                {urlError}
+              </p>
+            )}
           </div>
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
@@ -867,6 +893,28 @@ export function ProductDNA() {
             {isResearching ? <VideoLoader className="mr-2 h-7 w-7" /> : <Sparkles className="mr-2 h-4 w-4" />}
             Extract Brand DNA
           </button>
+
+          {dna.crawledUrls && dna.crawledUrls.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-200/60">
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                <Globe className="h-3 w-3 text-emerald-500" /> Crawled Pages ({dna.crawledUrls.length})
+              </label>
+              <ul className="space-y-1 bg-white border border-slate-200/50 rounded-xl p-2.5 max-h-32 overflow-y-auto font-mono text-[10px] text-slate-500 leading-normal scrollbar-thin">
+                {dna.crawledUrls.map((url, i) => {
+                  let path = url;
+                  try {
+                    path = new URL(url).pathname;
+                  } catch (_) {}
+                  return (
+                    <li key={i} className="truncate flex items-center gap-2 hover:text-slate-800" title={url}>
+                      <span className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />
+                      <span className="truncate">{path === '/' || !path ? '/' : path}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </div>
       </BentoCard>
 

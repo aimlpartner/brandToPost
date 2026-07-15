@@ -146,3 +146,42 @@ export function localToUtc(localTime: string): string {
   return `${utcHours}:${utcMinutes}`;
 }
 
+export function playSuccessChime() {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+    
+    // Classic ascending victory fanfare: G5 -> C6 -> E6 -> G6 -> C7
+    const notes = [783.99, 1046.50, 1318.51, 1567.98, 2093.00];
+    const now = ctx.currentTime;
+    
+    notes.forEach((freq, index) => {
+      const time = now + index * 0.06;
+      
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, time);
+      
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, time);
+      
+      // Loud, bright, clear envelope so it's audible from headphones on the desk
+      gain.gain.linearRampToValueAtTime(0.6, time + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, time + 1.0);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(time);
+      osc.stop(time + 1.2);
+    });
+  } catch (err) {
+    console.warn("Could not play success chime:", err);
+  }
+}
+
+

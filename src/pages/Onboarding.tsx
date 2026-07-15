@@ -29,6 +29,7 @@ import { researchProductDNA, researchFocus, generateCampaign } from "../services
 import { db } from "../firebase";
 import { collection, addDoc, setDoc, doc } from "firebase/firestore";
 import { logSilentError, handleFirestoreError, OperationType } from "../lib/firestore-error";
+import { playSuccessChime } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { BrandExtractionModal } from "../components/BrandExtractionModal";
 import { DnaModel } from "../components/DnaModel";
@@ -187,6 +188,7 @@ export function Onboarding() {
   // 6: Campaign Complete / Approve Screen
   const [step, setStep] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   // --- Step 1 State: Scanner Inputs & Scraper console ---
   const [website, setWebsite] = useState("");
@@ -310,9 +312,23 @@ export function Onboarding() {
     const targetWebsite = extractionInputType === "website" ? website.trim() : "";
     const targetDesc = extractionInputType === "description" ? brandDesc.trim() : "";
 
-    if (extractionInputType === "website" && !targetWebsite) {
-      setError("Please enter a Website URL to scan.");
-      return;
+    setError(null);
+    setUrlError(null);
+
+    if (extractionInputType === "website") {
+      if (!targetWebsite) {
+        setUrlError("Please enter a Website URL to scan.");
+        return;
+      }
+      
+      const hasEmailIndicator = targetWebsite.includes('@');
+      const hasDot = targetWebsite.includes('.');
+      const tld = targetWebsite.split('.').pop() || '';
+      
+      if (hasEmailIndicator || !hasDot || tld.length < 2) {
+        setUrlError("Please enter a valid website URL (e.g. stripe.com).");
+        return;
+      }
     }
     if (extractionInputType === "description" && !targetDesc) {
       setError("Please enter a Brand Description to extract DNA.");
@@ -504,9 +520,24 @@ export function Onboarding() {
       }
 
       // Add delay to show complete state
-      setTimeout(() => {
+      setTimeout(async () => {
         setDna(parsedDna);
         setExtractionComplete(true);
+
+        // Auto-save and move to step 2 directly without waiting or asking
+        if (activeProduct && user) {
+          try {
+            await updateProduct(activeProduct.id, {
+              ...parsedDna,
+              logoUrl: parsedDna.logoUrl || null,
+              logoDarkUrl: parsedDna.logoDarkUrl || null,
+              logoLightUrl: parsedDna.logoLightUrl || null,
+            });
+          } catch (err) {
+            console.error("Failed to save initial DNA scan:", err);
+          }
+        }
+        setStep(2);
       }, 1000);
 
     } catch (err: any) {
@@ -775,6 +806,8 @@ export function Onboarding() {
       setGenProgress(100);
       setGenLogs((prev) => [...prev, "Campaign structured. Synchronizing memory graph..."]);
 
+      playSuccessChime();
+
       setTimeout(() => {
         setDraftCampaign(campaignObj);
         setIsGenerating(false);
@@ -1009,10 +1042,18 @@ export function Onboarding() {
                             <input
                               type="text"
                               value={website}
-                              onChange={(e) => setWebsite(e.target.value)}
+                              onChange={(e) => {
+                                setWebsite(e.target.value);
+                                if (urlError) setUrlError(null);
+                              }}
                               placeholder="e.g. stripe.com"
-                              className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all"
+                              className={`w-full bg-slate-50 border ${urlError ? "border-red-500 focus:border-red-500 focus:ring-red-500/10" : "border-slate-200 focus:border-[#7C3AED] focus:ring-[#7C3AED]/10"} focus:bg-white text-slate-800 focus:outline-none focus:ring-2 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all`}
                             />
+                            {urlError && (
+                              <p className="mt-1.5 text-xs font-semibold text-red-500">
+                                {urlError}
+                              </p>
+                            )}
                           </div>
                         </motion.div>
                       ) : (

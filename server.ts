@@ -1090,7 +1090,41 @@ Return the result in a JSON object with the following fields:
 
   const currentDate = formatDate(new Date());
 
-  const newCampaign = {
+  // Attempt to publish to external site if configured
+  let publishedBlogUrl = null;
+  let blogPublishError = null;
+  let publishStatusText = 'Success';
+
+  try {
+    const blogSettings = await getBlogSettings(productId);
+    if (blogSettings && blogSettings.type !== 'none') {
+      console.log(`[executeAutoDailyBlogGeneration] Blog integration found (${blogSettings.type}). Attempting auto-publishing...`);
+      const appHost = process.env.APP_URL || lastKnownHost || 'http://localhost:3000';
+      const publishRes = await publishBlogToExternalSite(
+        productId,
+        founderInputs.blogTitle,
+        blogData.blogContent,
+        blogImageUrl,
+        { campaignId, targetAudience: blogData.targetAudience, coreMessage: blogData.coreMessage, cta: blogData.cta },
+        appHost
+      );
+      if (publishRes.success) {
+        publishedBlogUrl = (publishRes as any).url || null;
+        publishStatusText = `Success (Published to ${blogSettings.type})`;
+        console.log(`[executeAutoDailyBlogGeneration] Auto-publishing succeeded: ${publishedBlogUrl || 'delivery successful'}`);
+      } else {
+        blogPublishError = publishRes.message || 'Auto-publishing failed';
+        publishStatusText = `Success (Saved to Dashboard, Autopost Failed)`;
+        console.warn(`[executeAutoDailyBlogGeneration] Auto-publishing failed: ${blogPublishError}`);
+      }
+    }
+  } catch (pubErr: any) {
+    blogPublishError = pubErr.message || String(pubErr);
+    publishStatusText = `Success (Saved to Dashboard, Autopost Error)`;
+    console.error(`[executeAutoDailyBlogGeneration] Auto-publishing threw error:`, pubErr);
+  }
+
+  const newCampaign: any = {
     id: campaignId,
     productId,
     userId: product.userId || "anonymous",
@@ -1116,6 +1150,14 @@ Return the result in a JSON object with the following fields:
     cta: blogData.cta || ""
   };
 
+  if (publishedBlogUrl) {
+    newCampaign.publishedBlogUrl = publishedBlogUrl;
+    newCampaign.publishedAt = new Date().toISOString();
+  }
+  if (blogPublishError) {
+    newCampaign.blogPublishError = blogPublishError;
+  }
+
   await db.collection('campaigns').doc(campaignId).set(newCampaign);
 
   // 6. Update logs in product
@@ -1126,7 +1168,7 @@ Return the result in a JSON object with the following fields:
     type: 'daily_content',
     theme: founderInputs.blogTitle,
     focus: founderInputs.focusInput,
-    status: 'Success'
+    status: publishStatusText
   };
 
   const currentLogs = product.automationLogs || [];
@@ -1457,6 +1499,22 @@ async function setToken(productId: string, platform: string, token: string) {
   }
 }
 
+async function getBlogSettings(productId: string) {
+  if (db) {
+    const doc = await db.collection('server_tokens').doc(productId).get();
+    return doc.exists ? doc.data()?.blogSettings || null : null;
+  }
+  return globalBlogSettings[productId] || null;
+}
+
+async function setBlogSettings(productId: string, settings: any) {
+  if (db) {
+    await db.collection('server_tokens').doc(productId).set({ blogSettings: settings }, { merge: true });
+  } else {
+    globalBlogSettings[productId] = settings;
+  }
+}
+
 // --- Scheduling State (Fallback) ---
 let globalLinkedinTokens: Record<string, string> = {};
 let globalFacebookTokens: Record<string, string> = {};
@@ -1466,6 +1524,7 @@ let globalWhatsappTokens: Record<string, string> = {};
 let globalWhatsappPhoneIds: Record<string, string> = {};
 let globalWhatsappVerifyTokens: Record<string, string> = {};
 let globalWhatsappBotNumbers: Record<string, string> = {};
+let globalBlogSettings: Record<string, any> = {};
 let scheduleConfigs: Record<string, { enabled: boolean, timeUtc: string }> = {};
 let postQueue: Array<{ id: string, text: string, campaignId: string, platform: string, productId: string, day?: string, imageUrl?: string }> = [];
 let lastPostedDates: Record<string, string> = {};
@@ -2266,6 +2325,178 @@ async function runPeriodicEmailChecks() {
   }
 }
 
+async function publishBlogToWordPress(settings: any, title: string, content: string, imageUrl: string | null) {
+  let cleanUrl = settings.wordpress.url.trim().replace(/\/$/, '');
+  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    cleanUrl = 'https://' + cleanUrl;
+  }
+  
+  const authHeader = `Basic ${Buffer.from(`${settings.wordpress.username.trim()}:${settings.wordpress.appPassword.trim()}`).toString('base64')}`;
+  let featuredMediaId: number | null = null;
+
+  if (imageUrl) {
+    try {
+      let imageBuffer: Buffer | null = null;
+      let mimeType = 'image/png';
+      
+      if (imageUrl.startsWith('/api/whatsapp/images/')) {
+        const imageId = imageUrl.split('/').pop()?.replace('.png', '');
+        if (imageId) {
+          const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
+          try {
+            imageBuffer = await fs.readFile(localPath);
+          } catch (e) {
+            console.warn(`[WordPress Publish] Local file read failed: ${localPath}. Trying DB...`, e);
+          }
+
+          if (!imageBuffer && db) {
+            const imgDoc = await db.collection('whatsapp_images').doc(imageId).get();
+            if (imgDoc.exists) {
+              const data = imgDoc.data()!;
+              imageBuffer = Buffer.from(data.base64Data, 'base64');
+              mimeType = data.mimeType || 'image/png';
+            }
+          }
+        }
+      }
+
+      if (imageBuffer) {
+        const mediaUrl = `${cleanUrl}/wp-json/wp/v2/media`;
+        const uploadRes = await fetch(mediaUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': mimeType,
+            'Content-Disposition': 'attachment; filename="blog_image.png"'
+          },
+          body: imageBuffer
+        });
+
+        if (uploadRes.ok) {
+          const mediaData: any = await uploadRes.json();
+          featuredMediaId = mediaData.id || null;
+          console.log(`[WordPress Publish] Image uploaded successfully. WP Media ID: ${featuredMediaId}`);
+        } else {
+          const errText = await uploadRes.text();
+          console.warn(`[WordPress Publish] Image upload failed: ${uploadRes.status} - ${errText}`);
+        }
+      }
+    } catch (imgErr) {
+      console.error('[WordPress Publish] Exception uploading image:', imgErr);
+    }
+  }
+
+  const postsUrl = `${cleanUrl}/wp-json/wp/v2/posts`;
+  const postBody: any = {
+    title: title,
+    content: content,
+    status: 'publish'
+  };
+
+  if (featuredMediaId) {
+    postBody.featured_media = featuredMediaId;
+  }
+
+  const response = await fetch(postsUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': authHeader,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(postBody)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`WordPress REST API error: ${response.status} - ${errorText}`);
+  }
+
+  const postData: any = await response.json();
+  return {
+    success: true,
+    url: postData.link || `${cleanUrl}/?p=${postData.id}`,
+    postId: postData.id
+  };
+}
+
+async function publishBlogToWebhook(settings: any, payload: any) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+
+  if (settings.webhook.secret?.trim()) {
+    headers['X-BrandToPost-Secret'] = settings.webhook.secret.trim();
+  }
+
+  const response = await fetch(settings.webhook.url.trim(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Webhook integration error: ${response.status} - ${errorText}`);
+  }
+
+  return {
+    success: true,
+    message: 'Webhook payload delivered successfully'
+  };
+}
+
+async function publishBlogToExternalSite(
+  productId: string,
+  title: string,
+  content: string,
+  blogImageUrl: string | null,
+  extraData: { campaignId?: string, targetAudience?: string, coreMessage?: string, cta?: string },
+  appHost: string
+) {
+  const settings = await getBlogSettings(productId);
+  if (!settings || settings.type === 'none') {
+    return { success: false, reason: 'none', message: 'No blog integration configured' };
+  }
+
+  let absoluteImageUrl = null;
+  if (blogImageUrl) {
+    if (blogImageUrl.startsWith('http')) {
+      absoluteImageUrl = blogImageUrl;
+    } else {
+      const cleanHost = (appHost || process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+      absoluteImageUrl = `${cleanHost}${blogImageUrl}`;
+    }
+  }
+
+  if (settings.type === 'wordpress') {
+    if (!settings.wordpress || !settings.wordpress.url || !settings.wordpress.username || !settings.wordpress.appPassword) {
+      throw new Error('WordPress integration is incomplete. Check settings.');
+    }
+    return await publishBlogToWordPress(settings, title, content, blogImageUrl);
+  } else if (settings.type === 'webhook') {
+    if (!settings.webhook || !settings.webhook.url) {
+      throw new Error('Webhook integration URL is missing. Check settings.');
+    }
+    
+    const payload = {
+      event: "blog.publish",
+      campaignId: extraData.campaignId || null,
+      productId: productId,
+      title: title,
+      content: content,
+      imageUrl: absoluteImageUrl,
+      targetAudience: extraData.targetAudience || "",
+      coreMessage: extraData.coreMessage || "",
+      cta: extraData.cta || "",
+      createdAt: new Date().toISOString()
+    };
+    
+    return await publishBlogToWebhook(settings, payload);
+  } else {
+    throw new Error(`Unsupported blog platform type: ${settings.type}`);
+  }
+}
+
 async function publishToInstagramGraphAPI(token: string, text: string, imageUrl: string, appHost: string): Promise<string> {
   const baseUrl = appHost || process.env.APP_URL || '';
   if (!baseUrl) {
@@ -2431,16 +2662,25 @@ async function startServer() {
           '/home/u769235882/domains/brandtopost.com/public_html/.cache/puppeteer'
         ];
 
+        const isWin = process.platform === 'win32';
+        const execName = isWin ? 'chrome.exe' : 'chrome';
+
         for (const baseDir of candidateDirs) {
           try {
             const chromeDir = path.join(baseDir, 'chrome');
             if (fs.existsSync(chromeDir)) {
               const versions = fs.readdirSync(chromeDir);
               for (const v of versions) {
-                const candidate = path.join(chromeDir, v, 'chrome-linux64', 'chrome');
-                if (fs.existsSync(candidate)) {
-                  console.log(`[PUPPETEER POOL] Found Chrome at: ${candidate}`);
-                  return candidate;
+                const versionDir = path.join(chromeDir, v);
+                if (fs.existsSync(versionDir)) {
+                  const subdirs = fs.readdirSync(versionDir);
+                  for (const sd of subdirs) {
+                    const candidate = path.join(versionDir, sd, execName);
+                    if (fs.existsSync(candidate)) {
+                      console.log(`[PUPPETEER POOL] Found Chrome at: ${candidate}`);
+                      return candidate;
+                    }
+                  }
                 }
               }
             }
@@ -2500,7 +2740,7 @@ async function startServer() {
         console.log(`[PUPPETEER POOL] Initializing singleton background browser instance...`);
         const launchOptions: any = {
           headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         };
         if (hasInstall && chromeExecutable) {
           console.log(`[PUPPETEER POOL] Specifying explicit Chrome executable path: ${chromeExecutable}`);
@@ -3514,6 +3754,114 @@ ${htmlContent}
 
       res.json({ success: true, message: `Successfully disconnected from ${platform}` });
     } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Blog Publishing Config & Publish Endpoints
+  app.get('/api/blog/config', requireAuth, async (req, res) => {
+    try {
+      const { productId } = req.query as { productId: string };
+      if (!productId) return res.status(400).json({ error: 'productId is required' });
+
+      const settings = await getBlogSettings(productId) || { type: 'none' };
+      
+      const safeSettings = {
+        type: settings.type || 'none',
+        wordpress: settings.wordpress ? {
+          url: settings.wordpress.url || '',
+          username: settings.wordpress.username || '',
+          hasPassword: !!settings.wordpress.appPassword
+        } : undefined,
+        webhook: settings.webhook ? {
+          url: settings.webhook.url || '',
+          hasSecret: !!settings.webhook.secret
+        } : undefined
+      };
+
+      res.json(safeSettings);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/blog/config', requireAuth, async (req, res) => {
+    try {
+      const { productId, settings } = req.body;
+      if (!productId) return res.status(400).json({ error: 'productId is required' });
+      if (!settings || !settings.type) return res.status(400).json({ error: 'Invalid settings body' });
+
+      const existing = await getBlogSettings(productId);
+
+      if (settings.type === 'wordpress' && settings.wordpress) {
+        if (settings.wordpress.appPassword === '••••••••') {
+          settings.wordpress.appPassword = existing?.wordpress?.appPassword || '';
+        }
+      } else if (settings.type === 'webhook' && settings.webhook) {
+        if (settings.webhook.secret === '••••••••') {
+          settings.webhook.secret = existing?.webhook?.secret || '';
+        }
+      }
+
+      await setBlogSettings(productId, settings);
+      res.json({ success: true, message: 'Blog publishing settings updated successfully' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/blog/publish', requireAuth, routeRateLimiter(5, 60 * 1000), async (req, res) => {
+    try {
+      const { productId, campaignId } = req.body;
+      let { title, content, imageUrl, targetAudience, coreMessage, cta } = req.body;
+      if (!productId) return res.status(400).json({ error: 'productId is required' });
+
+      if (campaignId && db) {
+        const campaignDoc = await db.collection('campaigns').doc(campaignId).get();
+        if (campaignDoc.exists) {
+          const campaignData = campaignDoc.data()!;
+          title = title || campaignData.blogTitle || campaignData.theme;
+          content = content || campaignData.blogContent || '';
+          imageUrl = imageUrl || campaignData.blogImageUrl || null;
+          targetAudience = targetAudience || campaignData.targetAudience || '';
+          coreMessage = coreMessage || campaignData.coreMessage || '';
+          cta = cta || campaignData.cta || '';
+        }
+      }
+
+      if (!title || !content) {
+        return res.status(400).json({ error: 'Title and Content are required to publish a blog post' });
+      }
+
+      const protocol = req.headers.host?.includes('localhost') ? 'http' : 'https';
+      const appHost = `${protocol}://${req.headers.host}`;
+
+      const publishResult = await publishBlogToExternalSite(
+        productId,
+        title,
+        content,
+        imageUrl || null,
+        { campaignId, targetAudience, coreMessage, cta },
+        appHost
+      );
+
+      if (campaignId && db && publishResult.success) {
+        const updates: any = {
+          publishedBlogUrl: (publishResult as any).url || null,
+          publishedAt: new Date().toISOString(),
+          blogPublishError: admin.firestore.FieldValue.delete()
+        };
+        await db.collection('campaigns').doc(campaignId).update(updates);
+      }
+
+      res.json(publishResult);
+    } catch (e: any) {
+      console.error('[Blog Publish API Error]:', e);
+      if (campaignId && db) {
+        await db.collection('campaigns').doc(campaignId).update({
+          blogPublishError: e.message
+        }).catch(err => console.error("Failed to update publish error in campaign", err));
+      }
       res.status(500).json({ error: e.message });
     }
   });
@@ -5647,12 +5995,12 @@ However, if they ask to make a campaign or send a product photo, and they have n
           }
           
           console.log(`[api/scrape] Evaluating page document to extract Brand DNA...`);
-          const evaluationResult = await page.evaluate(() => {
+          const evaluationResult = await page.evaluate(new Function(`
             const textContent = document.body.innerText.substring(0, 20000);
             
-            const fontCounts: Record<string, number> = {};
-            const colorCounts: Record<string, number> = {};
-            const bgColorCounts: Record<string, number> = {};
+            const fontCounts = {};
+            const colorCounts = {};
+            const bgColorCounts = {};
             
             // Sample standard elements heavily used for text
             const elements = document.querySelectorAll('h1, h2, h3, h4, h5, p, span, a, button, div.container, section');
@@ -5677,7 +6025,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
             }
             
             // Extract Media Images
-            const mediaImages: string[] = [];
+            const mediaImages = [];
             document.querySelectorAll('img').forEach(img => {
                 const src = img.src;
                 if (!src || src.startsWith('data:')) return;
@@ -5708,9 +6056,9 @@ However, if they ask to make a campaign or send a product photo, and they have n
             ];
 
             // Helper to check if an element is likely a client / unwanted logo
-            const isExcluded = (element: Element | null): boolean => {
+            const isExcluded = (element) => {
               if (!element) return false;
-              let current: Element | null = element;
+              let current = element;
               for (let level = 0; level < 5; level++) {
                 if (!current) break;
                 const selfString = (
@@ -5727,11 +6075,11 @@ However, if they ask to make a campaign or send a product photo, and they have n
               return false;
             };
 
-            const candidates: { score: number; src: string }[] = [];
+            const candidates = [];
 
             // Find all IMG tags
             const imgElements = Array.from(document.querySelectorAll('img'));
-            imgElements.forEach((img: HTMLImageElement) => {
+            imgElements.forEach((img) => {
               const src = img.src;
               if (!src) return;
               if (src.startsWith('data:') && !src.startsWith('data:image/svg')) return; // skip other heavy non-svg data urls
@@ -5763,10 +6111,10 @@ However, if they ask to make a campaign or send a product photo, and they have n
 
             // Find SVG logos in header/nav
             const svgs = Array.from(document.querySelectorAll('header svg, nav svg, a svg'));
-            svgs.forEach((svg: SVGElement) => {
+            svgs.forEach((svg) => {
               if (isExcluded(svg)) return;
               
-              const classId = ((svg.className as any)?.baseVal || '') + ' ' + (svg.id || '');
+              const classId = ((svg.className)?.baseVal || '') + ' ' + (svg.id || '');
               const classIdLower = classId.toLowerCase();
               let score = 5; // Base score for header/nav svgs
               if (classIdLower.includes('logo')) score += 15;
@@ -5776,7 +6124,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
               try {
                 const svgString = new XMLSerializer().serializeToString(svg);
                 const svgBase64 = window.btoa(unescape(encodeURIComponent(svgString)));
-                const dataUrl = `data:image/svg+xml;base64,${svgBase64}`;
+                const dataUrl = 'data:image/svg+xml;base64,' + svgBase64;
                 candidates.push({ score, src: dataUrl });
               } catch (e) {}
             });
@@ -5790,16 +6138,152 @@ However, if they ask to make a campaign or send a product photo, and they have n
               // Final fallback to favicon
               const favicon = document.querySelector("link[rel*='icon']");
               if (favicon) {
-                logoUrl = (favicon as HTMLLinkElement).href;
+                logoUrl = favicon.href;
               } else {
                 logoUrl = window.location.origin + '/favicon.ico';
               }
             }
 
-            return { textContent, fontCounts, colorCounts, bgColorCounts, mediaImages: uniqueMediaImages, logoUrl };
-          });
+            // Extract same-domain links for crawling
+            const links = [];
+            document.querySelectorAll('a').forEach(a => {
+              const href = a.href;
+              const text = a.innerText.trim();
+              if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+                links.push({ href, text });
+              }
+            });
+
+            return { textContent, fontCounts, colorCounts, bgColorCounts, mediaImages: uniqueMediaImages, logoUrl, links };
+          `) as any);
           console.log(`[api/scrape] Page evaluation completed successfully.`);
-          return evaluationResult;
+
+          // Process discovered links to find top subpages
+          const links = evaluationResult.links || [];
+          let targetOrigin = '';
+          try {
+            targetOrigin = new URL(targetUrl).origin;
+          } catch (e) {
+            // fallback
+          }
+
+          const subpageCandidates = new Map<string, { href: string; score: number }>();
+          
+          if (targetOrigin) {
+            for (const link of links) {
+              try {
+                const linkUrl = new URL(link.href);
+                if (linkUrl.origin !== targetOrigin) continue;
+
+                let cleanPath = linkUrl.pathname.replace(/\/+$/, ''); // Strip trailing slash
+                if (!cleanPath) continue; // Skip homepage/root
+
+                const fullCleanUrl = `${targetOrigin}${cleanPath}`;
+                if (fullCleanUrl === targetUrl.replace(/\/+$/, '')) continue; // Skip homepage
+
+                if (/\.(pdf|png|jpg|jpeg|gif|zip|doc|docx|xml|json|svg)$/i.test(cleanPath)) continue;
+                if (/(login|signup|register|logout|signin|auth|cart|checkout|account|admin|terms|privacy|legal|cookies|subscribe|feed)/i.test(cleanPath)) continue;
+
+                let score = 0;
+                const pathLower = cleanPath.toLowerCase();
+                const textLower = link.text.toLowerCase();
+
+                if (/(about|company|team|story|who-we-are)/i.test(pathLower)) score += 20;
+                if (/(product|feature|service|solution|pricing|plan|how|technology|faq|help)/i.test(pathLower)) score += 15;
+
+                if (/(about|who we are|our story|company|team)/i.test(textLower)) score += 10;
+                if (/(product|feature|pricing|service|solution|how|technology|faq|help)/i.test(textLower)) score += 5;
+
+                if (score === 0) score = 1;
+
+                const existing = subpageCandidates.get(fullCleanUrl);
+                if (!existing || existing.score < score) {
+                  subpageCandidates.set(fullCleanUrl, { href: fullCleanUrl, score });
+                }
+              } catch (_) {}
+            }
+          }
+
+          const sortedSubpages = Array.from(subpageCandidates.values())
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5);
+
+          console.log(`[api/scrape] Discovered same-domain subpages:`, Array.from(subpageCandidates.keys()));
+          console.log(`[api/scrape] Selected top subpages for crawling:`, sortedSubpages.map(s => `${s.href} (score: ${s.score})`));
+
+
+
+          // Sequentially crawl subpages
+          const subpageContents: { url: string; textContent: string }[] = [];
+          const subpageMediaImages: string[] = [];
+
+          for (const sub of sortedSubpages) {
+            if (aborted) {
+              throw new DOMException("The user aborted a request.", "AbortError");
+            }
+            console.log(`[api/scrape] Crawling subpage: ${sub.href}...`);
+            let subPageInstance = null;
+            try {
+              subPageInstance = await browser.newPage();
+              await subPageInstance.setViewport({ width: 1280, height: 800 });
+              
+              // 7 seconds navigation timeout for subpages
+              await subPageInstance.goto(sub.href, { waitUntil: 'domcontentloaded', timeout: 7000 });
+              
+              if (aborted) break;
+
+              const subResult = await subPageInstance.evaluate(new Function(`
+                const textContent = document.body.innerText.substring(0, 10000);
+                
+                const images = [];
+                document.querySelectorAll('img').forEach(img => {
+                  const src = img.src;
+                  if (!src || src.startsWith('data:')) return;
+                  if (img.naturalWidth && img.naturalWidth > 150 && img.naturalHeight && img.naturalHeight > 150) {
+                    const classAlt = (img.className + ' ' + img.alt).toLowerCase();
+                    if (!classAlt.includes('logo') && !classAlt.includes('icon')) {
+                      images.push(src);
+                    }
+                  }
+                });
+                const uniqueImages = Array.from(new Set(images)).slice(0, 5);
+                return { textContent, images: uniqueImages };
+              `) as any);
+
+              console.log(`[api/scrape] Successfully crawled subpage: ${sub.href} (${subResult.textContent.length} chars, ${subResult.images.length} images)`);
+              subpageContents.push({ url: sub.href, textContent: subResult.textContent });
+              subpageMediaImages.push(...subResult.images);
+            } catch (e: any) {
+              console.error(`[api/scrape] Error crawling subpage ${sub.href}:`, e.message || e);
+            } finally {
+              if (subPageInstance) {
+                await subPageInstance.close().catch(() => {});
+              }
+            }
+          }
+
+          // Combine results
+          let aggregatedTextContent = evaluationResult.textContent;
+          for (const sub of subpageContents) {
+            let pathLabel = sub.url;
+            try {
+              pathLabel = new URL(sub.url).pathname;
+            } catch (_) {}
+            aggregatedTextContent += `\n\n--- SUBPAGE: ${pathLabel} ---\n${sub.textContent}`;
+          }
+
+          const mergedImages = Array.from(new Set([...evaluationResult.mediaImages, ...subpageMediaImages])).slice(0, 15);
+          const crawledUrls = [targetUrl, ...subpageContents.map(c => c.url)];
+
+          return {
+            textContent: aggregatedTextContent,
+            fontCounts: evaluationResult.fontCounts,
+            colorCounts: evaluationResult.colorCounts,
+            bgColorCounts: evaluationResult.bgColorCounts,
+            mediaImages: mergedImages,
+            logoUrl: evaluationResult.logoUrl,
+            crawledUrls
+          };
         } finally {
           if (page) {
             console.log(`[api/scrape] Closing page instance...`);
@@ -5856,6 +6340,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
         extractedBgColors,
         mediaImages: scrapeData.mediaImages,
         logoUrl: scrapeData.logoUrl,
+        crawledUrls: scrapeData.crawledUrls,
         // We'll pass the colors to Gemini in a combined string
         cssContent: `Most Used Text Colors (RGB/HEX): ${extractedColors.join(', ')}\nMost Used Background Colors: ${extractedBgColors.join(', ')}`
       });

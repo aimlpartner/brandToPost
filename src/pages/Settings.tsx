@@ -1,12 +1,13 @@
 import { createPortal } from 'react-dom';
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, CheckCircle2, HelpCircle, RefreshCw, UserPlus } from "lucide-react";
+import { Trash2, CheckCircle2, HelpCircle, RefreshCw, UserPlus, Globe } from "lucide-react";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
 import { db, auth } from "../firebase";
 import { collection, query, where, getDocs, deleteDoc, doc, setDoc } from "firebase/firestore";
 import { handleFirestoreError, OperationType, logSilentError } from "../lib/firestore-error";
+import { deleteCookie } from "../lib/cookies";
 
 const InstagramLogo = () => (
   <svg className="h-6 w-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -69,10 +70,22 @@ export function Settings() {
  const [whatsappSuccessMsg, setWhatsappSuccessMsg] = useState<string | null>(null);
  const [showWhatsappDev, setShowWhatsappDev] = useState(false);
 
- const [showLinkedinDev, setShowLinkedinDev] = useState(false);
- const [showFacebookDev, setShowFacebookDev] = useState(false);
- const [showInstagramDev, setShowInstagramDev] = useState(false);
- const [showRedditDev, setShowRedditDev] = useState(false);
+  const [showLinkedinDev, setShowLinkedinDev] = useState(false);
+  const [showFacebookDev, setShowFacebookDev] = useState(false);
+  const [showInstagramDev, setShowInstagramDev] = useState(false);
+  const [showRedditDev, setShowRedditDev] = useState(false);
+
+  // Blog Integration States
+  const [blogPlatform, setBlogPlatform] = useState<"none" | "wordpress" | "webhook">("none");
+  const [wpUrl, setWpUrl] = useState("");
+  const [wpUsername, setWpUsername] = useState("");
+  const [wpPassword, setWpPassword] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [isSavingBlog, setIsSavingBlog] = useState(false);
+  const [isTestingBlog, setIsTestingBlog] = useState(false);
+  const [blogSuccessMsg, setBlogSuccessMsg] = useState<string | null>(null);
+  const [blogErrorMsg, setBlogErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeProduct) return;
@@ -125,6 +138,27 @@ export function Settings() {
           }
         } catch (e) {
           logSilentError(e as Error, { context: "fetchWhatsappConfig" });
+        }
+
+        try {
+          const res = await fetch(`/api/blog/config?productId=${activeProduct.id}`, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (!isCancelled) {
+              setBlogPlatform(data.type || "none");
+              if (data.wordpress) {
+                setWpUrl(data.wordpress.url || "");
+                setWpUsername(data.wordpress.username || "");
+                setWpPassword(data.wordpress.hasPassword ? "••••••••" : "");
+              }
+              if (data.webhook) {
+                setWebhookUrl(data.webhook.url || "");
+                setWebhookSecret(data.webhook.hasSecret ? "••••••••" : "");
+              }
+            }
+          }
+        } catch (e) {
+          logSilentError(e as Error, { context: "fetchBlogConfig" });
         }
 
       } catch (err) {
@@ -369,6 +403,95 @@ export function Settings() {
    }
  };
 
+  const handleSaveBlogConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeProduct) return;
+    setIsSavingBlog(true);
+    setBlogSuccessMsg(null);
+    setBlogErrorMsg(null);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/blog/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          productId: activeProduct.id,
+          settings: {
+            type: blogPlatform,
+            wordpress: blogPlatform === 'wordpress' ? {
+              url: wpUrl,
+              username: wpUsername,
+              appPassword: wpPassword
+            } : undefined,
+            webhook: blogPlatform === 'webhook' ? {
+              url: webhookUrl,
+              secret: webhookSecret
+            } : undefined
+          }
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to save blog configuration');
+      }
+
+      setBlogSuccessMsg('Blog settings saved successfully.');
+    } catch (err: any) {
+      logSilentError(err as Error, { context: "handleSaveBlogConfig" });
+      setBlogErrorMsg(err.message || 'Error saving settings.');
+    } finally {
+      setIsSavingBlog(false);
+    }
+  };
+
+  const handleTestBlogConfig = async () => {
+    if (!activeProduct) return;
+    setIsTestingBlog(true);
+    setBlogSuccessMsg(null);
+    setBlogErrorMsg(null);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/blog/publish', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          productId: activeProduct.id,
+          title: "Test Connection from BrandToPost",
+          content: "<p>This is a test post automatically generated by your BrandToPost workspace to verify connection settings.</p>",
+          imageUrl: null,
+          targetAudience: "B2B Marketers",
+          coreMessage: "Verify integrations",
+          cta: "B2P Integration works!"
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Connection test failed');
+      }
+
+      if (blogPlatform === 'wordpress') {
+        setBlogSuccessMsg(`WordPress test post published successfully! Link: ${data.url}`);
+      } else {
+        setBlogSuccessMsg('Webhook test payload sent successfully!');
+      }
+    } catch (err: any) {
+      logSilentError(err as Error, { context: "handleTestBlogConfig" });
+      setBlogErrorMsg(`Test failed: ${err.message}`);
+    } finally {
+      setIsTestingBlog(false);
+    }
+  };
+
  if (!activeProduct) {
  return <div className="p-8">Please select or create a product first.</div>;
  }
@@ -584,11 +707,150 @@ export function Settings() {
            </div>
          )}
        </div>
-     );
-   })}
- </div>
- </div>
+      );
+    })}
+  </div>
+  </div>
 
+  {/* Blog Integration Section */}
+  <div className="border-t border-slate-200/65 pt-8 space-y-6 text-left">
+    <div>
+      <h3 className="text-lg font-semibold leading-6 text-slate-800 flex items-center gap-2">
+        <Globe className="h-5 w-5 text-[#7C3AED]" /> Blog Posting Integration
+      </h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Connect self-hosted WordPress sites or set up custom HTTP Webhooks (supporting Wix, Ghost, Zapier/Make, and custom sites) to automatically publish blogs.
+      </p>
+    </div>
+
+    {blogSuccessMsg && (
+      <div className="p-3.5 text-xs bg-emerald-50 border border-emerald-200/60 text-emerald-800 rounded-xl">
+        {blogSuccessMsg}
+      </div>
+    )}
+    {blogErrorMsg && (
+      <div className="p-3.5 text-xs bg-red-50 border border-red-200/60 text-red-800 rounded-xl">
+        {blogErrorMsg}
+      </div>
+    )}
+
+    <form onSubmit={handleSaveBlogConfig} className="space-y-4">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">CMS / Platform Type</label>
+        <select
+          value={blogPlatform}
+          onChange={(e) => {
+            setBlogPlatform(e.target.value as any);
+            setBlogSuccessMsg(null);
+            setBlogErrorMsg(null);
+          }}
+          className="w-full sm:max-w-xs border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+        >
+          <option value="none">None / Disabled</option>
+          <option value="wordpress">WordPress (Self-Hosted)</option>
+          <option value="webhook">Custom Webhook (Wix, Ghost, Custom, Zapier)</option>
+        </select>
+      </div>
+
+      {blogPlatform === "wordpress" && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">WordPress Site URL</label>
+            <input
+              type="url"
+              required
+              placeholder="https://myblog.com"
+              value={wpUrl}
+              onChange={(e) => setWpUrl(e.target.value)}
+              className="border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Username</label>
+            <input
+              type="text"
+              required
+              placeholder="admin"
+              value={wpUsername}
+              onChange={(e) => setWpUsername(e.target.value)}
+              className="border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Application Password</label>
+            <input
+              type="password"
+              required
+              placeholder="•••• •••• •••• ••••"
+              value={wpPassword}
+              onChange={(e) => setWpPassword(e.target.value)}
+              className="border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+            />
+          </div>
+          <div className="sm:col-span-3 text-xs text-slate-500 bg-slate-50 border border-slate-200/50 p-3.5 rounded-xl space-y-1">
+            <p className="font-semibold text-slate-800">Setup Instructions:</p>
+            <p>1. Go to your WordPress Admin Dashboard &gt; Users &gt; Profile (or Edit User for the posting user).</p>
+            <p>2. Scroll down to the <strong>Application Passwords</strong> section.</p>
+            <p>3. Enter an app name (e.g. "BrandToPost") and click <strong>Add New Application Password</strong>.</p>
+            <p>4. Copy the generated 24-character password and paste it into the field above.</p>
+          </div>
+        </div>
+      )}
+
+      {blogPlatform === "webhook" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Webhook URL</label>
+            <input
+              type="url"
+              required
+              placeholder="https://yourdomain.com/api/blog-webhook"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              className="border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Secret Header Token (Optional)</label>
+            <input
+              type="password"
+              placeholder="Secret sent in X-BrandToPost-Secret header"
+              value={webhookSecret}
+              onChange={(e) => setWebhookSecret(e.target.value)}
+              className="border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+            />
+          </div>
+          <div className="sm:col-span-2 text-xs text-slate-500 bg-slate-50 border border-slate-200/50 p-3.5 rounded-xl space-y-1">
+            <p className="font-semibold text-slate-800">Setup Instructions:</p>
+            <p>1. Provide an endpoint URL that accepts HTTP <strong>POST</strong> requests containing a JSON body.</p>
+            <p>2. The JSON body will contain properties: <code>title</code>, <code>content</code> (HTML), <code>imageUrl</code> (Imagen backdrop), <code>targetAudience</code>, <code>coreMessage</code>, and <code>cta</code>.</p>
+            <p>3. If a Secret Header Token is set, your API can verify it by checking the <code>X-BrandToPost-Secret</code> header.</p>
+            <p>4. Wix users: You can implement this via a Wix Velo <strong>HTTP Function</strong> (<code>post_blogPublish</code>) in your Wix Editor.</p>
+          </div>
+        </div>
+      )}
+
+      {blogPlatform !== "none" && (
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <button
+            type="submit"
+            disabled={isSavingBlog}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-5 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer"
+          >
+            {isSavingBlog ? "Saving..." : "Save configuration"}
+          </button>
+          <button
+            type="button"
+            onClick={handleTestBlogConfig}
+            disabled={isTestingBlog}
+            className="inline-flex items-center gap-2 rounded-xl bg-white border border-[#7C3AED]/20 text-[#7C3AED] hover:bg-[#7C3AED]/5 px-5 py-2.5 text-sm font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer"
+          >
+            {isTestingBlog ? "Testing..." : "Test connection"}
+          </button>
+        </div>
+      )}
+    </form>
+  </div>
 
   {/* Guided Tour & Setup Wizard Management Section */}
   <div className="border-t border-[#7C3AED]/15 pt-8">
@@ -633,6 +895,7 @@ export function Settings() {
             try {
               localStorage.removeItem(`onboardingCompleted_${user.uid}`);
               localStorage.removeItem(`dashboardTourCompleted_${user.uid}`);
+              deleteCookie(`dashboardTourCompleted_${user.uid}`);
               
               // Mark as NOT onboarded in Firestore user profile
               await setDoc(doc(db, "users", user.uid), { onboarded: false }, { merge: true });
@@ -680,7 +943,13 @@ export function Settings() {
  }
  localStorage.removeItem("campaigns");
  localStorage.removeItem("products");
- if (user) localStorage.removeItem(`activeProductId_${user.uid}`);
+ if (user) {
+   localStorage.removeItem(`activeProductId_${user.uid}`);
+   deleteCookie(`activeProductId_${user.uid}`);
+   deleteCookie(`dashboardTourCompleted_${user.uid}`);
+ }
+ deleteCookie("activeProductId_guest");
+ deleteCookie("cookie_consent");
  window.location.reload();
  }}
  className="glass-button rounded-lg text-red-500 hover:text-red-400 hover:bg-red-500/10 border-red-500/20 px-4 py-2 text-sm"

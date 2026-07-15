@@ -5,6 +5,7 @@ import { db } from '../firebase';
 import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType, logSilentError } from '../lib/firestore-error';
 import { AppSkeleton } from '../components/AppSkeleton';
+import { getCookie, setCookie, deleteCookie } from '../lib/cookies';
 
 interface ProductContextType {
   products: ProductDNA[];
@@ -39,12 +40,18 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
         try {
           const localProducts: ProductDNA[] = JSON.parse(stored);
           setProducts(localProducts);
-          const storedActive = localStorage.getItem('activeProductId_guest');
+          const storedActive = getCookie('activeProductId_guest') || localStorage.getItem('activeProductId_guest');
           if (storedActive && localProducts.find(p => p.id === storedActive)) {
             setActiveProductId(storedActive);
+            const consent = getCookie('cookie_consent');
+            if (consent !== 'rejected' && !getCookie('activeProductId_guest')) {
+              setCookie('activeProductId_guest', storedActive, 365);
+            }
           } else if (localProducts.length > 0) {
             setActiveProductId(localProducts[0].id);
             localStorage.setItem('activeProductId_guest', localProducts[0].id);
+            const consent = getCookie('cookie_consent');
+            if (consent !== 'rejected') setCookie('activeProductId_guest', localProducts[0].id, 365);
           }
         } catch (e) {
           logSilentError(e as Error, { context: "parseLocalProducts" });
@@ -95,12 +102,18 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
 
       setProducts(fetchedProducts);
       
-      const storedActive = localStorage.getItem(`activeProductId_${user.uid}`);
+      const storedActive = getCookie(`activeProductId_${user.uid}`) || localStorage.getItem(`activeProductId_${user.uid}`);
       if (storedActive && fetchedProducts.find(p => p.id === storedActive)) {
         setActiveProductId(storedActive);
+        const consent = getCookie('cookie_consent');
+        if (consent !== 'rejected' && !getCookie(`activeProductId_${user.uid}`)) {
+          setCookie(`activeProductId_${user.uid}`, storedActive, 365);
+        }
       } else if (fetchedProducts.length > 0) {
         setActiveProductId(fetchedProducts[0].id);
         localStorage.setItem(`activeProductId_${user.uid}`, fetchedProducts[0].id);
+        const consent = getCookie('cookie_consent');
+        if (consent !== 'rejected') setCookie(`activeProductId_${user.uid}`, fetchedProducts[0].id, 365);
       }
       setIsLoaded(true);
     }, (error) => {
@@ -158,6 +171,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('products', JSON.stringify(updatedProducts));
       setActiveProductId(id);
       localStorage.setItem('activeProductId_guest', id);
+      const consent = getCookie('cookie_consent');
+      if (consent !== 'rejected') setCookie('activeProductId_guest', id, 365);
       return;
     }
 
@@ -165,6 +180,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       await setDoc(doc(db, 'products', id), newProduct);
       setActiveProductId(id);
       localStorage.setItem(`activeProductId_${user.uid}`, id);
+      const consent = getCookie('cookie_consent');
+      if (consent !== 'rejected') setCookie(`activeProductId_${user.uid}`, id, 365);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `products/${id}`);
     }
@@ -207,9 +224,12 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       if (activeProductId === id && remaining.length > 0) {
         setActiveProductId(remaining[0].id);
         localStorage.setItem('activeProductId_guest', remaining[0].id);
+        const consent = getCookie('cookie_consent');
+        if (consent !== 'rejected') setCookie('activeProductId_guest', remaining[0].id, 365);
       } else if (remaining.length === 0) {
         setActiveProductId(null);
         localStorage.removeItem('activeProductId_guest');
+        deleteCookie('activeProductId_guest');
       }
       return;
     }
@@ -233,9 +253,12 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
         if (remaining.length > 0) {
           setActiveProductId(remaining[0].id);
           localStorage.setItem(`activeProductId_${user.uid}`, remaining[0].id);
+          const consent = getCookie('cookie_consent');
+          if (consent !== 'rejected') setCookie(`activeProductId_${user.uid}`, remaining[0].id, 365);
         } else {
           setActiveProductId(null);
           localStorage.removeItem(`activeProductId_${user.uid}`);
+          deleteCookie(`activeProductId_${user.uid}`);
         }
       }
     } catch (error) {
@@ -253,7 +276,14 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       activeProduct, 
       setActiveProductId: (id) => { 
         setActiveProductId(id); 
-        if (user) localStorage.setItem(`activeProductId_${user.uid}`, id); 
+        const consent = getCookie('cookie_consent');
+        if (user) {
+          localStorage.setItem(`activeProductId_${user.uid}`, id); 
+          if (consent !== 'rejected') setCookie(`activeProductId_${user.uid}`, id, 365);
+        } else {
+          localStorage.setItem('activeProductId_guest', id);
+          if (consent !== 'rejected') setCookie('activeProductId_guest', id, 365);
+        }
       }, 
       addProduct, 
       updateProduct, 

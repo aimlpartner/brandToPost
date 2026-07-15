@@ -110,6 +110,7 @@ import { db, auth } from "../firebase";
 import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { loggerService } from "./loggerService";
 import { logSilentError } from "../lib/firestore-error";
+import { getCookie } from "../lib/cookies";
 
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> {
   try {
@@ -170,7 +171,7 @@ function extractJSON(text: string): string {
 async function generateContentProxy(model: string, contents: any, config?: any, signal?: AbortSignal, customToken?: string) {
   const token = customToken || (await auth.currentUser?.getIdToken());
   const userId = auth.currentUser?.uid;
-  const activeProductId = userId ? localStorage.getItem(`activeProductId_${userId}`) : null;
+  const activeProductId = userId ? (getCookie(`activeProductId_${userId}`) || localStorage.getItem(`activeProductId_${userId}`)) : null;
 
   const response = await fetchWithRetry('/api/ai/generate', {
     method: 'POST',
@@ -266,6 +267,7 @@ export async function researchProductDNA(
   let sourceContext = "";
   let scrapedMediaImages: string[] = [];
   let scrapedLogoUrl = "";
+  let scrapedCrawledUrls: string[] = [];
   
   if (microlinkMetadata) {
      sourceContext += `\n--- ENHANCED METADATA (Microlink) ---\n`;
@@ -293,7 +295,7 @@ export async function researchProductDNA(
       }
       const token = customToken || (await auth.currentUser?.getIdToken());
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second total timeout for scraping endpoint
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second total timeout for scraping endpoint
       
       const onAbort = () => {
         controller.abort();
@@ -325,6 +327,7 @@ export async function researchProductDNA(
         if (scrapeData.success) {
           if (scrapeData.mediaImages) scrapedMediaImages = scrapeData.mediaImages;
           if (scrapeData.logoUrl) scrapedLogoUrl = scrapeData.logoUrl;
+          if (scrapeData.crawledUrls) scrapedCrawledUrls = scrapeData.crawledUrls;
           sourceContext += `\n--- SCRAPED WEBSITE DATA ---\n`;
           sourceContext += `Text Content Snippet: ${scrapeData.textContent}\n`;
           if (scrapeData.cssContent) {
@@ -514,6 +517,9 @@ export async function researchProductDNA(
     if (scrapedMediaImages.length > 0) {
       parsedResult.extractedMediaImages = scrapedMediaImages;
     }
+    if (scrapedCrawledUrls.length > 0) {
+      parsedResult.crawledUrls = scrapedCrawledUrls;
+    }
     return parsedResult;
   } catch (e) {
     logSilentError("Failed to parse JSON response", { context: "researchProductDNA", text });
@@ -528,6 +534,9 @@ export async function researchProductDNA(
       }
       if (scrapedMediaImages.length > 0) {
         parsedResult.extractedMediaImages = scrapedMediaImages;
+      }
+      if (scrapedCrawledUrls.length > 0) {
+        parsedResult.crawledUrls = scrapedCrawledUrls;
       }
       return parsedResult;
     }

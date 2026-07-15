@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { ChevronRight, ChevronLeft, X, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
+import { getCookie, setCookie } from "../lib/cookies";
 
 interface TourStep {
   target: string;
@@ -260,6 +261,10 @@ export function GuidedTour() {
   const handleClose = () => {
     setIsActive(false);
     localStorage.setItem(`dashboardTourCompleted_${user?.uid}`, "true");
+    const consent = getCookie('cookie_consent');
+    if (consent !== 'rejected' && user) {
+      setCookie(`dashboardTourCompleted_${user.uid}`, "true", 365);
+    }
   };
 
   return (

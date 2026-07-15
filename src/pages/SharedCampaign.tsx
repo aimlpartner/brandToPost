@@ -407,6 +407,7 @@ export function SharedCampaign() {
   dna={campaign as any} 
   productName={campaign.productName || ''} 
   productLogo={campaign.productLogoUrl || ''}
+  isFlattened={(pv as any).isFlattened || (dp as any).isFlattened}
   onImageGenerated={(url) => handleSetGeneratedVisual(`daily-${idx}-${pIdx}`, url)}
    onUpdateVisual={(url) => handleSetGeneratedVisual(`daily-${idx}-${pIdx}`, url)}
   />
@@ -471,6 +472,7 @@ export function SharedCampaign() {
   dna={campaign as any} 
   productName={campaign.productName || ''} 
   productLogo={campaign.productLogoUrl || ''}
+  isFlattened={(pv as any).isFlattened}
   onImageGenerated={(url) => handleSetGeneratedVisual(`platform-${idx}`, url)}
    onUpdateVisual={(url) => handleSetGeneratedVisual(`platform-${idx}`, url)}
   />

@@ -121,9 +121,10 @@ interface BulletEditorProps {
   color: string;
   dotColor: string;
   onChange: (newItems: string[]) => void;
+  className?: string;
 }
 
-function BulletEditor({ label, items, icon: Icon, color, dotColor, onChange }: BulletEditorProps) {
+function BulletEditor({ label, items, icon: Icon, color, dotColor, onChange, className = "" }: BulletEditorProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
 
@@ -138,42 +139,44 @@ function BulletEditor({ label, items, icon: Icon, color, dotColor, onChange }: B
   };
 
   return (
-    <div className="bg-slate-50/60 border border-slate-100 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-1.5">
-          <Icon className={`h-4 w-4 ${color}`} />
-          <span className="text-xs font-bold text-slate-700">{label}</span>
+    <div className={`bg-white border border-slate-900/10 rounded-2xl p-6 transition-all duration-300 hover:border-slate-900/20 hover:shadow-sm flex flex-col justify-between ${className}`}>
+      <div>
+        <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-1.5">
+            <Icon className={`h-4 w-4 ${color}`} />
+            <span className="text-xs font-bold text-slate-800 tracking-tight">{label}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (editing) handleSave();
+              else setEditing(true);
+            }}
+            className="text-[11px] font-bold text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+          >
+            {editing ? "Save" : "Edit"}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            if (editing) handleSave();
-            else setEditing(true);
-          }}
-          className="text-[11px] font-bold text-[#7C3AED] hover:text-[#6D28D9]"
-        >
-          {editing ? "Save" : "Edit"}
-        </button>
+        {editing ? (
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+            className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] text-xs rounded-xl p-3 outline-none resize-none leading-relaxed transition-colors"
+            placeholder="One item per line..."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {items.map((item, idx) => (
+              <li key={idx} className="flex items-start gap-2 text-xs text-slate-600 leading-relaxed">
+                <span className={`h-1.5 w-1.5 rounded-full ${dotColor} mt-1.5 shrink-0`} />
+                <span>{item}</span>
+              </li>
+            ))}
+            {items.length === 0 && <li className="text-xs text-slate-350 italic">None generated yet.</li>}
+          </ul>
+        )}
       </div>
-      {editing ? (
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={5}
-          className="w-full bg-white border border-slate-200 text-xs rounded-lg p-2.5 focus:outline-none focus:border-[#7C3AED] resize-none leading-relaxed"
-          placeholder="One trait per line..."
-        />
-      ) : (
-        <ul className="space-y-1.5">
-          {items.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-1.5 text-xs text-slate-650 leading-relaxed">
-              <span className={`h-1.5 w-1.5 rounded-full ${dotColor} mt-1.5 shrink-0`} />
-              <span>{item}</span>
-            </li>
-          ))}
-          {items.length === 0 && <li className="text-xs text-slate-350 italic">None generated yet.</li>}
-        </ul>
-      )}
     </div>
   );
 }
@@ -182,6 +185,19 @@ export function MasterFounder() {
   const { user, userProfile } = useAuth();
   const { products, updateProduct } = useProducts();
   const [activeTab, setActiveTab] = useState<"brain" | "brands" | "generator">("brain");
+
+  // Profiler collapsible control & Success Modal states
+  const [showProfiler, setShowProfiler] = useState(true);
+  const [hasInitializedProfilerState, setHasInitializedProfilerState] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [calibratedPersonaName, setCalibratedPersonaName] = useState("");
+
+  useEffect(() => {
+    if (userProfile && !hasInitializedProfilerState) {
+      setShowProfiler(!userProfile.founderAgentSynthesized);
+      setHasInitializedProfilerState(true);
+    }
+  }, [userProfile, hasInitializedProfilerState]);
 
   // Voice Inputs
   const [voiceDesc, setVoiceDesc] = useState(userProfile?.founderVoiceDescription || "");
@@ -404,7 +420,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
       const profile = await synthesizeFounderAgent(voiceDesc, docObj, user.uid, productsContext, optionalInputs);
 
       clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
-      setLogs(p => [...p, "✓ Cognitive Synthesis Complete.", `Activated Master Doppelganger: "${profile.personaName}"`]);
+      setLogs(p => [...p, "✓ Cognitive Synthesis Complete.", `Activated Founder Brain: "${profile.personaName}"`]);
       setProgress(100);
 
       const payload = {
@@ -419,6 +435,11 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
       };
 
       await saveProfileData(payload);
+
+      // Trigger UX modal and collapse profiler
+      setCalibratedPersonaName(profile.personaName);
+      setShowSuccessModal(true);
+      setShowProfiler(false);
 
       // Trigger Founder Agent Email
       if (user.email) {
@@ -491,7 +512,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
   // Handle General & Branded Founder Post Generation
   const handleGeneratePost = async () => {
     if (!userProfile?.founderAgentSynthesized) {
-      setError("You must first synthesize your Doppelganger Brain before generating founder posts.");
+      setError("You must first synthesize your Founder Brain before generating founder posts.");
       return;
     }
     if (!postTopic.trim()) {
@@ -505,7 +526,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
     setError(null);
     setGeneratedPost(null);
     setIsGeneratingPost(true);
-    setGeneratorLogs(["Spawning virtual Founder Doppelganger...", `Topic: "${postTopic}"`]);
+    setGeneratorLogs(["Spawning virtual Founder Brain...", `Topic: "${postTopic}"`]);
 
     try {
       if (postScope === "general") {
@@ -644,7 +665,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
               <h1 className="text-xl font-bold tracking-tight text-slate-805 font-display">Master Founder Agent</h1>
               {userProfile?.founderAgentSynthesized ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 uppercase tracking-wider">
-                  <Sparkles className="h-2.5 w-2.5" /> Doppelganger Active
+                  <Sparkles className="h-2.5 w-2.5" /> Founder Brain Active
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60 uppercase tracking-wider">
@@ -653,7 +674,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
               )}
             </div>
             <p className="mt-1 text-[11px] text-slate-400 font-light max-w-2xl leading-relaxed">
-              Your centralized Digital Doppelganger control board. Define your persona once and deploy it across all brands. Manages schedules, triggers content, and monitors daily automations.
+              Your centralized Digital Founder Brain control board. Define your persona once and deploy it across all brands. Manages schedules, triggers content, and monitors daily automations.
             </p>
           </div>
         </div>
@@ -679,7 +700,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
         <nav className="hidden md:flex flex-col shrink-0 w-44 pt-1 sticky top-8 text-left">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 px-3">Master Agent</p>
           {[
-            { key: "brain", label: "Doppelganger Brain" },
+            { key: "brain", label: "Founder Brain" },
             { key: "brands", label: "Brand Control Board" },
             { key: "generator", label: "Founder Post Generator" }
           ].map((tab) => {
@@ -704,7 +725,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
         {/* Mobile: Horizontal Scroll Tabs */}
         <div className="md:hidden w-full mb-4 flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
           {[
-            { key: "brain", label: "Doppelganger Brain" },
+            { key: "brain", label: "Founder Brain" },
             { key: "brands", label: "Brand Control Board" },
             { key: "generator", label: "Founder Post Generator" }
           ].map((tab) => {
@@ -728,441 +749,517 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
         <div className="flex-1 min-w-0 w-full">
           <div key={activeTab} className="animate-in fade-in slide-in-from-bottom-1 duration-200">
             {activeTab === "brain" ? (
-              /* Redesigned Doppelganger Brain tab: Setup row (2 columns) & Result row (Full width) */
               <div className="space-y-6">
                 
-                {/* Row 1: Setup Tools side-by-side */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-                  
-                  {/* Column 1: AI Doppelganger Brain Profiler Uploader Tool */}
-                  <BentoCard span={1} className="!bg-slate-50/60 flex flex-col justify-between">
-                    <div>
-                      <SectionTitle icon={Sparkles} title="Doppelganger AI Profiler" />
-                      <p className="text-xs text-slate-500 leading-relaxed mb-5 font-light">
-                        Feed descriptions of your personal voice or upload blog drafts/diary texts to synthesize your virtual Doppelganger Brain.
-                      </p>
-                      
-                      <div className="space-y-5">
-                        <div>
-                          <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                            <MessageSquare className="h-3 w-3 text-slate-450" /> Voice Description
-                          </label>
-                          <textarea
-                            value={voiceDesc}
-                            onChange={(e) => {
-                              setVoiceDesc(e.target.value);
-                              saveProfileData({ founderVoiceDescription: e.target.value });
-                            }}
-                            rows={4}
-                            className="w-full bg-white border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2.5 text-xs text-slate-805 placeholder-slate-300 outline-none resize-none transition-colors"
-                            placeholder="e.g. I prefer punchy sentences, speak skeptically of corporate speak, and focus on developer problems..."
-                          />
-                        </div>
-
-                        <div>
-                          <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                            <FileText className="h-3 w-3 text-slate-450" /> Voice Training Document
-                          </label>
-                          {voiceFile ? (
-                            <div className="flex items-center gap-3 bg-white border border-slate-200 p-3 rounded-xl justify-between">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <FileText className="h-4 w-4 text-violet-500 shrink-0" />
-                                <p className="text-xs font-semibold text-slate-700 truncate min-w-0">{voiceFile.name}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleRemoveFile();
-                                  saveProfileData({
-                                    founderVoiceFileName: "",
-                                    founderVoiceFileData: "",
-                                    founderVoiceFileMimeType: "",
-                                  });
-                                }}
-                                className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg border border-transparent hover:border-red-100 transition-all shrink-0"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          ) : (
-                            <input
-                              type="file"
-                              accept=".pdf,.txt,.md"
-                              onChange={handleFileUpload}
-                              className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-355 transition-colors cursor-pointer"
-                            />
-                          )}
-                        </div>
-
-                        {/* Optional Strategic Overrides Collapsible Drawer */}
-                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                          <button
-                            type="button"
-                            onClick={() => setShowOptionalInputs(!showOptionalInputs)}
-                            className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider transition-colors"
-                          >
-                            <span>Optional strategy overrides</span>
-                            <ChevronRight className={`h-3.5 w-3.5 text-slate-400 transition-transform ${showOptionalInputs ? 'rotate-90' : ''}`} />
-                          </button>
-                          {showOptionalInputs && (
-                            <div className="p-3 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Industry</label>
-                                <input 
-                                  type="text" 
-                                  value={optIndustry} 
-                                  onChange={e => setOptIndustry(e.target.value)} 
-                                  placeholder="e.g. AI DevTools"
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Audience</label>
-                                <input 
-                                  type="text" 
-                                  value={optAudience} 
-                                  onChange={e => setOptAudience(e.target.value)} 
-                                  placeholder="e.g. CTOs, Tech Founders"
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-755 focus:border-violet-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vision</label>
-                                <input 
-                                  type="text" 
-                                  value={optVision} 
-                                  onChange={e => setOptVision(e.target.value)} 
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mission</label>
-                                <input 
-                                  type="text" 
-                                  value={optMission} 
-                                  onChange={e => setOptMission(e.target.value)} 
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Goal</label>
-                                <input 
-                                  type="text" 
-                                  value={optGoal} 
-                                  onChange={e => setOptGoal(e.target.value)} 
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Content Pillars (Comma separated)</label>
-                                <input 
-                                  type="text" 
-                                  value={optPillars} 
-                                  onChange={e => setOptPillars(e.target.value)} 
-                                  placeholder="e.g. system design, lean teams"
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                {/* Active control toggle bar */}
+                {userProfile?.founderAgentSynthesized && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white border border-slate-900/10 rounded-2xl p-4 gap-3 shadow-sm transition-all duration-200">
+                    <div className="flex items-center gap-3">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                      </span>
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Active Founder Brain Calibrated</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowProfiler(!showProfiler)}
+                      className="text-xs font-bold text-[#7C3AED] hover:text-[#6D28D9] border border-slate-200/80 rounded-xl px-4 py-2 hover:bg-slate-50 transition-all cursor-pointer select-none text-center"
+                    >
+                      {showProfiler ? "Hide Profiler & Style Settings" : "Configure Voice Inputs & Style"}
+                    </button>
+                  </div>
+                )}
 
-                    <div className="mt-6 pt-3">
-                      <button
-                        type="button"
-                        onClick={handleSynthesize}
-                        disabled={isSynthesizing || (!voiceDesc && !voiceFile)}
-                        className="w-full bg-violet-600 hover:bg-violet-750 text-white rounded-xl py-3 text-xs font-bold tracking-wider flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors uppercase"
-                      >
-                        {isSynthesizing ? (
-                          <>
-                            <Loader2 className="animate-spin h-3.5 w-3.5" />
-                            <span>Profiling Doppelganger...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Cpu className="h-3.5 w-3.5" strokeWidth={2} />
-                            <span>Synthesize Profile</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </BentoCard>
-
-                  {/* Column 2: Personal Brand Graphic Styling (Redesigned matching user image!) */}
-                  <BentoCard span={1} className="flex flex-col justify-between">
-                    <div className="space-y-6">
-                      {/* Color Palette section */}
+                {/* Row 1: Collapsible Setup Tools */}
+                {showProfiler && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch animate-in fade-in slide-in-from-top-1 duration-200">
+                    
+                    {/* Column 1: AI Founder Brain Profiler Uploader Tool */}
+                    <BentoCard span={1} className="!bg-slate-50/60 flex flex-col justify-between">
                       <div>
-                        <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
-                          <div className="flex items-center gap-2">
-                            <Palette className="h-4 w-4 text-violet-500" />
-                            <h3 className="text-xs font-bold text-slate-805 uppercase tracking-wider">Color Palette</h3>
+                        <SectionTitle icon={Sparkles} title="Founder Brain AI Profiler" />
+                        <p className="text-xs text-slate-500 leading-relaxed mb-5 font-light">
+                          Feed descriptions of your personal voice or upload blog drafts/diary texts to synthesize your virtual Founder Brain.
+                        </p>
+                        
+                        <div className="space-y-5">
+                          <div>
+                            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-550 uppercase tracking-wider mb-2">
+                              <MessageSquare className="h-3 w-3 text-slate-455" /> Voice Description
+                            </label>
+                            <textarea
+                              value={voiceDesc}
+                              onChange={(e) => {
+                                setVoiceDesc(e.target.value);
+                                saveProfileData({ founderVoiceDescription: e.target.value });
+                              }}
+                              rows={4}
+                              className="w-full bg-white border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2.5 text-xs text-slate-805 placeholder-slate-300 outline-none resize-none transition-colors"
+                              placeholder="e.g. I prefer punchy sentences, speak skeptically of corporate speak, and focus on developer problems..."
+                            />
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (nbColors.length < 8) {
-                                const nextColors = [...nbColors, "#7C3AED"];
-                                setNbColors(nextColors);
-                                saveProfileData({ nonBrandedColors: nextColors });
-                              }
-                            }}
-                            className="text-[10px] font-bold text-[#7C3AED] hover:bg-violet-50 px-2.5 py-1 rounded-lg border border-transparent hover:border-violet-100 transition"
-                          >
-                            + Add
-                          </button>
-                        </div>
 
-                        <div className="flex flex-wrap gap-3">
-                          {nbColors.map((color, idx) => (
-                            <div key={idx} className="relative group flex flex-col items-center">
-                              {/* Color swatch input */}
-                              <div 
-                                className="w-11 h-11 rounded-xl overflow-hidden shadow-sm border border-slate-200/80 cursor-pointer relative"
-                                style={{ backgroundColor: color }}
-                              >
-                                <input
-                                  type="color"
-                                  value={color}
-                                  onChange={(e) => handleColorChange(idx, e.target.value)}
-                                  className="absolute inset-0 w-full h-full scale-150 cursor-pointer p-0 border-0 outline-none bg-transparent opacity-0"
-                                />
-                              </div>
-                              <span className="text-[9px] font-mono text-slate-400 mt-1.5 uppercase tracking-wider">{color}</span>
-                              {nbColors.length > 2 && (
+                          <div>
+                            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-550 uppercase tracking-wider mb-2">
+                              <FileText className="h-3 w-3 text-slate-455" /> Voice Training Document
+                            </label>
+                            {voiceFile ? (
+                              <div className="flex items-center gap-3 bg-white border border-slate-200 p-3 rounded-xl justify-between">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="h-4 w-4 text-violet-500 shrink-0" />
+                                  <p className="text-xs font-semibold text-slate-700 truncate min-w-0">{voiceFile.name}</p>
+                                </div>
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    const nextColors = nbColors.filter((_, i) => i !== idx);
-                                    setNbColors(nextColors);
-                                    await saveProfileData({ nonBrandedColors: nextColors });
+                                  onClick={() => {
+                                    handleRemoveFile();
+                                    saveProfileData({
+                                      founderVoiceFileName: "",
+                                      founderVoiceFileData: "",
+                                      founderVoiceFileMimeType: "",
+                                    });
                                   }}
-                                  className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm"
+                                  className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg border border-transparent hover:border-red-100 transition-all shrink-0"
                                 >
-                                  ×
+                                  Remove
                                 </button>
-                              )}
-                            </div>
-                          ))}
+                              </div>
+                            ) : (
+                              <input
+                                type="file"
+                                accept=".pdf,.txt,.md"
+                                onChange={handleFileUpload}
+                                className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-355 transition-colors cursor-pointer"
+                              />
+                            )}
+                          </div>
+
+                          {/* Optional Strategic Overrides Collapsible Drawer */}
+                          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                            <button
+                              type="button"
+                              onClick={() => setShowOptionalInputs(!showOptionalInputs)}
+                              className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 text-[10px] font-bold text-slate-550 uppercase tracking-wider transition-colors"
+                            >
+                              <span>Optional strategy overrides</span>
+                              <ChevronRight className={`h-3.5 w-3.5 text-slate-450 transition-transform ${showOptionalInputs ? 'rotate-90' : ''}`} />
+                            </button>
+                            {showOptionalInputs && (
+                              <div className="p-3 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+                                <div>
+                                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Industry</label>
+                                  <input 
+                                    type="text" 
+                                    value={optIndustry} 
+                                    onChange={e => setOptIndustry(e.target.value)} 
+                                    placeholder="e.g. AI DevTools"
+                                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Audience</label>
+                                  <input 
+                                    type="text" 
+                                    value={optAudience} 
+                                    onChange={e => setOptAudience(e.target.value)} 
+                                    placeholder="e.g. CTOs, Tech Founders"
+                                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-755 focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vision</label>
+                                  <input 
+                                    type="text" 
+                                    value={optVision} 
+                                    onChange={e => setOptVision(e.target.value)} 
+                                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mission</label>
+                                  <input 
+                                    type="text" 
+                                    value={optMission} 
+                                    onChange={e => setOptMission(e.target.value)} 
+                                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Goal</label>
+                                  <input 
+                                    type="text" 
+                                    value={optGoal} 
+                                    onChange={e => setOptGoal(e.target.value)} 
+                                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Content Pillars (Comma separated)</label>
+                                  <input 
+                                    type="text" 
+                                    value={optPillars} 
+                                    onChange={e => setOptPillars(e.target.value)} 
+                                    placeholder="e.g. system design, lean teams"
+                                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-750 focus:border-violet-500 outline-none"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Typography section */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
-                          <Type className="h-4 w-4 text-violet-500" />
-                          <h3 className="text-xs font-bold text-slate-855 uppercase tracking-wider">Typography</h3>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {/* Primary */}
-                          <div className="bg-slate-50 border border-slate-200/50 p-3 rounded-xl flex items-center gap-3">
-                            <div className="flex items-center justify-center h-11 w-11 rounded-xl bg-white border border-slate-150 text-base font-bold text-slate-700 font-display shadow-sm shrink-0">
-                              Aa
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <span className="text-[8px] font-bold text-slate-450 uppercase tracking-widest block mb-0.5">Primary (Headings)</span>
-                              <select
-                                value={nbPrimaryFont}
-                                onChange={async (e) => {
-                                  setNbPrimaryFont(e.target.value);
-                                  await saveProfileData({ nonBrandedPrimaryFont: e.target.value });
-                                }}
-                                className="w-full bg-transparent border-0 outline-none text-xs font-bold text-slate-705 p-0 focus:ring-0 cursor-pointer"
-                              >
-                                {POPULAR_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-                              </select>
-                            </div>
-                          </div>
-
-                          {/* Secondary */}
-                          <div className="bg-slate-50 border border-slate-200/50 p-3 rounded-xl flex items-center gap-3">
-                            <div className="flex items-center justify-center h-11 w-11 rounded-xl bg-white border border-slate-150 text-base font-bold text-slate-700 font-display shadow-sm shrink-0">
-                              Aa
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <span className="text-[8px] font-bold text-slate-450 uppercase tracking-widest block mb-0.5">Secondary (Body)</span>
-                              <select
-                                value={nbSecondaryFont}
-                                onChange={async (e) => {
-                                  setNbSecondaryFont(e.target.value);
-                                  await saveProfileData({ nonBrandedSecondaryFont: e.target.value });
-                                }}
-                                className="w-full bg-transparent border-0 outline-none text-xs font-bold text-slate-705 p-0 focus:ring-0 cursor-pointer"
-                              >
-                                {POPULAR_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Synthesizer Terminal logs inside styling column if active */}
-                    {isSynthesizing && (
-                      <div className="mt-6 border border-slate-800 rounded-xl bg-slate-900 p-4 font-mono text-[10px] text-slate-300 space-y-2 select-none">
-                        <div className="flex justify-between text-[9px] text-violet-400 font-bold uppercase tracking-wider">
-                          <span>Engine Terminal</span><span>{progress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
-                          <div className="bg-violet-500 h-1 rounded-full transition-all duration-350" style={{ width: `${progress}%` }} />
-                        </div>
-                        <div className="space-y-1 max-h-24 overflow-y-auto pt-2">
-                          {logs.map((log, idx) => (
-                            <p key={idx} className={log.startsWith("✓") ? "text-emerald-400 font-semibold" : "text-slate-400"}>{log}</p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </BentoCard>
-                </div>
-
-                {/* Row 2: Synthesized Profile (Full Width) */}
-                {userProfile?.founderAgentSynthesized && !isSynthesizing ? (
-                  <div className="w-full animate-in fade-in duration-200">
-                    <BentoCard span={3}>
-                      {/* Header info */}
-                      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-xl bg-violet-600/10 flex items-center justify-center text-violet-600 border border-violet-200/50">
-                            <Cpu className="h-5 w-5 animate-pulse" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-bold text-slate-850">
-                              {userProfile.founderAgentSynthesized.personaName || "Active Doppelganger"}
-                            </h3>
-                            <p className="text-[9px] text-violet-500 font-bold uppercase tracking-wider">Virtual Agent Profile Active</p>
-                          </div>
-                        </div>
-                        {userProfile.founderAgentSynthesized.synthesizedAt && (
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            Profiled: {new Date(userProfile.founderAgentSynthesized.synthesizedAt).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Strategic position & Cognitive DNA side-by-side inside wide space */}
-                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                        {/* Left Column: Strategic Alignment (cols 5) */}
-                        <div className="lg:col-span-5 space-y-6 lg:border-r lg:border-slate-100 lg:pr-8">
-                          <h4 className="text-xs font-bold text-slate-805 uppercase tracking-wider flex items-center gap-1.5">
-                            <Target className="h-4 w-4 text-violet-500 shrink-0" /> Strategic Alignment
-                          </h4>
-
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <SmartField
-                                label="Target Industry"
-                                value={userProfile.founderAgentSynthesized.targetIndustry || ""}
-                                placeholder="e.g. SaaS"
-                                onChange={(v) => {
-                                  const updated = { ...userProfile.founderAgentSynthesized, targetIndustry: v };
-                                  saveProfileData({ founderAgentSynthesized: updated });
-                                }}
-                              />
-                              <SmartField
-                                label="Target Audience"
-                                value={userProfile.founderAgentSynthesized.targetAudience || ""}
-                                placeholder="e.g. CTOs"
-                                onChange={(v) => {
-                                  const updated = { ...userProfile.founderAgentSynthesized, targetAudience: v };
-                                  saveProfileData({ founderAgentSynthesized: updated });
-                                }}
-                              />
-                            </div>
-                            
-                            <SmartField
-                              label="Vision"
-                              value={userProfile.founderAgentSynthesized.vision || ""}
-                              placeholder="Define your personal or startup long-term vision..."
-                              multiline
-                              onChange={(v) => {
-                                  const updated = { ...userProfile.founderAgentSynthesized, vision: v };
-                                  saveProfileData({ founderAgentSynthesized: updated });
-                              }}
-                            />
-
-                            <SmartField
-                              label="Mission"
-                              value={userProfile.founderAgentSynthesized.mission || ""}
-                              placeholder="What is your core daily driving mission?"
-                              multiline
-                              onChange={(v) => {
-                                  const updated = { ...userProfile.founderAgentSynthesized, mission: v };
-                                  saveProfileData({ founderAgentSynthesized: updated });
-                              }}
-                            />
-
-                            <SmartField
-                              label="Goal"
-                              value={userProfile.founderAgentSynthesized.goal || ""}
-                              placeholder="What is the immediate business or scaling goal?"
-                              multiline
-                              onChange={(v) => {
-                                  const updated = { ...userProfile.founderAgentSynthesized, goal: v };
-                                  saveProfileData({ founderAgentSynthesized: updated });
-                              }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Right Column: Cognitive Personality DNA (cols 7) */}
-                        <div className="lg:col-span-7 space-y-6">
-                          <h4 className="text-xs font-bold text-slate-805 uppercase tracking-wider flex items-center gap-1.5">
-                            <Brain className="h-4 w-4 text-violet-500 shrink-0" /> Cognitive Personality DNA
-                          </h4>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            {[
-                              { key: "behavioralTraits" as const, icon: Brain, color: "text-violet-500", label: "Personality & Traits", items: userProfile.founderAgentSynthesized.behavioralTraits || [], dotColor: "bg-violet-400" },
-                              { key: "coreValues" as const, icon: Target, color: "text-rose-500", label: "Core Beliefs & Values", items: userProfile.founderAgentSynthesized.coreValues || [], dotColor: "bg-rose-400" },
-                              { key: "communicationStyle" as const, icon: MessageSquare, color: "text-emerald-500", label: "Communication Style", items: userProfile.founderAgentSynthesized.communicationStyle || [], dotColor: "bg-emerald-400" },
-                              { key: "decisionHeuristics" as const, icon: Zap, color: "text-amber-500", label: "Decision Heuristics", items: userProfile.founderAgentSynthesized.decisionHeuristics || [], dotColor: "bg-amber-400" },
-                            ].map(({ key, icon, color, label, items, dotColor }) => (
-                              <BulletEditor
-                                key={key}
-                                label={label}
-                                items={items}
-                                icon={icon}
-                                color={color}
-                                dotColor={dotColor}
-                                onChange={(newItems) => {
-                                  const updatedSynthesized = {
-                                    ...userProfile.founderAgentSynthesized,
-                                    [key]: newItems,
-                                  };
-                                  saveProfileData({ founderAgentSynthesized: updatedSynthesized });
-                                }}
-                              />
-                            ))}
-                            <div className="sm:col-span-2">
-                              <BulletEditor
-                                label="Key Content Pillars"
-                                items={userProfile.founderAgentSynthesized.contentPillars || []}
-                                icon={Brain}
-                                color="text-[#7C3AED]"
-                                dotColor="bg-[#7C3AED]"
-                                onChange={(newItems) => {
-                                  const updated = { ...userProfile.founderAgentSynthesized, contentPillars: newItems };
-                                  saveProfileData({ founderAgentSynthesized: updated });
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
+                      <div className="mt-6 pt-3">
+                        <button
+                          type="button"
+                          onClick={handleSynthesize}
+                          disabled={isSynthesizing || (!voiceDesc && !voiceFile)}
+                          className="w-full bg-violet-600 hover:bg-violet-750 text-white rounded-xl py-3 text-xs font-bold tracking-wider flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors uppercase"
+                        >
+                          {isSynthesizing ? (
+                            <>
+                              <Loader2 className="animate-spin h-3.5 w-3.5" />
+                              <span>Profiling Founder Brain...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Cpu className="h-3.5 w-3.5" strokeWidth={2} />
+                              <span>Synthesize Founder Brain</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </BentoCard>
+
+                    {/* Column 2: Personal Brand Graphic Styling */}
+                    <BentoCard span={1} className="flex flex-col justify-between">
+                      <div className="space-y-6">
+                        {/* Color Palette section */}
+                        <div>
+                          <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <Palette className="h-4 w-4 text-violet-500" />
+                              <h3 className="text-xs font-bold text-slate-805 uppercase tracking-wider">Color Palette</h3>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (nbColors.length < 8) {
+                                  const nextColors = [...nbColors, "#7C3AED"];
+                                  setNbColors(nextColors);
+                                  saveProfileData({ nonBrandedColors: nextColors });
+                                }
+                              }}
+                              className="text-[10px] font-bold text-[#7C3AED] hover:bg-violet-50 px-2.5 py-1 rounded-lg border border-transparent hover:border-violet-100 transition"
+                            >
+                              + Add
+                            </button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-3">
+                            {nbColors.map((color, idx) => (
+                              <div key={idx} className="relative group flex flex-col items-center">
+                                <div 
+                                  className="w-11 h-11 rounded-xl overflow-hidden shadow-sm border border-slate-200/80 cursor-pointer relative"
+                                  style={{ backgroundColor: color }}
+                                >
+                                  <input
+                                    type="color"
+                                    value={color}
+                                    onChange={(e) => handleColorChange(idx, e.target.value)}
+                                    className="absolute inset-0 w-full h-full scale-150 cursor-pointer p-0 border-0 outline-none bg-transparent opacity-0"
+                                  />
+                                </div>
+                                <span className="text-[9px] font-mono text-slate-450 mt-1.5 uppercase tracking-wider">{color}</span>
+                                {nbColors.length > 2 && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const nextColors = nbColors.filter((_, i) => i !== idx);
+                                      setNbColors(nextColors);
+                                      await saveProfileData({ nonBrandedColors: nextColors });
+                                    }}
+                                    className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Typography section */}
+                        <div>
+                          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
+                            <Type className="h-4 w-4 text-violet-500" />
+                            <h3 className="text-xs font-bold text-slate-855 uppercase tracking-wider">Typography</h3>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Primary */}
+                            <div className="bg-slate-50 border border-slate-200/50 p-3 rounded-xl flex items-center gap-3">
+                              <div className="flex items-center justify-center h-11 w-11 rounded-xl bg-white border border-slate-150 text-base font-bold text-slate-700 font-display shadow-sm shrink-0">
+                                Aa
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <span className="text-[8px] font-bold text-slate-450 uppercase tracking-widest block mb-0.5">Primary (Headings)</span>
+                                <select
+                                  value={nbPrimaryFont}
+                                  onChange={async (e) => {
+                                    setNbPrimaryFont(e.target.value);
+                                    await saveProfileData({ nonBrandedPrimaryFont: e.target.value });
+                                  }}
+                                  className="w-full bg-transparent border-0 outline-none text-xs font-bold text-slate-705 p-0 focus:ring-0 cursor-pointer"
+                                >
+                                  {POPULAR_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Secondary */}
+                            <div className="bg-slate-50 border border-slate-200/50 p-3 rounded-xl flex items-center gap-3">
+                              <div className="flex items-center justify-center h-11 w-11 rounded-xl bg-white border border-slate-150 text-base font-bold text-slate-700 font-display shadow-sm shrink-0">
+                                Aa
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <span className="text-[8px] font-bold text-slate-455 uppercase tracking-widest block mb-0.5">Secondary (Body)</span>
+                                <select
+                                  value={nbSecondaryFont}
+                                  onChange={async (e) => {
+                                    setNbSecondaryFont(e.target.value);
+                                    await saveProfileData({ nonBrandedSecondaryFont: e.target.value });
+                                  }}
+                                  className="w-full bg-transparent border-0 outline-none text-xs font-bold text-slate-705 p-0 focus:ring-0 cursor-pointer"
+                                >
+                                  {POPULAR_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Synthesizer Terminal logs */}
+                      {isSynthesizing && (
+                        <div className="mt-6 border border-slate-800 rounded-xl bg-slate-900 p-4 font-mono text-[10px] text-slate-300 space-y-2 select-none">
+                          <div className="flex justify-between text-[9px] text-violet-400 font-bold uppercase tracking-wider">
+                            <span>Engine Terminal</span><span>{progress}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                            <div className="bg-violet-500 h-1 rounded-full transition-all duration-350" style={{ width: `${progress}%` }} />
+                          </div>
+                          <div className="space-y-1 max-h-24 overflow-y-auto pt-2">
+                            {logs.map((log, idx) => (
+                              <p key={idx} className={log.startsWith("✓") ? "text-emerald-400 font-semibold" : "text-slate-400"}>{log}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </BentoCard>
+                  </div>
+                )}
+
+                {/* Bento Grid: Active Founder Brain Details */}
+                {userProfile?.founderAgentSynthesized && !isSynthesizing ? (
+                  <div className="w-full animate-in fade-in duration-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 items-stretch">
+                      
+                      {/* Card 1: Identity & Sync Status */}
+                      <div className="bg-white border border-slate-900/10 rounded-2xl p-6 transition-all duration-300 hover:border-slate-900/20 hover:shadow-sm flex flex-col justify-between relative overflow-hidden lg:col-span-4 md:col-span-2">
+                        {/* Interactive Brainwave animation background */}
+                        <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none">
+                          <svg width="200" height="120" viewBox="0 0 200 120" fill="none">
+                            <path d="M10 60 C 30 30, 50 90, 70 60 C 90 30, 110 90, 130 60 C 150 30, 170 90, 190 60" stroke="#7C3AED" strokeWidth="2.5" strokeLinecap="round" className="animate-pulse" />
+                            <path d="M20 70 C 40 40, 60 100, 80 70 C 100 40, 120 100, 140 70 C 160 40, 180 100, 200 70" stroke="#2583EB" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+                          </svg>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-12 w-12 rounded-xl bg-violet-600/10 flex items-center justify-center text-violet-600 border border-violet-200/50 font-display text-lg font-bold shrink-0">
+                                {userProfile.founderAgentSynthesized.personaName?.charAt(0) || "F"}
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-bold text-slate-800 tracking-tight">
+                                  {userProfile.founderAgentSynthesized.personaName || "Active Founder Brain"}
+                                </h3>
+                                <p className="text-[9px] text-violet-500 font-bold uppercase tracking-wider">Founder Persona Twin</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="h-px bg-slate-100" />
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-455">Sync Status</span>
+                              <span className="flex items-center gap-1.5 font-semibold text-emerald-600">
+                                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                                Online & Active
+                              </span>
+                            </div>
+                            {userProfile.founderAgentSynthesized.synthesizedAt && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-slate-455">Last Calibrated</span>
+                                <span className="font-mono text-slate-600 text-[11px]">
+                                  {new Date(userProfile.founderAgentSynthesized.synthesizedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-400">
+                          <span>Cognitive DNA Clone</span>
+                          <span className="text-violet-500 font-medium font-mono text-[10px]">Arthur V1.2</span>
+                        </div>
+                      </div>
+
+                      {/* Card 2: Strategic Targets */}
+                      <div className="bg-white border border-slate-900/10 rounded-2xl p-6 transition-all duration-300 hover:border-slate-900/20 hover:shadow-sm flex flex-col justify-between lg:col-span-4 md:col-span-1">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-4 pb-2 border-b border-slate-100">
+                            <Target className="h-4 w-4 text-violet-500 shrink-0" />
+                            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Strategic Targets</h4>
+                          </div>
+
+                          <div className="space-y-4">
+                            <SmartField
+                              label="Target Industry"
+                              value={userProfile.founderAgentSynthesized.targetIndustry || ""}
+                              placeholder="e.g. SaaS"
+                              onChange={(v) => {
+                                const updated = { ...userProfile.founderAgentSynthesized, targetIndustry: v };
+                                saveProfileData({ founderAgentSynthesized: updated });
+                              }}
+                            />
+                            <SmartField
+                              label="Target Audience"
+                              value={userProfile.founderAgentSynthesized.targetAudience || ""}
+                              placeholder="e.g. CTOs"
+                              onChange={(v) => {
+                                const updated = { ...userProfile.founderAgentSynthesized, targetAudience: v };
+                                saveProfileData({ founderAgentSynthesized: updated });
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card 3: Growth Goal */}
+                      <div className="bg-white border border-slate-900/10 rounded-2xl p-6 transition-all duration-300 hover:border-slate-900/20 hover:shadow-sm flex flex-col justify-between lg:col-span-4 md:col-span-1">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-4 pb-2 border-b border-slate-100">
+                            <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+                            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Growth Goal</h4>
+                          </div>
+
+                          <SmartField
+                            label="Immediate Scaling Target"
+                            value={userProfile.founderAgentSynthesized.goal || ""}
+                            placeholder="What is the immediate business or scaling goal?"
+                            multiline
+                            onChange={(v) => {
+                              const updated = { ...userProfile.founderAgentSynthesized, goal: v };
+                              saveProfileData({ founderAgentSynthesized: updated });
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Card 4: Long-Term Vision */}
+                      <div className="bg-white border border-slate-900/10 rounded-2xl p-6 transition-all duration-300 hover:border-slate-900/20 hover:shadow-sm flex flex-col justify-between lg:col-span-6 md:col-span-1">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-4 pb-2 border-b border-slate-100">
+                            <Globe className="h-4 w-4 text-blue-500 shrink-0" />
+                            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Core Vision</h4>
+                          </div>
+
+                          <SmartField
+                            label="Future Outlook"
+                            value={userProfile.founderAgentSynthesized.vision || ""}
+                            placeholder="Define your personal or startup long-term vision..."
+                            multiline
+                            onChange={(v) => {
+                              const updated = { ...userProfile.founderAgentSynthesized, vision: v };
+                              saveProfileData({ founderAgentSynthesized: updated });
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Card 5: Daily Mission */}
+                      <div className="bg-white border border-slate-900/10 rounded-2xl p-6 transition-all duration-300 hover:border-slate-900/20 hover:shadow-sm flex flex-col justify-between lg:col-span-6 md:col-span-1">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-4 pb-2 border-b border-slate-100">
+                            <Clock className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Daily Mission</h4>
+                          </div>
+
+                          <SmartField
+                            label="Value Driver"
+                            value={userProfile.founderAgentSynthesized.mission || ""}
+                            placeholder="What is your core daily driving mission?"
+                            multiline
+                            onChange={(v) => {
+                              const updated = { ...userProfile.founderAgentSynthesized, mission: v };
+                              saveProfileData({ founderAgentSynthesized: updated });
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Cards 6-9: Cognitive DNA Bullet Editors */}
+                      {[
+                        { key: "behavioralTraits" as const, icon: Brain, color: "text-violet-500", label: "Personality & Traits", items: userProfile.founderAgentSynthesized.behavioralTraits || [], dotColor: "bg-violet-400", gridClass: "lg:col-span-4 md:col-span-1" },
+                        { key: "coreValues" as const, icon: Target, color: "text-rose-500", label: "Core Beliefs & Values", items: userProfile.founderAgentSynthesized.coreValues || [], dotColor: "bg-rose-400", gridClass: "lg:col-span-4 md:col-span-1" },
+                        { key: "communicationStyle" as const, icon: MessageSquare, color: "text-emerald-500", label: "Communication Style", items: userProfile.founderAgentSynthesized.communicationStyle || [], dotColor: "bg-emerald-400", gridClass: "lg:col-span-4 md:col-span-2 lg:col-span-4" },
+                        { key: "decisionHeuristics" as const, icon: Zap, color: "text-amber-500", label: "Decision Heuristics", items: userProfile.founderAgentSynthesized.decisionHeuristics || [], dotColor: "bg-amber-400", gridClass: "lg:col-span-6 md:col-span-1" },
+                      ].map(({ key, icon, color, label, items, dotColor, gridClass }) => (
+                        <BulletEditor
+                          key={key}
+                          label={label}
+                          items={items}
+                          icon={icon}
+                          color={color}
+                          dotColor={dotColor}
+                          className={gridClass}
+                          onChange={(newItems) => {
+                            const updatedSynthesized = {
+                              ...userProfile.founderAgentSynthesized,
+                              [key]: newItems,
+                            };
+                            saveProfileData({ founderAgentSynthesized: updatedSynthesized });
+                          }}
+                        />
+                      ))}
+
+                      {/* Card 10: Key Content Pillars */}
+                      <BulletEditor
+                        label="Key Content Pillars"
+                        items={userProfile.founderAgentSynthesized.contentPillars || []}
+                        icon={Brain}
+                        color="text-[#7C3AED]"
+                        dotColor="bg-[#7C3AED]"
+                        className="lg:col-span-6 md:col-span-1"
+                        onChange={(newItems) => {
+                          const updated = { ...userProfile.founderAgentSynthesized, contentPillars: newItems };
+                          saveProfileData({ founderAgentSynthesized: updated });
+                        }}
+                      />
+
+                    </div>
                   </div>
                 ) : (
-                  !isSynthesizing && (
+                  !isSynthesizing && !userProfile?.founderAgentSynthesized && (
                     <div className="flex flex-col items-center justify-center py-28 px-4 bg-slate-55 border border-slate-200 border-dashed rounded-2xl text-center">
-                      <Brain className="h-8 w-8 text-slate-300 animate-pulse mb-3" />
-                      <h4 className="text-xs font-bold text-slate-700">No Doppelganger Synthesized</h4>
+                      <Brain className="h-8 w-8 text-slate-350 animate-pulse mb-3" />
+                      <h4 className="text-xs font-bold text-slate-700">No Founder Brain Calibrated</h4>
                       <p className="text-[10px] text-slate-400 max-w-[280px] leading-relaxed mt-1">
-                        Configure your voice parameters on the left and run synthesis to view your active strategical doppelganger context.
+                        Configure your voice guidelines above and run synthesis to build your virtual active Founder Brain workspace.
                       </p>
                     </div>
                   )
@@ -1703,7 +1800,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-bold text-slate-800 truncate block">
-                            {userProfile?.founderAgentSynthesized?.personaName || "Founder Doppelganger"}
+                            {userProfile?.founderAgentSynthesized?.personaName || "Founder Persona"}
                           </span>
                           <span className="text-[10px] text-slate-400 font-normal shrink-0">• 1st</span>
                         </div>
@@ -1748,7 +1845,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-bold text-slate-800 truncate block">
-                              {userProfile?.founderAgentSynthesized?.personaName || "Founder Doppelganger"}
+                              {userProfile?.founderAgentSynthesized?.personaName || "Founder Persona"}
                             </span>
                             <span className="text-[10px] text-slate-400 font-normal shrink-0">• 1st</span>
                           </div>
@@ -1883,6 +1980,28 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
         </div>
       </div>
       </div>
+
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-900/10 rounded-2xl max-w-md w-full p-6 text-center animate-in fade-in zoom-in-95 duration-200 shadow-xl">
+            {/* Pulsing check circle indicator */}
+            <div className="mx-auto h-16 w-16 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle2 className="h-8 w-8 animate-pulse text-emerald-500" strokeWidth={2.5} />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-2">Founder Brain Calibrated</h3>
+            <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+              Your virtual persona twin <span className="font-semibold text-[#7C3AED]">"{calibratedPersonaName}"</span> has been synthesized and is now active inside the workspace.
+            </p>
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl py-3 transition shadow-sm"
+            >
+              Explore Founder Brain
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -1,34 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  Play, 
-  Settings, 
-  FileText, 
-  CalendarClock, 
   Upload, 
   Trash2, 
-  Sparkles, 
   Copy, 
   Check, 
   Download, 
-  Maximize2, 
   Music, 
   ArrowLeft, 
   ArrowRight, 
-  HelpCircle,
-  Video,
-  Smile,
-  Sliders,
-  Tv,
-  Clapperboard,
-  BookOpen,
+  Video, 
   Palette
 } from "lucide-react";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
 import { Scene, ScriptData } from "../types";
 import { copyFormattedText } from "../lib/utils";
-
 
 // Standard model we use:
 const MODEL_NAME = "gemini-3.5-flash";
@@ -109,13 +96,15 @@ export function Scripts() {
   const [mascotShowcase, setMascotShowcase] = useState("Animated Sticker Overlay");
   const [isMascotUploading, setIsMascotUploading] = useState(false);
 
+  // Extra instructions from testing pilot request
+  const [scriptInstructions, setScriptInstructions] = useState("");
+
   // Active generation & playbook state
   const [activeTab, setActiveTab] = useState<"chrono" | "style" | "assets">("chrono");
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [scriptTweakInput, setScriptTweakInput] = useState("");
   const [scriptData, setScriptData] = useState<ScriptData | null>(null);
-  const [hasAutoTriggered, setHasAutoTriggered] = useState<string | null>(null);
   
   // UX Copy/Download helpers
   const [copiedState, setCopiedState] = useState<string | null>(null);
@@ -130,12 +119,15 @@ export function Scripts() {
       const currentFormat = activeProduct.productionFormat || "Real-Life Creator / Studio Shoot";
       const currentLogo = activeProduct.logoShowcase || "Intro/Outro Slate";
       const currentMascot = activeProduct.mascotShowcase || "Animated Sticker Overlay";
+      const currentInstructions = activeProduct.scriptInstructions || "";
 
       setNarrativeVibe(currentVibe);
       setTimingLimit(currentTiming);
       setProductionFormat(currentFormat);
       setLogoShowcase(currentLogo);
       setMascotShowcase(currentMascot);
+      setScriptInstructions(currentInstructions);
+      
       if (activeProduct.mascotPreview) setMascotPreview(activeProduct.mascotPreview);
 
       if (activeProduct.activeScript) {
@@ -155,6 +147,7 @@ export function Scripts() {
       else if (key === 'productionFormat') setProductionFormat(value);
       else if (key === 'logoShowcase') setLogoShowcase(value);
       else if (key === 'mascotShowcase') setMascotShowcase(value);
+      else if (key === 'scriptInstructions') setScriptInstructions(value);
 
       await updateProduct(activeProduct.id, { [key]: value });
     } catch (e) {
@@ -174,7 +167,8 @@ export function Scripts() {
         logoShowcase,
         mascotShowcase,
         mascotPreview: mascotPreview || undefined,
-        activeScript: scriptData
+        activeScript: scriptData,
+        scriptInstructions
       });
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2500);
@@ -267,11 +261,12 @@ export function Scripts() {
     setSelectedSceneIndex(0);
     
     const logs = [
-      "Analyzing registered Brand Position & DNA...",
-      "Extracting hooks from GTM Hook Tagline...",
-      "Mapping psychographics & core mission profile...",
-      "Composing cinematic monitor directives & camera cues...",
-      "Synthesizing customized script scripts and timing limits using Gemini..."
+      "Analyzing brand position & psychographics with Sarah...",
+      "Arthur is aligning Founder voice clone parameters...",
+      "Zack is composing cinematic screenplays & camera cues...",
+      "Chloe is calibrating visual styles and scene directives...",
+      "Julian is compiling required video assets specifications...",
+      "Synthesizing script and timing limits using Gemini..."
     ];
 
     const finalVibe = customVibe || narrativeVibe;
@@ -284,14 +279,12 @@ export function Scripts() {
       try {
         const token = await user?.getIdToken();
 
-        // Craft a precise strategic prompt grounded in active brand position
         const brandName = activeProduct?.name || "Unknown Brand";
         const brandDescription = activeProduct?.description || "";
         const brandAudience = activeProduct?.audience || "";
         const brandTone = activeProduct?.tone || "Bold, Intellectual, Professional";
         const brandPositioning = activeProduct?.positioning || "";
 
-        // Collect all advanced brand positioning DNA values
         const brandEnemy = activeProduct?.enemy || "";
         const brandEarnedSecret = activeProduct?.earnedSecret || "";
         const brandOriginStory = activeProduct?.originStory || "";
@@ -317,7 +310,7 @@ The output must STRICTLY follow JSON format and have the exact properties specif
 - Core Brand Positioning: ${brandPositioning}
 
 Advanced Strategic Brand DNA:
-${brandEnemy ? `- Brand Nemesis / Enemy Status Quo: ${brandEnemy}` : ""}
+${brandEnemy ? `- Brand Nemesis / Enemy Status Status Quo: ${brandEnemy}` : ""}
 ${brandHellState ? `- Target Audience "Hell State" (Pre-solution pains): ${brandHellState}` : ""}
 ${brandHeavenState ? `- Target Audience "Heaven State" (Desired outcome): ${brandHeavenState}` : ""}
 ${brandEarnedSecret ? `- Earned Secret (Our unique discovery): ${brandEarnedSecret}` : ""}
@@ -329,6 +322,7 @@ ${brandThemes ? `- Recommended Narrative Themes: ${brandThemes}` : ""}
 ${brandVocabularyAlways ? `- Words/phrases to ALWAYS include/prefer: ${brandVocabularyAlways}` : ""}
 ${brandVocabularyNever ? `- Words/phrases to NEVER use or avoid completely: ${brandVocabularyNever}` : ""}
 ${brandObjections ? `- Handling common buyer objections: ${brandObjections}` : ""}
+${scriptInstructions ? `- Custom Directives & Guidelines: ${scriptInstructions}` : ""}
 
 Script Configuration:
 - Narrative Vibe / Copy Angle: ${finalVibe}
@@ -395,7 +389,6 @@ Your response MUST be wrapped in a strictly valid JSON object conforming to this
 
         const data = await response.json();
         
-        // Robust clean-up of potential markdown output
         let cleanText = data.text || "";
         cleanText = cleanText.replace(/```json/g, "").replace(/```/g, "").trim();
         
@@ -415,7 +408,7 @@ Your response MUST be wrapped in a strictly valid JSON object conforming to this
         }
       } catch (err) {
         console.error("Failed to generate custom script:", err);
-        // Fallback to beautiful customized schema using brand data on JSON parse errors
+        // Fallback
         const fallback: ScriptData = {
           title: `${activeProduct?.name || "Tror"}: Custom Playbook Campaign`,
           gtmHook: activeProduct?.positioning ? `"${activeProduct.positioning}"` : "Precision-crafted results over noisy generic updates.",
@@ -477,9 +470,9 @@ Your response MUST be wrapped in a strictly valid JSON object conforming to this
     setIsGenerating(true);
     
     const logs = [
-      "Analyzing script tweak suggestions...",
-      "Re-calibrating scene timings & dialogues...",
-      "Re-synthesizing screenplay blocks..."
+      "Zack is reviewing script tweak suggestions...",
+      "Chloe is re-calibrating scene timings & visual direction...",
+      "Re-synthesizing screenplay blocks with Gemini..."
     ];
 
     runLogSimulation(logs, async () => {
@@ -535,6 +528,7 @@ Modify and output the complete revised JSON conforming strictly to the original 
   };
 
   const handleDownloadFullScript = () => {
+    if (!scriptData) return;
     let textOut = `SCREENPLAY BRIEF PLAYBOOK\n`;
     textOut += `====================================\n`;
     textOut += `TITLE: ${scriptData.title}\n`;
@@ -577,6 +571,7 @@ Modify and output the complete revised JSON conforming strictly to the original 
   };
 
   const handleDownloadScene = (scIdx: number) => {
+    if (!scriptData) return;
     const sc = scriptData.scenes[scIdx];
     if (!sc) return;
     let textOut = `${sc.title} (${sc.timing})\n`;
@@ -600,50 +595,48 @@ Modify and output the complete revised JSON conforming strictly to the original 
   const activeScene = scriptData ? (scriptData.scenes[selectedSceneIndex] || scriptData.scenes[0]) : null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#07070B] text-gray-100 p-4 md:p-8" id="scripts-studio-container">
-      {/* Top Breadcrumb Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-[#7C3AED]/20 pb-6 w-full max-w-full px-2 lg:px-4 xl:px-6 mx-auto">
+    <div className="flex flex-col min-h-screen bg-transparent text-slate-800 p-4 md:p-8" id="scripts-studio-container">
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8 border-b border-slate-200 pb-6 w-full max-w-7xl mx-auto">
         <div className="tour-scripts-header">
-          <div className="flex items-center gap-2 text-[#7C3AED] text-xs font-bold uppercase tracking-wider mb-2">
-            <Clapperboard className="w-4 h-4" />
-            <span>Cinematic Production Hub</span>
-          </div>
-          <h1 className="text-3xl font-display font-extrabold text-white tracking-tight flex items-center gap-3">
-            Creative Script Studio
+          <h1 className="text-4xl font-display font-light text-slate-900 tracking-tight">
+            Script Studio
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Turn your registered active brand position DNA into professional, customized screenplays and video production scripts.
+          <p className="text-sm text-slate-500 mt-2 max-w-2xl leading-relaxed">
+            Co-directed by <span className="font-medium text-slate-800">Zack (Video Screenwriter)</span> and <span className="font-medium text-slate-800">Chloe (Creative Director)</span>. Translate your active brand position DNA into high-converting screenplay briefs, scene dialogues, and asset specifications.
           </p>
         </div>
         
-        <div className="flex items-center gap-3 bg-[#1C1C22]/50 border border-[#7C3AED]/20 py-2 px-4 rounded-xl shadow-lg">
-          <div className="w-3 h-3 bg-[#18F07A] rounded-full animate-pulse" />
+        <div className="flex items-center gap-3 bg-white border border-slate-200 py-2.5 px-4 rounded-lg shadow-sm shrink-0">
+          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
           <div className="flex flex-col">
-            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">Connected Brand</span>
-            <span className="text-sm font-semibold text-white truncate max-w-[150px]">{activeProduct?.name || "Default Brand"}</span>
+            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Active Profile</span>
+            <span className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">{activeProduct?.name || "Default Brand"}</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full max-w-full px-2 lg:px-4 xl:px-6 mx-auto">
-        {/* Left Control Panel Column */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-6">
-          <div className="bg-[#101015]/80 border border-[#7C3AED]/15 rounded-2xl p-5 md:p-6 shadow-xl space-y-5">
-            <div className="flex items-center gap-2 pb-3 border-b border-[#7C3AED]/10">
-              <Sliders className="w-5 h-5 text-[#7C3AED]" />
-              <h2 className="text-lg font-bold text-white">Production Settings</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full max-w-7xl mx-auto">
+        {/* Left Column: Production Deck */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-6 pr-0 lg:pr-6 lg:border-r border-slate-200 text-left">
+          
+          {/* Section 1: Narrative & Pacing */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                1. Narrative & Pacing
+              </h3>
             </div>
-
-            {/* Inputs Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  Narrative Vibe / Copy Angle
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                  Narrative mode vibe
                 </label>
                 <select 
                   value={narrativeVibe}
                   onChange={(e) => handleConfigChange('narrativeVibe', e.target.value)}
-                  className="w-full bg-[#1C1C22] border border-[#7C3AED]/30 hover:border-[#7C3AED]/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7C3AED] transition-all cursor-pointer"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-2 text-sm text-slate-800 outline-none transition-colors cursor-pointer"
                 >
                   <option>Problem-Agitating Explainer (Pain & Savior)</option>
                   <option>Contrarian Mindset Shift</option>
@@ -659,199 +652,205 @@ Modify and output the complete revised JSON conforming strictly to the original 
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  Target Playback limits
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                  Playback timing limits
                 </label>
                 <select 
                   value={timingLimit}
                   onChange={(e) => handleConfigChange('timingLimit', e.target.value)}
-                  className="w-full bg-[#1C1C22] border border-[#7C3AED]/30 hover:border-[#7C3AED]/50 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7C3AED] transition-all cursor-pointer"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-2 text-sm text-slate-800 outline-none transition-colors cursor-pointer"
                 >
                   <option>10 Seconds (Ultra Snappy Hook / Micro-Short)</option>
                   <option>30 Seconds (Standard Social Explainer)</option>
                   <option>60 Seconds (Deep Dive Storytelling)</option>
                 </select>
               </div>
-            </div>
 
-            {/* Production Format Mode Selection */}
-            <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-                <span>Production Format</span>
-                <span className="text-[10px] lowercase text-purple-400 font-medium">Digital capture or physical shoot?</span>
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button 
-                  onClick={() => handleConfigChange("productionFormat", "SaaS UI & Animated VFX")}
-                  className={`p-3.5 rounded-xl border text-left transition-all ${productionFormat === "SaaS UI & Animated VFX" ? "border-[#7C3AED] bg-[#7C3AED]/10 text-white shadow-xl shadow-purple-900/10" : "border-[#7C3AED]/10 bg-[#1C1C22]/30 text-gray-400 hover:bg-[#1C1C22]/65"}`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                     <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${productionFormat === "SaaS UI & Animated VFX" ? "border-[#7C3AED]" : "border-gray-500"}`}>
-                       {productionFormat === "SaaS UI & Animated VFX" && <div className="w-1.5 h-1.5 rounded-full bg-[#7C3AED]" />}
-                    </div>
-                    <span className="text-xs font-bold block">SaaS UI & Animated VFX</span>
-                  </div>
-                  <span className="text-[10px] leading-relaxed block mt-0.5 max-h-24 overflow-y-auto">High-end dark layout screen capture, mouse cursor glide zooms, browser features walkthrough, and clean typography.</span>
-                </button>
-
-                <button 
-                  onClick={() => handleConfigChange("productionFormat", "Real-Life Creator / Studio Shoot")}
-                  className={`p-3.5 rounded-xl border text-left transition-all ${productionFormat === "Real-Life Creator / Studio Shoot" ? "border-[#7C3AED] bg-[#7C3AED]/10 text-white shadow-xl shadow-purple-900/10" : "border-[#7C3AED]/10 bg-[#1C1C22]/30 text-gray-400 hover:bg-[#1C1C22]/65"}`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                     <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${productionFormat === "Real-Life Creator / Studio Shoot" ? "border-[#7C3AED]" : "border-gray-500"}`}>
-                       {productionFormat === "Real-Life Creator / Studio Shoot" && <div className="w-1.5 h-1.5 rounded-full bg-[#7C3AED]" />}
-                    </div>
-                    <span className="text-xs font-bold block">Real-Life Creator & S. Shoot</span>
-                  </div>
-                  <span className="text-[10px] leading-relaxed block mt-0.5 max-h-24 overflow-y-auto">Cinematic directions for actors/founders, Cozy studio lights, gestures, hand-held phone shots, eye contact, and dialogue hooks.</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Logo Showcase options */}
-            <div className="space-y-2">
-              <span className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
-                Where / How should the Logo be showcased?
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {[
-                  { name: "Corner Watermark", desc: "Semi-transparent overlaid in upper corners." },
-                  { name: "Physical Apparel", desc: "Actor wears branding hoodie/t-shirt." },
-                  { name: "3D Floating Overlay", desc: "Logo hovers near presenter's head." },
-                  { name: "Intro/Outro Slate", desc: "Central high-fidelity zooming slate." },
-                  { name: "Device Backing", desc: "Distinct sticker clearly shown on laptop." }
-                ].map((logoOpt) => (
-                  <button
-                    key={logoOpt.name}
-                    onClick={() => handleConfigChange("logoShowcase", logoOpt.name)}
-                    className={`p-2.5 rounded-xl border text-left flex flex-col transition-all ${logoShowcase === logoOpt.name ? "border-red-500 bg-red-950/20 text-white shadow-md shadow-red-900/10" : "border-[#7C3AED]/10 bg-[#1C1C22]/30 text-gray-400 hover:bg-[#1C1C22]/65"}`}
-                  >
-                    <span className="text-xs font-bold mb-0.5">{logoOpt.name}</span>
-                    <span className="text-[9px] text-gray-500 leading-tight block">{logoOpt.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Upload Mascot Option */}
-            <div className="space-y-3 pt-3 border-t border-[#7C3AED]/10">
-              <div className="flex items-center justify-between">
-                <span className="inner-label text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                  <Smile className="w-4 h-4 text-purple-400" />
-                  Upload Mascot Illustration (analyzed visually)
+              <div>
+                <span className="block text-xs font-semibold text-slate-500 mb-2">
+                  Production format
                 </span>
-                {mascotPreview && (
+                <div className="grid grid-cols-2 gap-2">
                   <button 
-                    onClick={handleRemoveMascot}
-                    className="text-xs text-red-400 flex items-center gap-1 hover:text-red-300 transition-colors"
+                    onClick={() => handleConfigChange("productionFormat", "SaaS UI & Animated VFX")}
+                    className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${productionFormat === "SaaS UI & Animated VFX" ? "border-[#7C3AED] bg-[#7C3AED]/5 text-slate-800" : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-slate-50"}`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" /> Remove Mascot
+                    <span className="text-xs font-semibold block">SaaS UI & VFX</span>
+                    <span className="text-[9px] text-slate-400 mt-0.5 block leading-tight">Screen captures, mouse glide, browser flows.</span>
                   </button>
+
+                  <button 
+                    onClick={() => handleConfigChange("productionFormat", "Real-Life Creator / Studio Shoot")}
+                    className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${productionFormat === "Real-Life Creator / Studio Shoot" ? "border-[#7C3AED] bg-[#7C3AED]/5 text-slate-800" : "border-slate-200 bg-slate-50/50 text-slate-500 hover:bg-slate-50"}`}
+                  >
+                    <span className="text-xs font-semibold block">Creator Studio</span>
+                    <span className="text-[9px] text-slate-400 mt-0.5 block leading-tight">Presenter cues, studio lights, gestures.</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Scripting Guidelines */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                2. Scripting Guidelines
+              </h3>
+            </div>
+            
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                Extra instructions / directives
+              </label>
+              <textarea 
+                value={scriptInstructions}
+                onChange={(e) => handleConfigChange('scriptInstructions', e.target.value)}
+                placeholder="e.g. Speak directly to B2B founders. Do not mention generic SaaS metrics. Emphasize pipeline predictability. Avoid emojis."
+                className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-2.5 text-xs text-slate-800 outline-none transition-colors h-28 resize-none placeholder-slate-400 leading-relaxed"
+              />
+              <span className="text-[10px] text-slate-400 block mt-1.5 leading-normal">
+                These rules are directly injected into Zack's prompts to guide voice flow.
+              </span>
+            </div>
+          </div>
+
+          {/* Section 3: Branding & Assets */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+            <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                3. Branding & Assets Strategy
+              </h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <span className="block text-xs font-semibold text-slate-500 mb-2">
+                  Logo placement strategy
+                </span>
+                <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-1 hide-scrollbar">
+                  {[
+                    "Corner Watermark",
+                    "Physical Apparel",
+                    "3D Floating Overlay",
+                    "Intro/Outro Slate",
+                    "Device Backing"
+                  ].map((logoOpt) => (
+                    <button
+                      key={logoOpt}
+                      onClick={() => handleConfigChange("logoShowcase", logoOpt)}
+                      className={`p-2 rounded-lg border text-center text-xs font-semibold transition-all cursor-pointer ${logoShowcase === logoOpt ? "border-[#7C3AED] bg-[#7C3AED]/5 text-[#7C3AED]" : "border-slate-200 bg-slate-50/50 text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {logoOpt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-slate-500">
+                    Mascot illustration
+                  </span>
+                  {mascotPreview && (
+                    <button 
+                      onClick={handleRemoveMascot}
+                      className="text-xs text-red-500 hover:text-red-600 cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                {!mascotPreview ? (
+                  <div 
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    className="border border-dashed border-slate-300 hover:border-[#7C3AED] rounded-lg p-4 flex flex-col items-center justify-center bg-slate-50/50 cursor-pointer transition-all relative group"
+                  >
+                    <input 
+                      type="file" 
+                      onChange={handleMascotChange}
+                      accept="image/*"
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                    <Upload className="w-4 h-4 text-slate-400 mb-1.5 group-hover:text-[#7C3AED] transition-colors" />
+                    <span className="text-[11px] font-semibold text-slate-700">Drag or click to upload mascot</span>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-200 flex items-center gap-3">
+                    <div className="w-9 h-9 bg-slate-100 rounded border border-slate-200 overflow-hidden shrink-0">
+                      <img src={mascotPreview} alt="Mascot Preview" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[11px] font-semibold text-slate-800 block truncate" title={mascotFile?.name || "Active Mascot"}>
+                        {mascotFile?.name || "Active Mascot"}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {!mascotPreview ? (
-                <div 
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                  className="border border-dashed border-[#7C3AED]/35 hover:border-[#7C3AED]/60 rounded-xl p-5 flex flex-col items-center justify-center bg-[#0C0C12]/50 cursor-pointer transition-all relative group"
-                >
-                  <input 
-                    type="file" 
-                    onChange={handleMascotChange}
-                    accept="image/*"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
-                  <Upload className="w-7 h-7 text-[#7C3AED]/70 mb-2 group-hover:scale-105 transition-transform" />
-                  <span className="text-xs font-semibold text-gray-300">Drag & Drop Mascot illustration here</span>
-                  <span className="text-[10px] text-gray-500 mt-1">or Click to browse PNG/JPG assets</span>
-                </div>
-              ) : (
-                <div className="bg-[#1C1C22]/60 rounded-xl p-4 border border-emerald-500/30 flex items-center gap-4 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 h-1.5 bg-emerald-500 animate-pulse w-full" />
-                  <div className="w-12 h-12 bg-gray-900 rounded-lg overflow-hidden border border-[#7C3AED]/20 shrink-0">
-                    <img src={mascotPreview} alt="Mascot Preview" className="w-full h-full object-cover" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block truncate max-w-[200px]" title={mascotFile?.name || "Stored Mascot Asset"}>
-                      {mascotFile?.name || "Stored Mascot Asset"}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#18F07A] uppercase bg-[#18F07A]/10 px-2 py-0.5 rounded-full mt-1">
-                      Ready for Mascot Analysis
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Showcase mascot rule */}
-              <div className="space-y-2">
-                <span className="inner-label text-xs font-bold text-gray-500 uppercase tracking-wider block">
-                  Where / How should the brand Mascot be showcased? (with rich Actor-Sidekick options)
+              <div>
+                <span className="block text-xs font-semibold text-slate-500 mb-2">
+                  Mascot showcase strategy
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 gap-1.5 max-h-36 overflow-y-auto pr-1 hide-scrollbar">
                   {[
-                    { name: "Animated Sticker Overlay", desc: "Mascot floats quietly in corner screen overlays." },
-                    { name: "Actor Figurine Desk Buddy", desc: "Actor interacts or gestures towards physical desktop model ornament." },
-                    { name: "Over-the-Shoulder 3D Holo", desc: "Sleek animated 3D holographic projection floating next to actor's head." },
-                    { name: "AI-Voice Sidekick Dialogue", desc: "Actor has dynamic verbal script conversation with a synthesized off-screen mascot." },
-                    { name: "Comedic Green-Screen Buddy", desc: "Full-size keyed mascot acting alongside the presenter, buddy-cop style." },
-                    { name: "Handheld Smartphone AR", desc: "Actor glances at phone lens with mascot fully rendered next to them in AR." },
-                    { name: "Emotional Empath Overlay", desc: "Pop-up comic graphic frames showing mascot reacting visually to actor cues." },
-                    { name: "Intro Splash Star", desc: "Mascot leaps out dramatically into center to trigger title cards." },
-                    { name: "Dashboard App Guide", desc: "Mascot acts as smart holographic hover guide within SaaS walk-throughs." }
+                    "Animated Sticker Overlay",
+                    "Actor Figurine Desk Buddy",
+                    "Over-the-Shoulder 3D Holo",
+                    "AI-Voice Sidekick Dialogue",
+                    "Comedic Green-Screen Buddy",
+                    "Handheld Smartphone AR",
+                    "Emotional Empath Overlay",
+                    "Intro Splash Star",
+                    "Dashboard App Guide"
                   ].map((mscOpt) => (
                     <button
-                      key={mscOpt.name}
-                      onClick={() => handleConfigChange("mascotShowcase", mscOpt.name)}
-                      className={`p-2.5 rounded-xl border text-left flex flex-col transition-all h-full ${mascotShowcase === mscOpt.name ? "border-red-500 bg-red-950/20 text-white shadow-md shadow-red-900/15" : "border-[#7C3AED]/10 bg-[#1C1C22]/30 text-gray-400 hover:bg-[#1C1C22]/65"}`}
+                      key={mscOpt}
+                      onClick={() => handleConfigChange("mascotShowcase", mscOpt)}
+                      className={`p-2 rounded-lg border text-left text-xs transition-all cursor-pointer ${mascotShowcase === mscOpt ? "border-[#7C3AED] bg-[#7C3AED]/5 text-[#7C3AED] font-semibold" : "border-slate-200 bg-slate-50/50 text-slate-600 hover:bg-slate-50"}`}
                     >
-                      <span className="text-xs font-bold mb-0.5">{mscOpt.name}</span>
-                      <span className="text-[9px] text-gray-500 leading-tight block">{mscOpt.desc}</span>
+                      {mscOpt}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Action Trigger Buttons */}
-            <div className="pt-4 space-y-3">
-              <button 
-                onClick={() => handleGenerateScript()}
-                disabled={isGenerating}
-                className="tour-generate-script-btn w-full text-white font-bold py-3 px-4 rounded-xl transition-all shadow-xl shadow-purple-900/20 hover:shadow-purple-900/40 inline-flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-60 bg-[#7C3AED] hover:bg-[#6D28D9] active:scale-95 text-sm"
-              >
-                <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                {isGenerating ? (
-                  <>
-                    <motion.div 
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                    >
-                      <Sparkles className="w-5 h-5 text-purple-200" />
-                    </motion.div>
-                    <span>Generating Playbook...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5 text-purple-200 animate-pulse" />
-                    <span>Generate Screenplay & Video Script</span>
-                  </>
-                )}
-              </button>
+          {/* Action buttons section */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3.5 shadow-sm">
+            <button 
+              onClick={() => handleGenerateScript()}
+              disabled={isGenerating}
+              className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-sm hover:shadow active:scale-[0.99] disabled:opacity-60 inline-flex items-center justify-center gap-2 cursor-pointer text-sm"
+            >
+              {isGenerating ? (
+                <>
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                    className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                  />
+                  <span>Writing screenplay...</span>
+                </>
+              ) : (
+                <span>Generate screenplay</span>
+              )}
+            </button>
 
-              <button
-                onClick={handleManualSave}
-                disabled={isGenerating}
-                className="w-full bg-[#1C1C22]/80 hover:bg-[#1C1C22] border border-[#7C3AED]/25 text-gray-300 hover:text-white font-bold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 text-xs"
-              >
-                <Settings className={`w-4 h-4 ${saveStatus === "saving" ? "animate-spin text-purple-400" : "text-gray-400"}`} />
-                {saveStatus === "saving" && "Saving Changes to Brand..."}
-                {saveStatus === "saved" && "✓ Preserved in Brand Profile!"}
-                {saveStatus === "error" && "✗ Save Failed."}
-                {saveStatus === "idle" && "Save Current State To Firestore"}
-              </button>
-            </div>
+            <button
+              onClick={handleManualSave}
+              disabled={isGenerating}
+              className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold py-2.5 px-4 rounded-lg transition-all flex items-center justify-center gap-2 active:scale-[0.99] text-xs cursor-pointer"
+            >
+              {saveStatus === "saving" && "Saving details..."}
+              {saveStatus === "saved" && "✓ Preserved in brand profile"}
+              {saveStatus === "error" && "✗ Save failed"}
+              {saveStatus === "idle" && "Save workspace configuration"}
+            </button>
           </div>
         </div>
 
@@ -861,124 +860,82 @@ Modify and output the complete revised JSON conforming strictly to the original 
             {isGenerating ? (
               <motion.div 
                 key="loader"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="bg-[#101015]/80 border border-[#2583EB]/25 rounded-2xl p-10 flex flex-col items-center justify-center flex-grow text-center min-h-[500px] shadow-2xl relative overflow-hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center justify-center flex-grow text-center min-h-[500px] py-12"
               >
-
-                
-                {/* Visual loading ring */}
-                <div className="relative w-20 h-20 mb-8">
-                  <div className="absolute inset-0 border-4 border-t-[#2583EB] border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin" />
-                  <div className="absolute inset-2 border-4 border-b-[#7C3AED] border-t-transparent border-r-transparent border-l-transparent rounded-full animate-spin [animation-duration:1.5s]" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Video className="w-8 h-8 text-[#2583EB]" />
-                  </div>
+                <div className="relative w-12 h-12 mb-6">
+                  <div className="w-full h-full border-2 border-slate-200 border-t-[#7C3AED] rounded-full animate-spin" />
                 </div>
 
-                <h3 className="text-xl font-bold text-white mb-2 font-display">Crafting Cinematic Script</h3>
-                <p className="text-sm text-gray-400 max-w-md mb-6 leading-relaxed">
-                  Our advanced Gemini pipeline is mapping your registered product psychographics, GTM goals, and selected options into scenic cue codes...
+                <h3 className="text-2xl font-display font-light text-slate-900 mb-2">
+                  Zack is drafting screenplay...
+                </h3>
+                <p className="text-sm text-slate-500 max-w-md mb-8 leading-relaxed">
+                  Mapping your registered brand positioning DNA, founder doppelganger style, and scene directives into active screenplay briefs.
                 </p>
 
                 {/* Simulated build logger */}
-                <div className="w-full max-w-md bg-[#07070B] border border-gray-800 rounded-xl p-4 text-left font-mono text-xs text-gray-400 space-y-1.5 h-44 overflow-y-auto">
+                <div className="w-full max-w-md bg-slate-900 text-slate-200 rounded-lg p-4 text-left font-mono text-xs space-y-2 h-48 overflow-y-auto">
                   {generationLogs.map((log, lIdx) => (
                     <div key={lIdx} className="flex gap-2 items-start text-emerald-400">
-                      <span className="text-[#2583EB] font-bold">●</span>
-                      <span>{log}</span>
+                      <span>&gt;</span>
+                      <span className="text-slate-300">{log}</span>
                     </div>
                   ))}
-                  <div className="inline-block animate-pulse w-2 h-4 bg-emerald-400 mt-1" />
+                  <div className="inline-block animate-pulse w-2 h-3.5 bg-emerald-400 mt-0.5" />
                 </div>
               </motion.div>
             ) : !scriptData ? (
               <motion.div
                 key="empty-state"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="bg-[#101015]/80 border border-[#7C3AED]/15 rounded-2xl p-6 md:p-8 flex flex-col justify-between flex-grow min-h-[500px] shadow-2xl relative overflow-hidden"
+                className="flex flex-col justify-start flex-grow py-8 space-y-12"
               >
-
-                
-                {/* Upper Hero Panel */}
-                <div className="flex flex-col items-center justify-center text-center pt-8 max-w-lg mx-auto">
-                  <div className="w-16 h-16 bg-[#1C1C22]/80 rounded-2xl border border-[#7C3AED]/30 flex items-center justify-center shadow-xl shadow-purple-950/10 mb-6 group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[#7C3AED]/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <Clapperboard className="w-8 h-8 text-[#7C3AED] relative z-10 animate-pulse" />
+                {/* Onboarding steps list on top */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-slate-950 flex items-center gap-2">
+                      <span className="w-5 h-5 bg-slate-950 text-white rounded-full flex items-center justify-center text-[10px] font-bold">1</span>
+                      Choose production format
+                    </span>
+                    <p className="text-[11px] text-slate-500 leading-relaxed pl-7">
+                      Select narration vibe angles, timeline playback limits, logo showcase, and active mascot formats.
+                    </p>
                   </div>
-                  
-                  <h3 className="text-2xl font-extrabold text-white tracking-tight font-display mb-3">
-                    Sculpt Your Brand Playbook Screenplay
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-slate-950 flex items-center gap-2">
+                      <span className="w-5 h-5 bg-slate-950 text-white rounded-full flex items-center justify-center text-[10px] font-bold">2</span>
+                      Drop logo or mascot
+                    </span>
+                    <p className="text-[11px] text-slate-500 leading-relaxed pl-7">
+                      Provide a custom brand illustration or vector to generate matching camera framing guidelines.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-slate-900 flex items-center gap-2">
+                      <span className="w-5 h-5 bg-emerald-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold">3</span>
+                      Compose screenplay
+                    </span>
+                    <p className="text-[11px] text-slate-500 leading-relaxed pl-7">
+                      Trigger the Gemini pipeline to compile complete scene dialogue briefs and filming directions.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Simplified header / title at the bottom of empty state */}
+                <div className="border-t border-slate-200 pt-8 flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-2">
+                  <h3 className="text-lg font-display font-semibold text-slate-900">
+                    Create your video script
                   </h3>
-                  <p className="text-sm text-gray-400 leading-relaxed">
-                    Custom-calibrated scripts, voiceover narration prompts, sound cues, and scene transitions designed exclusively for your connected brand DNA.
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Set up your script preferences on the left pane and generate a customized cinematic screenplay for your brand.
                   </p>
-                </div>
-
-                {/* Bento Grid layout of loaded Profile Data */}
-                <div className="my-8 bg-[#1C1C22]/20 border border-[#7C3AED]/10 rounded-xl p-5 space-y-4">
-                  <span className="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block">
-                    Ready Brand Profile Inputs
-                  </span>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div className="bg-[#0C0C12]/80 border border-gray-800/60 p-3 rounded-lg">
-                      <span className="text-[9px] text-[#2583EB] font-bold uppercase block mb-1">Company / Product</span>
-                      <span className="text-xs text-white font-semibold truncate block">
-                        {activeProduct?.name || "No active name"}
-                      </span>
-                    </div>
-
-                    <div className="bg-[#0C0C12]/80 border border-gray-800/60 p-3 rounded-lg">
-                      <span className="text-[9px] text-purple-400 font-bold uppercase block mb-1">Website URL</span>
-                      <span className="text-xs text-white font-semibold truncate block">
-                        {activeProduct?.website || "Unspecified"}
-                      </span>
-                    </div>
-
-                    <div className="bg-[#0C0C12]/80 border border-gray-800/60 p-3 rounded-lg sm:col-span-2">
-                      <span className="text-[9px] text-gray-500 font-bold uppercase block mb-1">Target Audience Context</span>
-                      <p className="text-xs text-gray-300 leading-relaxed truncate">
-                        {activeProduct?.description || "Ready to evaluate brand description context..."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Onboarding steps list */}
-                <div className="pb-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left border-t border-[#7C3AED]/10 pt-6">
-                  <div>
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5 mb-1.5">
-                      <span className="w-5 h-5 bg-[#7C3AED]/20 text-[#7C3AED] rounded-full flex items-center justify-center text-[10px] font-extrabold">1</span>
-                      Choose Set-up
-                    </span>
-                    <p className="text-[11px] text-gray-400 leading-normal">
-                      Adjust your narrative mode vibe, timing limits, and desired layout shoot style from the left pane.
-                    </p>
-                  </div>
-
-                  <div>
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5 mb-1.5">
-                      <span className="w-5 h-5 bg-[#7C3AED]/20 text-[#7C3AED] rounded-full flex items-center justify-center text-[10px] font-extrabold">2</span>
-                      Add Mascot
-                    </span>
-                    <p className="text-[11px] text-gray-400 leading-normal">
-                      Drop an optional mascot illustration vector to get visual sticker placement styling cues.
-                    </p>
-                  </div>
-
-                  <div>
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5 mb-1.5">
-                      <span className="w-5 h-5 bg-[#18F07A]/20 text-[#18F07A] rounded-full flex items-center justify-center text-[10px] font-extrabold">3</span>
-                      Launch Gemini
-                    </span>
-                    <p className="text-[11px] text-gray-400 leading-normal">
-                      Click "Generate Screenplay & Video Script" to synthesize high-quality cinematic scripts instantly!
-                    </p>
-                  </div>
                 </div>
               </motion.div>
             ) : (
@@ -987,221 +944,105 @@ Modify and output the complete revised JSON conforming strictly to the original 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-grow"
+                className="flex flex-col space-y-6 flex-grow"
               >
-                {/* Brand DNA Specs Column */}
-                <div className="md:col-span-5 bg-[#101015]/80 border border-[#7C3AED]/15 rounded-2xl p-5 shadow-lg space-y-5 flex flex-col">
+                {/* Active Screenplay Brief Title Header */}
+                <div className="pb-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
                   <div>
-                    <span className="text-[10px] bg-indigo-500/15 text-indigo-400 font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                      Active Brief Playbook
+                    <span className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider">
+                      Active screenplay brief
                     </span>
-                    <h3 className="text-xl font-extrabold text-white mt-2 mb-1 tracking-tight">
+                    <h2 className="text-2xl font-semibold text-slate-900 mt-0.5 tracking-tight">
                       {scriptData.title}
-                    </h3>
-                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                      <span>ANALYSED LINK:</span>
-                      <span className="text-purple-400 font-semibold underline truncate max-w-[150px]">
-                        {activeProduct?.website || "brandtopost.com"}
-                      </span>
-                    </div>
+                    </h2>
                   </div>
-
-                  <div className="space-y-4 border-t border-[#7C3AED]/10 pt-4 flex-grow">
-                    {/* Brand DNA Params */}
-                    <div className="bg-[#1C1C22]/30 border border-[#7C3AED]/10 rounded-xl p-3.5 space-y-3">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase tracking-widest pl-0.5">
-                        <Palette className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Brand DNA Parameters</span>
-                      </div>
-                      
-                      <div>
-                        <span className="text-[9px] text-[#2583EB] font-bold uppercase tracking-wide block mb-1">
-                          GTM Hook Tagline
-                        </span>
-                        <blockquote className="text-sm font-semibold italic text-white pl-2 border-l-2 border-[#2583EB] leading-snug">
-                          {scriptData.gtmHook}
-                        </blockquote>
-                      </div>
-
-                      <div>
-                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider block mb-1">
-                          Core Mission & Mechanics
-                        </span>
-                        <p className="text-xs text-gray-300 leading-relaxed max-h-40 overflow-y-auto">
-                          {scriptData.coreMission}
-                        </p>
-                      </div>
-
-                      <div>
-                        <span className="text-[9px] text-red-400 font-bold uppercase tracking-wider block mb-1">
-                          Logo Visual Identity DNA
-                        </span>
-                        <p className="text-xs text-gray-300 leading-relaxed max-h-40 overflow-y-auto">
-                          {scriptData.logoIdentityDna}
-                        </p>
-                      </div>
-
-                      <div>
-                        <span className="text-[9px] text-purple-400 font-bold uppercase tracking-wider block mb-1">
-                          Mascot Visual Identity DNA
-                        </span>
-                        <p className="text-xs text-gray-300 leading-relaxed max-h-40 overflow-y-auto">
-                          {scriptData.mascotIdentityDna}
-                        </p>
-                      </div>
+                  {activeProduct?.website && (
+                    <div className="text-xs text-slate-400">
+                      <span>Analyzed link: </span>
+                      <a 
+                        href={activeProduct.website.startsWith("http") ? activeProduct.website : `https://${activeProduct.website}`}
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-[#7C3AED] hover:underline"
+                      >
+                        {activeProduct.website}
+                      </a>
                     </div>
-
-                    {/* Targets block */}
-                    <div className="space-y-3">
-                      <div>
-                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">
-                          Primary Audience Targets
-                        </span>
-                        <div className="bg-[#1C1C22]/50 border border-gray-800 p-3 rounded-xl flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 bg-[#2583EB] rounded-full shrink-0" />
-                          <span className="text-xs text-gray-200 font-medium leading-normal">{scriptData.primaryAudience}</span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-left">
-                        <div className="bg-[#1C1C22]/30 border border-[#7C3AED]/10 p-3 rounded-xl space-y-1">
-                          <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider block">
-                            Crown Jewel Prop
-                          </span>
-                          <span className="text-[11px] text-gray-300 block leading-snug max-h-32 overflow-y-auto">
-                            {scriptData.crownJewelProposition}
-                          </span>
-                        </div>
-                        <div className="bg-[#1C1C22]/30 border border-[#7C3AED]/10 p-3 rounded-xl space-y-1">
-                          <span className="text-[9px] text-yellow-500/95 font-bold uppercase tracking-wider block">
-                            Central Agitated Pain
-                          </span>
-                          <span className="text-[11px] text-gray-300 block leading-snug max-h-32 overflow-y-auto">
-                            {scriptData.centralAgitatedPain}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Art Styles bottom parameters */}
-                  <div className="border-t border-[#7C3AED]/10 pt-4 space-y-3 mt-auto">
-                    <div>
-                      <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider block mb-1">
-                        Calibrated Tone Adjectives
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {scriptData.calibratedToneAdjectives.map((toneAdj, tIdx) => (
-                          <span 
-                            key={tIdx} 
-                            className="text-[10px] bg-[#1C1C22] border border-[#7C3AED]/20 text-gray-200 font-extrabold px-2 py-0.5 rounded-full"
-                          >
-                            ● {toneAdj}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider block mb-1">
-                        Suggested Color Profile
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs max-w-[150px] truncate text-gray-300 font-mono">
-                          {scriptData.suggestedColors?.[0]?.label || "Obsidian Black"}
-                        </span>
-                        <div className="flex gap-1.5 ml-auto">
-                          {scriptData.suggestedColors.map((colorObj, cIdx) => (
-                            <div 
-                              key={cIdx}
-                              className="w-4 h-4 rounded-full border border-white/20 shadow-md cursor-help"
-                              style={{ backgroundColor: colorObj.value }}
-                              title={`${colorObj.label}: ${colorObj.value}`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-                {/* Screenplay Timeline + Camera Playbook Track */}
-                <div className="md:col-span-7 flex flex-col space-y-4">
                   {/* Tabs Selector Header with Action Buttons */}
-                  <div className="flex items-center justify-between border-b border-[#7C3AED]/20 pb-2">
-                    <div className="flex gap-1 bg-[#101015]/90 p-1 rounded-xl border border-[#7C3AED]/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 gap-3">
+                    <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
                       <button
                         onClick={() => setActiveTab("chrono")}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === "chrono" ? "bg-[#7C3AED] text-white" : "text-gray-400 hover:text-white"}`}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === "chrono" ? "bg-slate-950 text-white" : "text-slate-500 hover:text-slate-900"}`}
                       >
-                        <Clapperboard className="w-3.5 h-3.5" /> Chrono Board
+                        Chrono board
                       </button>
                       <button
                         onClick={() => setActiveTab("style")}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === "style" ? "bg-[#7C3AED] text-white" : "text-gray-400 hover:text-white"}`}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === "style" ? "bg-slate-950 text-white" : "text-slate-500 hover:text-slate-900"}`}
                       >
-                        <BookOpen className="w-3.5 h-3.5" /> Style & Music Guide
+                        Style & music
                       </button>
                       <button
                         onClick={() => setActiveTab("assets")}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${activeTab === "assets" ? "bg-[#7C3AED] text-white" : "text-gray-400 hover:text-white"}`}
-                        title="Requirements Checklist for LLM Inputs"
+                        className={`px-3 py-1.5 text-xs font-semibold rounded transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === "assets" ? "bg-slate-950 text-white" : "text-slate-500 hover:text-slate-900"}`}
                       >
-                        <Upload className="w-3.5 h-3.5" /> Required Video Assets
+                        Required video assets
                       </button>
                     </div>
 
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => notifyCopy("full-script", JSON.stringify(scriptData, null, 2))}
-                        className="bg-[#1C1C22]/80 hover:bg-[#1C1C22]/100 border border-gray-800 text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 hover:text-white"
-                        title="Copy Entire JSON Screenplay"
+                        className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 py-1.5 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
                       >
-                        {copiedState === "full-script" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        Copy Full Screenplay
+                        {copiedState === "full-script" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                        <span>Copy screenplay JSON</span>
                       </button>
                       <button
                         onClick={handleDownloadFullScript}
-                        className="bg-[#2583EB] hover:bg-[#2583EB]/90 text-white py-1.5 px-3 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 shadow"
-                        title="Download Whole Script (.txt)"
+                        className="bg-slate-950 hover:bg-slate-900 text-white py-1.5 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
                       >
-                        <Download className="w-3.5 h-3.5" /> Download .TXT Brief
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download brief</span>
                       </button>
                     </div>
                   </div>
 
                   {/* Active Tab Body Content */}
-                  <div className="bg-[#101015]/80 border border-[#7C3AED]/15 rounded-2xl p-5 shadow-lg flex-grow flex flex-col space-y-4">
+                  <div className="flex-grow flex flex-col space-y-5">
                     {activeTab === "chrono" ? (
                       <>
-                        {/* Monitor Deck Container */}
-                        <div className="bg-black/90 border border-[#2583EB]/25 rounded-xl overflow-hidden aspect-[16/9] relative flex flex-col items-center justify-center">
-                          <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600/10 border border-red-600/30 text-red-500 text-[10px] font-bold px-2.5 py-1.5 rounded uppercase tracking-widest animate-pulse">
-                            <Video className="w-3.5 h-3.5 inline" /> REC
+                        {/* Monitor Deck Container - styled as a beautiful, premium pitch-black layout frame */}
+                        <div className="bg-[#08080C] border border-slate-950 rounded-lg overflow-hidden aspect-[16/9] relative flex flex-col items-center justify-center shadow-md">
+                          <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-bold px-2 py-0.5 rounded tracking-widest">
+                            REC
                           </div>
                           
-                          <div className="absolute top-3 right-3 text-[10px] font-mono text-gray-400 bg-black/60 px-2 py-1 rounded">
-                            Frame Timing: [{activeScene?.timing || "0:00 - 0:05"}]
+                          <div className="absolute top-4 right-4 text-[9px] font-mono text-slate-400 bg-slate-900/60 px-2 py-0.5 rounded">
+                            [{activeScene?.timing || "0:00 - 0:05"}]
                           </div>
 
-                          {/* Cinematic Monitor visualizer waves */}
-                          <div className="absolute bottom-5 right-5 flex items-end gap-1 shrink-0 h-10">
+                          {/* Sound wave simulation */}
+                          <div className="absolute bottom-4 right-4 flex items-end gap-1 h-8">
                             {[0.4, 0.7, 0.2, 0.9, 0.6, 0.3, 0.8, 0.5].map((h, hIdx) => (
                               <motion.div 
                                 key={hIdx}
-                                animate={{ height: [h*15, h*40, h*15] }}
+                                animate={{ height: [h*10, h*30, h*10] }}
                                 transition={{ repeat: Infinity, duration: 1.2 + hIdx*0.1, ease: "easeInOut" }}
-                                className="w-1.5 bg-[#2583EB]"
+                                className="w-1 bg-[#2583EB]"
                               />
                             ))}
                           </div>
 
-                          {/* Subtitles Overlay / Live Feed Representation */}
-                          <div className="p-6 text-center max-w-md w-full relative z-10 flex flex-col justify-end h-full select-none">
-                            <span className="text-[10px] font-bold tracking-widest text-[#2583EB] uppercase mb-1">
-                              Live Cinematic Monitor (Visual Mock Feed)
+                          {/* Subtitles Overlay */}
+                          <div className="p-6 text-center max-w-lg w-full relative z-10 flex flex-col justify-end h-full select-none">
+                            <span className="text-[9px] font-bold tracking-widest text-[#2583EB] uppercase mb-1.5">
+                              Live cinematic monitor (subtitles feed)
                             </span>
-                            <p className="text-sm font-semibold text-white drop-shadow-md leading-relaxed bg-black/60 p-3 rounded-lg border border-gray-800">
+                            <p className="text-sm font-medium text-white leading-relaxed bg-[#08080C]/85 p-3 rounded border border-slate-800">
                               {activeScene?.dialog || 'Speaking cues will be generated here...'}
                             </p>
                           </div>
@@ -1211,93 +1052,92 @@ Modify and output the complete revised JSON conforming strictly to the original 
                         <div className="space-y-4">
                           <div>
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#2583EB]">
-                                Active Camera Cue Direction
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Active camera cue direction
                               </span>
                               <button 
                                 onClick={() => notifyCopy("cameraCue", activeScene?.activeCameraCue)}
-                                className="text-[11px] text-gray-500 hover:text-[#2583EB] flex items-center gap-1"
+                                className="text-[11px] text-slate-400 hover:text-slate-600 flex items-center gap-1 cursor-pointer"
                               >
-                                {copiedState === "cameraCue" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                                Copy Cue
+                                {copiedState === "cameraCue" ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                <span>Copy cue</span>
                               </button>
                             </div>
-                            <blockquote className="text-xs text-gray-300 italic pl-3 border-l-2 border-[#2583EB] bg-[#0A0A0F] py-2 px-3 rounded-r-lg mt-1 relative">
+                            <blockquote className="text-xs text-slate-700 italic pl-3 border-l-2 border-[#2583EB] bg-white py-2.5 px-3 rounded-r-lg mt-1 relative shadow-sm border border-slate-200 border-l-0">
                               "{activeScene?.activeCameraCue || 'Backlight studio desk workspace'}"
                             </blockquote>
                           </div>
 
                           {/* Scene Playbook Spoken Cues Card */}
-                          <div className="bg-[#1C1C22]/20 border border-[#7C3AED]/10 rounded-xl p-4 space-y-3 relative">
+                          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 relative shadow-sm">
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] bg-[#18F07A]/15 text-[#18F07A] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                                  Action Playbook
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] bg-emerald-50 text-emerald-600 font-bold px-2 py-0.5 rounded uppercase tracking-wider border border-emerald-100">
+                                  Dialogue playbook
                                 </span>
-                                <h4 className="text-sm font-extrabold text-white">
+                                <h4 className="text-xs font-semibold text-slate-900">
                                   {activeScene?.title || "Scene #1"} ({activeScene?.timing || "0:00 - 0:05"})
                                 </h4>
                               </div>
                               <div className="flex gap-2">
                                 <button 
                                   onClick={() => notifyCopy("dialogue", activeScene?.dialog)}
-                                  className="text-[10px] bg-[#1C1C22] border border-gray-800 px-2 py-1 rounded text-gray-400 hover:text-white inline-flex items-center gap-1"
+                                  className="text-[10px] bg-slate-50 border border-slate-200 px-2.5 py-1 rounded text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 cursor-pointer"
                                 >
-                                  {copiedState === "dialogue" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                                  Copy selected phrase
+                                  {copiedState === "dialogue" ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                                  <span>Copy phrase</span>
                                 </button>
                                 <button 
                                   onClick={() => handleDownloadScene(selectedSceneIndex)}
-                                  className="text-[10px] bg-[#2583EB]/15 text-[#2583EB] px-2 py-1 rounded border border-[#2583EB]/20 hover:bg-[#2583EB]/35"
+                                  className="text-[10px] bg-slate-950 text-white px-2.5 py-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
                                 >
-                                  Download Scene
+                                  Download scene
                                 </button>
                               </div>
                             </div>
                             
-                            <p className="text-xs text-gray-400 pl-0.5 font-bold uppercase tracking-wider mb-1">
-                              Spoken Actor Dialogue & Actions [Zero Voiceover]
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-0.5">
+                              Dialogue spoken text
                             </p>
-                            <p className="text-sm font-semibold text-white leading-relaxed font-mono bg-black/40 p-3 rounded-lg border border-gray-800">
+                            <p className="text-sm font-semibold text-slate-800 leading-relaxed font-sans bg-slate-50/50 p-3 rounded border border-slate-200">
                               {activeScene?.dialog || "No spoken dialogue."}
                             </p>
                           </div>
 
                           {/* Sora visual prompt */}
-                          <div className="bg-black/40 border border-[#7C3AED]/15 rounded-xl p-4 space-y-2 relative">
+                          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 relative shadow-sm">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-1">
-                                <Sparkles className="w-3.5 h-3.5 inline text-cyan-300" />
-                                AI Video Generator Prompt (Sora / Runway / Luma)
+                              <span className="text-[9px] font-bold text-cyan-600 uppercase tracking-wider">
+                                Video generator prompt (Sora / Luma / Runway)
                               </span>
                               <button 
                                 onClick={() => notifyCopy("aiPrompt", activeScene?.videoPrompt)}
-                                className="text-[10px] bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/25 px-2 py-1 rounded inline-flex items-center gap-1"
+                                className="text-[10px] bg-cyan-50 border border-cyan-100 text-cyan-600 hover:bg-cyan-100/50 px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer"
                               >
-                                {copiedState === "aiPrompt" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                                Copy AI Prompt
+                                {copiedState === "aiPrompt" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3 h-3 text-cyan-400" />}
+                                <span>Copy prompt</span>
                               </button>
                             </div>
-                            <p className="text-xs text-gray-300 leading-relaxed font-mono bg-[#07070B] p-2.5 rounded border border-gray-800/80">
-                              {activeScene?.videoPrompt || "No model prompts generated."}
+                            <p className="text-xs text-slate-600 leading-relaxed font-mono bg-slate-50/50 p-3 rounded border border-slate-200">
+                              {activeScene?.videoPrompt || "No prompts generated."}
                             </p>
                           </div>
 
                           {/* SFX and tip row */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="bg-[#1C1C22]/30 border border-[#7C3AED]/10 p-3.5 rounded-xl space-y-1.5">
+                            <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-sm space-y-1.5">
                               <span className="text-[9px] text-[#2583EB] font-bold uppercase tracking-wider block">
-                                Sound Effects Accent Cues
+                                Audio & sound effects
                               </span>
-                              <p className="text-xs text-gray-300 leading-normal max-h-32 overflow-y-auto">
+                              <p className="text-xs text-slate-600 leading-relaxed">
                                 {activeScene?.soundEffects || "No sound effects cues."}
                               </p>
                             </div>
-                            <div className="bg-[#1C1C22]/30 border border-[#7C3AED]/10 p-3.5 rounded-xl space-y-1.5">
-                              <span className="text-[9px] text-yellow-500/90 font-bold uppercase tracking-wider block">
-                                Filming Directing Tip
+                            <div className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-sm space-y-1.5">
+                              <span className="text-[9px] text-amber-600 font-bold uppercase tracking-wider block">
+                                Filming directive tip
                               </span>
-                              <p className="text-xs text-gray-300 leading-normal max-h-32 overflow-y-auto font-medium">
+                              <p className="text-xs text-slate-600 leading-relaxed">
                                 {activeScene?.directingTip || "No directing tip cues."}
                               </p>
                             </div>
@@ -1305,110 +1145,108 @@ Modify and output the complete revised JSON conforming strictly to the original 
                         </div>
 
                         {/* Sequence Tracker Scroll block */}
-                        <div className="border-t border-[#7C3AED]/10 pt-4 space-y-2 mt-auto">
-                          <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block">
-                            Timeline Sequencer Track (Scrub or Select Scene Frame Blocks)
+                        <div className="border-t border-slate-200 pt-4 space-y-3 mt-auto">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">
+                            Timeline sequence track (Select active scene frame)
                           </span>
-                          <div className="flex gap-3 overflow-x-auto pb-1.5 [&::-webkit-scrollbar]:hidden">
+                          <div className="flex gap-3 overflow-x-auto pb-1.5 hide-scrollbar">
                             {scriptData.scenes.map((scItem, sIdx) => (
                               <button
                                 key={sIdx}
                                 onClick={() => setSelectedSceneIndex(sIdx)}
-                                className={`px-4 py-3 rounded-xl border text-left shrink-0 text-xs transition-all cursor-pointer ${selectedSceneIndex === sIdx ? "border-[#7C3AED] bg-[#7C3AED]/10 text-white shadow-md shadow-purple-950/20" : "border-[#7C3AED]/10 bg-[#1C1C22]/30 text-gray-400 hover:bg-[#1C1C22]/50"}`}
+                                className={`px-4 py-3 rounded-lg border text-left shrink-0 text-xs transition-all cursor-pointer ${selectedSceneIndex === sIdx ? "border-[#7C3AED] bg-white text-slate-800 shadow-sm" : "border-slate-200 bg-white/50 text-slate-500 hover:bg-white"}`}
                               >
-                                <span className="font-bold block text-white">SC {sIdx + 1}</span>
-                                <span className="text-[10px] text-gray-500 leading-snug">{scItem.timing}</span>
+                                <span className="font-semibold block text-slate-800">Scene {sIdx + 1}</span>
+                                <span className="text-[10px] text-slate-400 leading-snug mt-0.5 block">{scItem.timing}</span>
                               </button>
                             ))}
                           </div>
                           
-                          {/* Inner Nodes Navigation */}
-                          <div className="flex items-center justify-between pt-1 font-mono text-[11px] text-gray-500">
+                          {/* Inner Navigation */}
+                          <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
                             <button 
                               onClick={() => setSelectedSceneIndex(prev => Math.max(0, prev - 1))}
                               disabled={selectedSceneIndex === 0}
-                              className="px-2 py-0.5 rounded bg-gray-900 border border-gray-800 disabled:opacity-30 flex items-center gap-1 font-bold hover:text-white"
+                              className="px-3 py-1 rounded bg-white border border-slate-200 disabled:opacity-30 flex items-center gap-1 font-semibold hover:text-slate-800 transition-colors cursor-pointer"
                             >
-                              <ArrowLeft className="w-3 h-3" /> Prev Frame
+                              <ArrowLeft className="w-3 h-3" /> Previous scene
                             </button>
-                            <span>FRAME NODE {selectedSceneIndex + 1} OF {scriptData.scenes.length}</span>
+                            <span className="font-semibold uppercase tracking-wider text-[10px]">Scene {selectedSceneIndex + 1} of {scriptData.scenes.length}</span>
                             <button 
                               onClick={() => setSelectedSceneIndex(prev => Math.min(scriptData.scenes.length - 1, prev + 1))}
                               disabled={selectedSceneIndex === scriptData.scenes.length - 1}
-                              className="px-2 py-0.5 rounded bg-gray-900 border border-gray-800 disabled:opacity-30 flex items-center gap-1 font-bold hover:text-white"
+                              className="px-3 py-1 rounded bg-white border border-slate-200 disabled:opacity-30 flex items-center gap-1 font-semibold hover:text-slate-800 transition-colors cursor-pointer"
                             >
-                              Next Frame <ArrowRight className="w-3 h-3" />
+                              Next scene <ArrowRight className="w-3 h-3" />
                             </button>
                           </div>
                         </div>
                       </>
                     ) : activeTab === "style" ? (
-                      <div className="space-y-5 flex-grow">
-                        <div className="bg-[#1C1C22]/20 border border-[#7C3AED]/10 rounded-xl p-4.5 space-y-4">
-                          <div className="flex items-center gap-2 pb-2 border-b border-[#7C3AED]/10">
-                            <Palette className="w-4.5 h-4.5 text-indigo-400" />
-                            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Video Art Style & Direction</h4>
+                      <div className="space-y-4 flex-grow">
+                        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
+                          <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
+                            <Palette className="w-4 h-4 text-indigo-600" />
+                            <h4 className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Video art style & visual guidelines</h4>
                           </div>
-                          <p className="text-xs text-gray-300 leading-relaxed font-mono">
+                          <p className="text-xs text-slate-600 leading-relaxed font-sans">
                             {scriptData.visualStyleGuide}
                           </p>
                         </div>
 
-                        <div className="bg-[#1C1C22]/20 border border-[#7C3AED]/10 rounded-xl p-4.5 space-y-4">
-                          <div className="flex items-center gap-2 pb-2 border-b border-[#7C3AED]/10">
-                            <Music className="w-4.5 h-4.5 text-[#2583EB]" />
-                            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Music Track & Sound design</h4>
+                        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
+                          <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
+                            <Music className="w-4 h-4 text-[#2583EB]" />
+                            <h4 className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Soundtrack & music track design</h4>
                           </div>
-                          <p className="text-xs text-gray-300 leading-relaxed font-mono">
+                          <p className="text-xs text-slate-600 leading-relaxed font-sans">
                             {scriptData.musicVibeGuide}
                           </p>
                         </div>
 
-                        <div className="bg-[#0C0C12] border border-dashed border-[#7C3AED]/20 hover:border-[#7C3AED]/35 rounded-xl p-5 flex flex-col items-center justify-center text-center">
-                          <Clapperboard className="w-7 h-7 text-[#7C3AED]/70 mb-2" />
-                          <span className="text-xs font-bold text-white block">Active Outro Transition</span>
-                          <span className="text-[10px] text-gray-500 mt-1 max-w-sm">
-                            Logo fade flare containing direct CTAs linking to call schedules. Built automatically inside campaigns list views.
+                        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center">
+                          <span className="text-xs font-semibold text-slate-800 block">Outro Transition Guide</span>
+                          <span className="text-[11px] text-slate-500 mt-1 max-w-sm">
+                            Logo fade flare containing direct CTAs linking to call schedules. Standard outro assets are loaded into your assets locker automatically.
                           </span>
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-4 flex-grow flex flex-col text-left">
-                        <div className="bg-[#1C1C22]/30 border border-[#7C3AED]/20 rounded-xl p-4">
-                          <div className="flex items-center gap-2 mb-1.5 text-indigo-400">
-                            <Sparkles className="w-4 h-4 text-indigo-300" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Required Media Attachments for Video Generation</span>
-                          </div>
-                          <p className="text-[11px] text-gray-400 leading-relaxed">
-                            To ensure high-fidelity brand representations inside text-to-video tools (like Sora, Luma, Runway, or edit suites), make sure you attach the following physical elements as files or screenshot guidelines:
+                        <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                          <span className="text-xs font-semibold text-slate-800 uppercase tracking-wider block mb-1">
+                            Media attachments checklist
+                          </span>
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                            To ensure high-fidelity brand representations inside visual editors, prepare these graphic files as input attachments.
                           </p>
                         </div>
 
                         {scriptData.requiredAssets && scriptData.requiredAssets.length > 0 ? (
-                          <div className="grid grid-cols-1 gap-3 overflow-y-auto max-h-[380px] md:max-h-[450px] pr-1 scrollbar-thin scrollbar-thumb-gray-800">
+                          <div className="grid grid-cols-1 gap-3 overflow-y-auto max-h-96 pr-1 hide-scrollbar">
                             {scriptData.requiredAssets.map((asset, index) => (
                               <div 
                                 key={index} 
-                                className="bg-[#0C0C12]/90 border border-[#7C3AED]/15 hover:border-[#7C3AED]/30 p-4 rounded-xl flex flex-col gap-2 relative overflow-hidden transition-colors group"
+                                className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col gap-2 relative overflow-hidden transition-colors shadow-sm"
                               >
                                 <div className="absolute top-0 bottom-0 left-0 w-1 bg-[#7C3AED]" />
                                 
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[10px] bg-indigo-500/10 text-indigo-300 font-extrabold px-2 py-0.5 rounded border border-indigo-400/10 uppercase tracking-widest scale-95 origin-left">
+                                  <span className="text-[9px] bg-slate-50 border border-slate-200 text-slate-600 font-bold px-2 py-0.5 rounded uppercase tracking-wider">
                                     {asset.type}
                                   </span>
-                                  <h4 className="text-xs font-extrabold text-white tracking-tight">
+                                  <h4 className="text-xs font-semibold text-slate-800">
                                     {asset.name}
                                   </h4>
                                 </div>
 
-                                <div className="space-y-1 mt-1 pl-1">
-                                  <div className="text-[11px] text-gray-300 leading-relaxed">
-                                    <span className="text-[9px] text-[#2583EB] font-bold uppercase block tracking-wider mb-0.5">Where/How it is Used:</span>
+                                <div className="space-y-2 mt-1.5 pl-1.5 border-l border-slate-100">
+                                  <div className="text-[11px] text-slate-600 leading-relaxed">
+                                    <span className="text-[9px] text-[#2583EB] font-bold uppercase tracking-wider block mb-0.5">Asset placement purpose:</span>
                                     {asset.purpose}
                                   </div>
-                                  <div className="text-[11px] text-gray-400 bg-black/45 p-2 rounded border border-gray-800/50 mt-1.5">
-                                    <span className="text-[9px] text-emerald-400 font-bold uppercase block tracking-wider mb-0.5">Asset Preparation Specs:</span>
+                                  <div className="text-[11px] text-slate-500 leading-relaxed">
+                                    <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-wider block mb-0.5">Visual specs & guidelines:</span>
                                     {asset.description}
                                   </div>
                                 </div>
@@ -1416,11 +1254,10 @@ Modify and output the complete revised JSON conforming strictly to the original 
                             ))}
                           </div>
                         ) : (
-                          <div className="bg-[#1C1C22]/10 border border-dashed border-gray-800 rounded-xl p-8 text-center flex flex-col items-center justify-center my-auto">
-                            <Upload className="w-8 h-8 text-gray-600 mb-2 animate-bounce" />
-                            <span className="text-xs text-gray-400 font-bold">No assets parsed yet</span>
-                            <span className="text-[10px] text-gray-500 mt-1 max-w-xs leading-normal">
-                              Run the screenplay generation above to auto-compile a professional list of visual, UI, and logo elements checklist!
+                          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-8 text-center flex flex-col items-center justify-center my-auto shadow-inner">
+                            <span className="text-xs font-semibold text-slate-700">No assets listed yet</span>
+                            <span className="text-[10px] text-slate-400 mt-1 max-w-xs leading-normal">
+                              Compile a screenplay playbook from the production deck to parse required asset details.
                             </span>
                           </div>
                         )}
@@ -1429,39 +1266,33 @@ Modify and output the complete revised JSON conforming strictly to the original 
                   </div>
 
                   {/* Iterative Tweak Editor */}
-                  <div className="bg-[#101015]/80 border border-[#7C3AED]/15 rounded-2xl p-4 md:p-5 shadow-lg space-y-3 relative overflow-hidden">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase tracking-widest pl-0.5">
-                      <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
-                      <span>Iterative Strategy Editor</span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs font-bold text-white block leading-snug">
-                        Need a sharper hook? Or specific visual frame highlights?
-                      </div>
-                      <p className="text-[10px] text-gray-500 leading-relaxed block mt-0.5">
-                        Provide any specific script notes or dialog tweaks. Our generation pipeline will rewrite timing and narrative, leaving central Brand DNA intact.
+                  <div className="border-t border-slate-200 pt-4 space-y-3.5 mt-auto">
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-800 uppercase tracking-wider">
+                        Polishing script note tweaks
+                      </h4>
+                      <p className="text-[10px] text-slate-500 leading-relaxed mt-1">
+                        Adjust specific visual highlights or wording hook preferences. Zack and Chloe will update script values while preserving core Brand DNA setup.
                       </p>
-                      
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={scriptTweakInput}
-                          onChange={(e) => setScriptTweakInput(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleApplyTweak()}
-                          placeholder="e.g. 'Make Scene 1 start with a shocking contrarian rule overlay' or 'Integrate a direct click demo walkthrough'"
-                          className="flex-grow bg-[#1C1C22] border border-[#7C3AED]/30 hover:border-[#7C3AED]/50 rounded-xl px-4.5 py-3 text-xs text-white focus:outline-none focus:border-[#7C3AED] transition-all"
-                        />
-                        <button
-                          onClick={handleApplyTweak}
-                          className="bg-[#7C3AED] hover:bg-[#7C3AED]/90 text-white font-bold px-4 py-3 rounded-xl text-xs transition-colors shadow shadow-purple-950/20 shrink-0 uppercase active:scale-95"
-                        >
-                          Apply Script Tweak
-                        </button>
-                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={scriptTweakInput}
+                        onChange={(e) => setScriptTweakInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleApplyTweak()}
+                        placeholder="e.g., 'Make the hook in Scene 1 much more contrarian' or 'Describe the dashboard back-lighting as glowing orange'"
+                        className="flex-grow bg-white border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-2.5 text-xs text-slate-800 outline-none transition-colors shadow-sm"
+                      />
+                      <button
+                        onClick={handleApplyTweak}
+                        className="bg-slate-950 hover:bg-slate-900 text-white font-semibold px-4 py-2.5 rounded-lg text-xs transition-colors shadow-sm cursor-pointer shrink-0"
+                      >
+                        Apply tweak
+                      </button>
                     </div>
                   </div>
-                </div>
               </motion.div>
             )}
           </AnimatePresence>

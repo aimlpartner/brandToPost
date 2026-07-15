@@ -41,6 +41,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Layout,
+  Globe,
 } from "lucide-react";
 import {
   FaLinkedin,
@@ -51,7 +52,7 @@ import {
   FaReddit,
   FaYoutube,
 } from "react-icons/fa6";
-import { cn, formatCopy, copyFormattedText } from "../lib/utils";
+import { cn, formatCopy, copyFormattedText, playSuccessChime } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
 import { db, auth } from "../firebase";
@@ -74,6 +75,7 @@ import { ImageLoader } from "../components/ImageLoader";
 import { VisualEngine } from "../components/VisualEngine";
 import { ImageLightbox } from "../components/ImageLightbox";
 import { PostPreviewModal } from "../components/PostPreviewModal";
+import { CampaignLoaderConsole } from "../components/CampaignLoaderConsole";
 
 import { useLocation, useNavigate } from "react-router-dom";
 const getVisualDataWithImages = (
@@ -162,6 +164,10 @@ export function Campaigns() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isLinkedinConnected, setIsLinkedinConnected] = useState(false);
   const [isInstagramConnected, setIsInstagramConnected] = useState(false);
+  const [blogConfig, setBlogConfig] = useState<{ type: string; wordpress?: { url: string }; webhook?: { url: string } } | null>(null);
+  const [isPublishingBlog, setIsPublishingBlog] = useState(false);
+  const [blogPublishSuccess, setBlogPublishSuccess] = useState<string | null>(null);
+  const [blogPublishErrorMsg, setBlogPublishErrorMsg] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<Record<string, boolean>>({});
   const [published, setPublished] = useState<Record<string, boolean>>({});
   const [queuing, setQueuing] = useState<Record<string, boolean>>({});
@@ -374,6 +380,13 @@ export function Campaigns() {
       // Delete the massive baseBg from editorState as it is redundant and huge (we can load it on open dynamically)
       delete cleanVd.editorState.baseBg;
     }
+    
+    // Preserve baseImageId if it already exists and wasn't just set above
+    // This prevents the field from being lost during visual data cleaning
+    if (vd.baseImageId && !cleanVd.baseImageId) {
+      cleanVd.baseImageId = vd.baseImageId;
+    }
+    
     return cleanVd;
   };
 
@@ -445,6 +458,8 @@ export function Campaigns() {
             dp.platformVersions.forEach((pv) => {
               pv.imageId = newImageId;
               delete pv.imageUrl;
+              // Mark as flattened so display pipeline shows static JPEG (no re-rendering)
+              (pv as any).isFlattened = true;
               if (processedVisualData) {
                 pv.visualData = processedVisualData;
               }
@@ -456,6 +471,9 @@ export function Campaigns() {
                 setGeneratedVisualData((prev) => ({ ...prev, [syncKey]: processedVisualData }));
               }
             });
+            
+            // Mark the daily post itself as flattened
+            (dp as any).isFlattened = true;
 
             hasChanged = true;
           }
@@ -482,6 +500,8 @@ export function Campaigns() {
 
               pv.imageId = newImageId;
               delete pv.imageUrl;
+              // Mark as flattened so display pipeline shows static JPEG
+              (pv as any).isFlattened = true;
               if (processedVisualData) {
                 pv.visualData = processedVisualData;
               }
@@ -907,6 +927,18 @@ export function Campaigns() {
           setIsLinkedinConnected(linkedinConnected);
           setIsInstagramConnected(instagramConnected);
         }
+
+        try {
+          const res = await fetch(`/api/blog/config?productId=${activeProduct.id}`, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (!isCancelled) {
+              setBlogConfig(data);
+            }
+          }
+        } catch (e) {
+          logSilentError(e as Error, { context: "fetchBlogConfigInCampaigns" });
+        }
       } catch (err) {
         logSilentError(err as Error, { context: "checkStatusesInCampaigns" });
       }
@@ -1103,6 +1135,7 @@ export function Campaigns() {
         campaignThemeInput: campaignTheme,
       };
 
+      playSuccessChime();
       setDraftCampaign(newCampaign);
       setModalStep(5);
     } catch (err: any) {
@@ -1178,6 +1211,7 @@ export function Campaigns() {
         campaignThemeInput: campaignTheme,
       };
 
+      playSuccessChime();
       setDraftCampaign(newCampaign);
       setModalStep(5);
     } catch (err: any) {
@@ -1459,6 +1493,64 @@ export function Campaigns() {
       );
     } finally {
       setIsApproving(false);
+    }
+  };
+
+  const handlePublishBlog = async (campaign: WeeklyCampaign) => {
+    if (!activeProduct) return;
+    setIsPublishingBlog(true);
+    setBlogPublishSuccess(null);
+    setBlogPublishErrorMsg(null);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/blog/publish', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          productId: activeProduct.id,
+          campaignId: campaign.id
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to publish blog post');
+      }
+
+      if (blogConfig?.type === 'wordpress') {
+        setBlogPublishSuccess(`Blog post published successfully!`);
+        setSelectedCampaign((prev) => {
+          if (prev && prev.id === campaign.id) {
+            return {
+              ...prev,
+              publishedBlogUrl: data.url,
+              publishedAt: new Date().toISOString()
+            };
+          }
+          return prev;
+        });
+      } else {
+        setBlogPublishSuccess('Blog payload delivered successfully to Webhook endpoint!');
+        setSelectedCampaign((prev) => {
+          if (prev && prev.id === campaign.id) {
+            return {
+              ...prev,
+              publishedBlogUrl: 'Webhook Delivered',
+              publishedAt: new Date().toISOString()
+            };
+          }
+          return prev;
+        });
+      }
+    } catch (err: any) {
+      logSilentError(err as Error, { context: "handlePublishBlog" });
+      setBlogPublishErrorMsg(err.message || 'Error publishing blog.');
+    } finally {
+      setIsPublishingBlog(false);
     }
   };
 
@@ -2398,6 +2490,82 @@ export function Campaigns() {
                       </div>
                     </div>
 
+                    {/* Blog Direct Publishing Integration */}
+                    <div className="border-t border-slate-100 pt-6 space-y-4 text-left font-sans">
+                      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-150 shadow-inner">
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                            <Globe className="h-4.5 w-4.5 text-[#7C3AED]" /> Blog Website Integration
+                          </h4>
+                          {blogConfig && blogConfig.type !== 'none' ? (
+                            <p className="text-xs text-slate-500 mt-1 font-medium">
+                              Configured: <span className="font-semibold text-slate-700 capitalize">{blogConfig.type}</span>
+                              {blogConfig.wordpress?.url && ` at ${blogConfig.wordpress.url}`}
+                              {blogConfig.webhook?.url && ` at ${blogConfig.webhook.url}`}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-slate-400 mt-1">
+                              No blog website connected. Connect your site in <span className="font-semibold text-[#7C3AED] hover:underline cursor-pointer" onClick={() => navigate('/settings')}>Settings</span> to publish instantly.
+                            </p>
+                          )}
+                        </div>
+
+                        {blogConfig && blogConfig.type !== 'none' && (
+                          <div className="flex items-center gap-3">
+                            {selectedCampaign.publishedBlogUrl ? (
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-250/50">
+                                  ✓ Published
+                                </span>
+                                {selectedCampaign.publishedBlogUrl.startsWith('http') && (
+                                  <a
+                                    href={selectedCampaign.publishedBlogUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs font-semibold text-[#7C3AED] hover:underline hover:text-[#6D28D9] transition-all"
+                                  >
+                                    View live post →
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => handlePublishBlog(selectedCampaign)}
+                                  disabled={isPublishingBlog}
+                                  className="text-xs text-[#7C3AED] hover:text-[#6D28D9] font-semibold border border-[#7C3AED]/20 bg-white rounded-lg px-3 py-1.5 hover:bg-[#7C3AED]/5 transition-all cursor-pointer"
+                                >
+                                  {isPublishingBlog ? "Re-publishing..." : "Re-publish"}
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handlePublishBlog(selectedCampaign)}
+                                disabled={isPublishingBlog}
+                                className="inline-flex items-center gap-1.5 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-5 py-2.5 text-xs font-bold transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer shadow-sm shadow-[#7C3AED]/20"
+                              >
+                                {isPublishingBlog ? "Publishing..." : `Publish to ${blogConfig.type === 'wordpress' ? 'WordPress' : 'Webhook'}`}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedCampaign.blogPublishError && !blogPublishSuccess && !blogPublishErrorMsg && (
+                        <div className="p-3.5 text-xs bg-amber-50 border border-amber-250 text-amber-800 rounded-xl">
+                          <strong>Last Publish Error:</strong> {selectedCampaign.blogPublishError}
+                        </div>
+                      )}
+
+                      {blogPublishSuccess && (
+                        <div className="p-3.5 text-xs bg-emerald-50 border border-emerald-200/60 text-emerald-800 rounded-xl">
+                          {blogPublishSuccess}
+                        </div>
+                      )}
+                      {blogPublishErrorMsg && (
+                        <div className="p-3.5 text-xs bg-red-50 border border-red-200/60 text-red-800 rounded-xl">
+                          {blogPublishErrorMsg}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Copy to Clipboard CTA */}
                     <div className="flex justify-end pt-2">
                       <button
@@ -2729,6 +2897,7 @@ export function Campaigns() {
                                         productLogo={
                                           activeProduct?.logoUrl || ""
                                         }
+                                        isFlattened={(pv as any).isFlattened || (typeof dp !== "undefined" && (dp as any).isFlattened)}
                                         onImageGenerated={(url) =>
                                           handleSetGeneratedVisual(
                                             publishKey,
@@ -3014,6 +3183,7 @@ export function Campaigns() {
                                 isLoadingVisual={isFetchingImages && !(generatedVisuals[publishKey] || pv.imageUrl || (pv.imageId ? campaignImages[pv.imageId] : undefined))}
                                 productName={activeProduct?.name || ""}
                                 productLogo={activeProduct?.logoUrl || ""}
+                                isFlattened={(pv as any).isFlattened}
                                 onImageGenerated={(url) =>
                                   handleSetGeneratedVisual(publishKey, url)
                                 }
@@ -3088,7 +3258,7 @@ export function Campaigns() {
                 <h2 className="text-lg font-bold text-slate-800 font-display">
                   {modalStep === 1 && "Campaign Focus"}
                   {modalStep === 2 && "Image Settings"}
-                  {modalStep === 4 && "Generating..."}
+                  {modalStep === 4 && "Campaign Boardroom"}
                   {modalStep === 5 && "Review Campaign"}
                   {modalStep === 6 && "Improve Campaign"}
                 </h2>
@@ -3499,49 +3669,17 @@ export function Campaigns() {
                 )}
 
                 {modalStep === 4 && (
-                  <div className="flex flex-col items-center justify-center py-10 space-y-6">
-                    <div className="relative flex items-center justify-center">
-                      <div className="absolute -inset-4 bg-[#7C3AED]/10 rounded-full filter blur-xl animate-pulse" />
-                      <VideoLoader className="h-32 w-32 text-[#7C3AED] relative z-10 border-2 border-slate-200/50 shadow-[0_10px_40px_rgba(124,58,237,0.15)] bg-white" />
-                      <div className="absolute -bottom-1 -right-1 bg-[#7C3AED] text-white p-2.5 rounded-full border-2 border-white shadow-xl z-20">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 text-center w-full max-w-md">
-                      <h3 className="text-lg font-bold text-slate-800 font-display">
-                        Tror is working...
-                      </h3>
-                      <p className="text-sm text-slate-600 font-medium min-h-[40px] px-4 flex items-center justify-center text-center">
-                        {generationStatus}
-                        <span className="text-[#7C3AED] ml-1">
-                          {warmupStatus}
-                        </span>
-                      </p>
-
-                      <div className="mt-6 pt-4 space-y-2">
-                        <div className="flex justify-between text-xs text-slate-500 font-semibold px-1">
-                          <span>
-                            Step {generationStep} of {generationTotal}
-                          </span>
-                          <span>
-                            {Math.round(
-                              (generationStep / generationTotal) * 100,
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-slate-100 border border-slate-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-[#7C3AED] rounded-full transition-all duration-1000 ease-out"
-                            style={{
-                              width: `${(generationStep / generationTotal) * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <CampaignLoaderConsole
+                    activeProduct={activeProduct}
+                    focus={focus || focusInput || "Fitness industry"}
+                    subCategory={subCategory}
+                    campaignTheme={campaignTheme}
+                    selectedChannels={selectedChannels}
+                    generationStep={generationStep}
+                    generationTotal={generationTotal}
+                    generationStatus={generationStatus}
+                    warmupStatus={warmupStatus}
+                  />
                 )}
 
                 {modalStep === 5 && draftCampaign && (
@@ -4034,6 +4172,7 @@ export function Campaigns() {
           )}
           dna={activeProduct!}
           isLoadingVisual={isFetchingImages && !previewPost.imageUrl}
+          isFlattened={(previewPost as any).isFlattened}
           productName={activeProduct?.name || "Product Name"}
           productLogo={
             activeProduct?.logoUrl ||

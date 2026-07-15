@@ -761,9 +761,11 @@ export function VisualEditorModal({
   // Overall State
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<"background" | "scrim" | "typography" | "logo">("typography");
+  const [exportTrigger, setExportTrigger] = useState(0);
   
   // Stage Scaling
   const stageRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
 
@@ -845,14 +847,26 @@ export function VisualEditorModal({
   if (!isOpen) return null;
 
   const handleSave = async () => {
-    if (!stageRef.current) return;
     setIsGenerating(true);
+    // Trigger a re-render so the exportRef picks up the latest textX.get() and logoX.get() values
+    setExportTrigger(prev => prev + 1);
+    
     try {
-      const dataUrl = await toJpeg(stageRef.current, { 
-        quality: 0.95, 
-        canvasWidth: 1080, 
-        canvasHeight: 1080,
-        pixelRatio: 1
+      // Wait for React to re-render the hidden export node with latest coordinates
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (!exportRef.current) {
+         throw new Error("Export canvas not found");
+      }
+
+      // We use the Snapshot Clone (exportRef) which has no framer-motion or animations
+      const dataUrl = await toJpeg(exportRef.current, { 
+         quality: 0.95,
+         canvasWidth: 1080,
+         canvasHeight: 1080,
+         pixelRatio: 1, // ensure 1080x1080 exact
+         cacheBust: true,
+         skipFonts: false
       });
       
       const newVisualData = {
@@ -1082,6 +1096,71 @@ export function VisualEditorModal({
                     </motion.div>
                   )}
                 </div>
+             </div>
+             
+             {/* The hidden export clone for html-to-image to snapshot without framer-motion ghosting */}
+             <div 
+               ref={exportRef}
+               style={{ 
+                 width: 1080, height: 1080, position: 'fixed', top: '-9999px', left: '-9999px', 
+                 overflow: 'hidden', background: '#000', fontFamily, zIndex: -9999
+               }}
+             >
+                {/* Background Layer */}
+                {baseBg && (
+                  <img src={baseBg} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }} crossOrigin={baseBg.startsWith('data:') ? undefined : "anonymous"} alt="bg" />
+                )}
+                {/* Scrim Overlay */}
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${scrimHeight}%`, background: `rgba(${parseInt(scrimColor.slice(1,3), 16) || 0},${parseInt(scrimColor.slice(3,5), 16) || 0},${parseInt(scrimColor.slice(5,7), 16) || 0},${scrimOpacity})`, zIndex: 1, pointerEvents: 'none' }} />
+                
+                {/* Custom HTML Extracted Background */}
+                {!patchedHtml && customOverlayBg && (
+                  <div style={{ position: 'absolute', inset: 0, background: customOverlayBg, zIndex: 2, pointerEvents: 'none' }} />
+                )}
+
+                {/* Typography Layer (Static) */}
+                <div
+                  style={{ 
+                    transform: `translate(${textX.get()}px, ${textY.get()}px)`,
+                    position: 'absolute', top: 0, left: 0, zIndex: 10, 
+                    width: patchedHtml ? 1080 : textWidth, height: patchedHtml ? 1080 : 'auto',
+                    display: 'flex', flexDirection: 'column', 
+                    alignItems: textAlign === 'center' ? 'center' : textAlign === 'right' ? 'flex-end' : 'flex-start',
+                    textAlign
+                  }}
+                >
+                  {patchedHtml ? (
+                    <div style={{ width: '100%', height: '100%', position: 'relative' }} dangerouslySetInnerHTML={{ __html: patchedHtml }} />
+                  ) : (
+                    <>
+                      {title && (
+                        <h1 style={{ 
+                          ...customTitleStyles, fontSize: `${titleSize}px`, color: titleColor, fontWeight: customTitleStyles.fontWeight || 800, 
+                          lineHeight: customTitleStyles.lineHeight || 1.15, margin: 0, marginBottom: subtitle ? '24px' : '0',
+                          textShadow: customTitleStyles.textShadow || '0 8px 32px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.6)', width: '100%', wordWrap: 'break-word', whiteSpace: 'pre-wrap'
+                        }}>
+                          {title}
+                        </h1>
+                      )}
+                      {subtitle && (
+                        <p style={{ 
+                          ...customSubtitleStyles, fontSize: `${subtitleSize}px`, color: subtitleColor, fontWeight: customSubtitleStyles.fontWeight || 500, 
+                          lineHeight: customSubtitleStyles.lineHeight || 1.4, margin: 0, textShadow: customSubtitleStyles.textShadow || '0 2px 8px rgba(0,0,0,0.8)',
+                          width: '100%', wordWrap: 'break-word', whiteSpace: 'pre-wrap'
+                        }}>
+                          {subtitle}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Logo Layer (Static) */}
+                {showLogo && activeLogo && (
+                  <div style={{ transform: `translate(${logoX.get()}px, ${logoY.get()}px)`, position: 'absolute', top: 0, left: 0, zIndex: 20 }}>
+                    <img src={activeLogo} crossOrigin={activeLogo.startsWith('data:') ? undefined : "anonymous"} style={{ maxWidth: 180, maxHeight: 70, transform: `scale(${logoScale})`, transformOrigin: 'center center', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }} alt="Logo" />
+                  </div>
+                )}
              </div>
              
              {/* Interaction Hint Overlay */}

@@ -30,6 +30,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ProductProvider } from "./contexts/ProductContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { CookieConsent } from "./components/CookieConsent";
 
 export default function App() {
   return (
@@ -93,6 +94,7 @@ export default function App() {
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <CookieConsent />
         </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>
