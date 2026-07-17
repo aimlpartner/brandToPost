@@ -3578,12 +3578,17 @@ ${htmlContent}
     
     const stateStr = `state_${Math.random().toString(36).substring(7)}_${productId}`;
 
+    const isFounder = productId && productId.startsWith('founder_');
+    const scope = isFounder 
+      ? 'openid profile w_member_social email'
+      : 'openid profile w_member_social email w_organization_social r_organization_social';
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
       redirect_uri: redirectUri,
       state: stateStr,
-      scope: 'openid profile w_member_social email w_organization_social r_organization_social',
+      scope: scope,
     });
     
     res.json({ url: `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}` });
