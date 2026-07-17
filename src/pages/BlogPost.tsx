@@ -4,6 +4,7 @@ import { collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { Blog } from '../types';
+import { PublicLayout } from '../components/PublicLayout';
 
 export function BlogPost() {
   const { slug } = useParams<{ slug: string }>();
@@ -52,21 +53,21 @@ export function BlogPost() {
       .replace(/>/g, '&gt;');
     
     // Headers
-    html = html.replace(/^### (.*$)/gim, '<h4 class="text-lg font-bold text-slate-800 mt-6 mb-2 font-display">$1</h4>');
-    html = html.replace(/^## (.*$)/gim, '<h3 class="text-xl font-bold text-slate-900 mt-8 mb-3 font-display border-b border-slate-900/10 pb-1">$1</h3>');
-    html = html.replace(/^# (.*$)/gim, '<h2 class="text-2xl font-bold text-slate-950 mt-10 mb-4 font-display">$1</h2>');
+    html = html.replace(/^### (.*$)/gim, '<h4 class="text-lg font-bold text-slate-900 mt-8 mb-2 font-display tracking-tight text-left">$1</h4>');
+    html = html.replace(/^## (.*$)/gim, '<h3 class="text-xl md:text-2xl font-semibold text-slate-950 mt-10 mb-4 font-display border-b border-slate-900/10 pb-2 text-left">$1</h3>');
+    html = html.replace(/^# (.*$)/gim, '<h2 class="text-2xl md:text-3xl font-bold text-slate-950 mt-12 mb-6 font-display text-left">$1</h2>');
     
     // Bold
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-slate-900">$1</strong>');
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-slate-950">$1</strong>');
     
     // Italic
     html = html.replace(/\*(.*?)\*/g, '<em class="italic text-slate-800">$1</em>');
     
     // Lists
-    html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li class="ml-6 list-disc text-slate-650 my-1 font-light">$1</li>');
+    html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li class="ml-6 list-disc text-slate-600 my-2 font-light text-left leading-relaxed">$1</li>');
     
     // Code blocks
-    html = html.replace(/```([\s\S]*?)```/g, '<pre class="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs my-4 overflow-x-auto">$1</pre>');
+    html = html.replace(/```([\s\S]*?)```/g, '<pre class="bg-slate-900 text-slate-100 p-5 rounded-xl font-mono text-xs my-6 overflow-x-auto border border-white/[0.03] text-left">$1</pre>');
     // Inline code
     html = html.replace(/`(.*?)`/g, '<code class="bg-slate-100 text-[#7C3AED] px-1.5 py-0.5 rounded font-mono text-[11px]">$1</code>');
     
@@ -78,7 +79,7 @@ export function BlogPost() {
       if (p.startsWith('<h') || p.startsWith('<li') || p.startsWith('<pre') || p.startsWith('<ul') || p.startsWith('<ol')) {
         return p;
       }
-      return `<p class="text-slate-650 font-sans leading-relaxed text-sm md:text-base mb-4 font-light text-left">${p.replace(/\n/g, '<br/>')}</p>`;
+      return `<p class="text-slate-650 font-sans leading-relaxed text-sm md:text-base mb-5 font-light text-left">${p.replace(/\n/g, '<br/>')}</p>`;
     }).join('\n');
     
     return html;
@@ -88,7 +89,7 @@ export function BlogPost() {
     return (
       <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center">
         <Loader2 className="h-10 w-10 text-[#7C3AED] animate-spin mb-3" />
-        <p className="text-xs text-slate-500 font-mono">Opening archive...</p>
+        <p className="text-xs text-slate-400 font-mono tracking-wider">Unsealing article vault...</p>
       </div>
     );
   }
@@ -102,7 +103,7 @@ export function BlogPost() {
         </p>
         <Link 
           to="/blog" 
-          className="inline-flex items-center gap-2 bg-[#7C3AED] text-white px-5 py-2.5 text-xs font-semibold rounded-lg shadow-sm hover:bg-[#6D28D9] transition-all border-none cursor-pointer"
+          className="inline-flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 text-xs font-semibold rounded-lg shadow-sm hover:bg-slate-800 transition-all border-none cursor-pointer"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Blog
         </Link>
@@ -111,90 +112,90 @@ export function BlogPost() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-slate-900 selection:bg-[#7C3AED]/20 selection:text-[#7C3AED] pb-24">
-      {/* Small Navbar */}
-      <nav className="border-b border-slate-900/10 bg-[#08080C] text-white py-4 px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <Link to="/blog" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors">
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Articles
+    <PublicLayout transparentNavbar={false}>
+      <div className="bg-[#FAF9F6] min-h-screen py-16 px-6 lg:px-8">
+        <div className="max-w-3xl mx-auto pt-8 space-y-8">
+          
+          {/* Back button */}
+          <Link 
+            to="/blog" 
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Archives
           </Link>
-          <Link to="/" className="text-xs font-bold font-display tracking-tight text-white">
-            BrandToPost
-          </Link>
-        </div>
-      </nav>
 
-      {/* Main Container */}
-      <main className="max-w-3xl mx-auto px-6 mt-12 md:mt-16 text-left">
-        {/* Category & Date */}
-        <div className="flex items-center gap-3 text-xs text-slate-400 font-mono mb-4">
-          <span>{new Date(blog.publishedAt || blog.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-          <span>&bull;</span>
-          <span className="text-[#7C3AED] font-semibold">{blog.targetAudience || 'Insight'}</span>
-        </div>
+          {/* Editorial Header */}
+          <div className="space-y-4 text-left">
+            <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
+              <span>{new Date(blog.publishedAt || blog.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              <span>&bull;</span>
+              <span className="text-[#7C3AED] font-semibold uppercase tracking-wider text-[10px]">{blog.targetAudience || 'Heuristics'}</span>
+            </div>
+            
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-950 font-display leading-[1.1] mb-6">
+              {blog.title}
+            </h1>
 
-        {/* Title */}
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-950 font-display mb-6 leading-tight">
-          {blog.title}
-        </h1>
-
-        {/* Author / Metadata */}
-        <div className="flex items-center gap-3 border-y border-slate-900/10 py-4 mb-8">
-          <div className="h-8 w-8 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] flex items-center justify-center font-bold text-xs border border-[#7C3AED]/20 select-none">
-            {blog.author?.[0]?.toUpperCase() || 'B'}
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-slate-900">Written by {blog.author || 'BrandToPost Team'}</div>
-            <div className="text-[10px] text-slate-450 font-mono">System Publisher Agent</div>
-          </div>
-        </div>
-
-        {/* Featured Image */}
-        {blog.imageUrl && (
-          <div className="rounded-xl overflow-hidden bg-slate-100 mb-8 border border-slate-900/10 aspect-video">
-            <img 
-              src={blog.imageUrl} 
-              alt={blog.title} 
-              className="w-full h-full object-cover" 
-            />
-          </div>
-        )}
-
-        {/* Markdown Content */}
-        <article 
-          className="prose prose-slate max-w-none prose-headings:font-display prose-headings:tracking-tight text-slate-800"
-          dangerouslySetInnerHTML={{ __html: parseMarkdown(blog.content) }}
-        />
-
-        {/* CTA Block (if defined) */}
-        {blog.cta && (
-          <div className="mt-12 p-6 md:p-8 bg-white border border-[#7C3AED]/10 rounded-2xl text-left space-y-4 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-900 font-display">Get Started with BrandToPost</h3>
-            <p className="text-xs md:text-sm text-slate-650 font-light leading-relaxed">
-              Did you find this insight useful? Implement it directly in your own GTM pipeline using the BrandToPost platform.
-            </p>
-            <div className="pt-2">
-              {blog.cta.startsWith('http') ? (
-                <a 
-                  href={blog.cta} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="inline-flex items-center justify-center px-5 py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold rounded-lg shadow-sm transition-all border-none cursor-pointer"
-                >
-                  Learn More &rarr;
-                </a>
-              ) : (
-                <Link 
-                  to="/login?mode=signup" 
-                  className="inline-flex items-center justify-center px-5 py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold rounded-lg shadow-sm transition-all border-none cursor-pointer"
-                >
-                  {blog.cta} &rarr;
-                </Link>
-              )}
+            {/* Author Profile */}
+            <div className="flex items-center gap-3.5 border-y border-slate-900/10 py-5">
+              <div className="h-9 w-9 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] flex items-center justify-center font-bold text-sm border border-[#7C3AED]/15 select-none font-sans">
+                {blog.author?.[0]?.toUpperCase() || 'B'}
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-900">Written by {blog.author || 'BrandToPost Team'}</div>
+                <div className="text-[10px] text-slate-405 font-mono">System Publisher Agent</div>
+              </div>
             </div>
           </div>
-        )}
-      </main>
-    </div>
+
+          {/* Featured Image */}
+          {blog.imageUrl && (
+            <div className="rounded-2xl overflow-hidden bg-slate-101 border border-slate-900/10 aspect-video shadow-sm">
+              <img 
+                src={blog.imageUrl} 
+                alt={blog.title} 
+                className="w-full h-full object-cover" 
+              />
+            </div>
+          )}
+
+          {/* Article Content */}
+          <article 
+            className="prose prose-slate max-w-none pt-4 text-left leading-relaxed text-slate-700 font-sans"
+            dangerouslySetInnerHTML={{ __html: parseMarkdown(blog.content) }}
+          />
+
+          {/* CTA Box (Resting directly on canvas separated by a border) */}
+          {blog.cta && (
+            <div className="pt-8 border-t border-slate-900/10 mt-12 text-left space-y-4">
+              <h3 className="text-xl font-bold text-slate-900 font-display">Get Started with BrandToPost</h3>
+              <p className="text-xs md:text-sm text-slate-500 font-light leading-relaxed max-w-xl">
+                Did you find this insight useful? Implement it directly in your own GTM pipeline using the BrandToPost platform.
+              </p>
+              <div className="pt-2">
+                {blog.cta.startsWith('http') ? (
+                  <a 
+                    href={blog.cta} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="inline-flex items-center justify-center px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-sm transition-all border-none cursor-pointer"
+                  >
+                    Learn More &rarr;
+                  </a>
+                ) : (
+                  <Link 
+                    to="/login?mode=signup" 
+                    className="inline-flex items-center justify-center px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold rounded-lg shadow-sm transition-all border-none cursor-pointer"
+                  >
+                    {blog.cta} &rarr;
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </PublicLayout>
   );
 }

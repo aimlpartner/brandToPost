@@ -749,7 +749,7 @@ export function Settings() {
           className="w-full sm:max-w-xs border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
         >
           <option value="none">None / Disabled</option>
-          <option value="brandtopost">BrandToPost Website (Local Blogs)</option>
+          <option value="brandtopost">BrandToPost Native Blog</option>
           <option value="wordpress">WordPress (Self-Hosted)</option>
           <option value="webhook">Custom Webhook (Wix, Ghost, Custom, Zapier)</option>
         </select>
@@ -757,8 +757,8 @@ export function Settings() {
 
       {blogPlatform === "brandtopost" && (
         <div className="text-xs text-slate-550 bg-[#FAF9F6] border border-slate-900/10 p-4 rounded-xl space-y-1 animate-in slide-in-from-top-2 duration-200 text-left">
-          <p className="font-semibold text-slate-900 font-sans">Local Blog Publishing:</p>
-          <p className="font-light">No configuration needed! Your generated blogs will be published directly to your website's public <strong>/blog</strong> section.</p>
+          <p className="font-semibold text-slate-900 font-sans">Native Blog Publishing:</p>
+          <p className="font-light">No configuration needed. Your generated campaigns will publish directly to the built-in <strong>/blog</strong> section of your website.</p>
         </div>
       )}
 
