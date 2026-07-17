@@ -3644,10 +3644,27 @@ ${htmlContent}
           </script></body></html>
         `);
       } else {
-        res.status(400).send('Failed to get token: ' + JSON.stringify(tokenData));
+        res.status(200).send(`
+          <html>
+            <body style="font-family: sans-serif; padding: 20px;">
+              <h2 style="color: #dc2626;">Failed to exchange LinkedIn token</h2>
+              <p>The LinkedIn API returned an error during token exchange. Here is the response data:</p>
+              <pre style="background: #f3f4f6; padding: 15px; border-radius: 8px; overflow-x: auto;">${JSON.stringify(tokenData, null, 2)}</pre>
+              <p style="font-size: 12px; color: #4b5563;">Redirect URI used: <code>${redirectUri}</code></p>
+            </body>
+          </html>
+        `);
       }
     } catch (e: any) {
-      res.status(500).send('Error during callback: ' + e.message);
+      res.status(200).send(`
+        <html>
+          <body style="font-family: sans-serif; padding: 20px;">
+            <h2 style="color: #dc2626;">Error during LinkedIn Callback</h2>
+            <p>An exception occurred during the callback process:</p>
+            <pre style="background: #f3f4f6; padding: 15px; border-radius: 8px; overflow-x: auto;">${e.stack || e.message || String(e)}</pre>
+          </body>
+        </html>
+      `);
     }
   });
 

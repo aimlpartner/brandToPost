@@ -426,10 +426,15 @@ export function MasterFounder() {
   };
 
   useEffect(() => {
-    if (activeTab === "generator" && suggestions.length === 0 && userProfile?.founderAgentSynthesized) {
+    if (
+      activeTab === "generator" &&
+      suggestions.length === 0 &&
+      userProfile?.founderAgentSynthesized &&
+      !isFetchingSuggestions
+    ) {
       fetchTopicSuggestions();
     }
-  }, [activeTab, userProfile]);
+  }, [activeTab, userProfile, suggestions.length, isFetchingSuggestions]);
 
   useEffect(() => {
     if (userProfile) {
