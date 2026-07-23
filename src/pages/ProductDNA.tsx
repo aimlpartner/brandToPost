@@ -567,9 +567,25 @@ export function ProductDNA() {
       const newDna = { ...dna, ...researchedData } as ProductDNAType;
 
       if (microlinkMetadata?.logo?.url) {
-        if (!newDna.logoUrl) newDna.logoUrl = microlinkMetadata.logo.url;
-        if (!newDna.logoDarkUrl) newDna.logoDarkUrl = microlinkMetadata.logo.url;
-        if (!newDna.logoLightUrl) newDna.logoLightUrl = microlinkMetadata.logo.url;
+        let logoBase64 = microlinkMetadata.logo.url;
+        try {
+          const proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(microlinkMetadata.logo.url)}`;
+          const response = await fetch(proxiedUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            logoBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch (e) {
+          console.error("Failed to convert crawled logo to base64:", e);
+        }
+        if (!newDna.logoUrl) newDna.logoUrl = logoBase64;
+        if (!newDna.logoDarkUrl) newDna.logoDarkUrl = logoBase64;
+        if (!newDna.logoLightUrl) newDna.logoLightUrl = logoBase64;
       }
 
       if (user && researchedData.extractedMediaImages && Array.isArray(researchedData.extractedMediaImages)) {
@@ -577,8 +593,13 @@ export function ProductDNA() {
           const mediaImages = researchedData.extractedMediaImages as string[];
           for (let i = 0; i < mediaImages.length; i++) {
             await addDoc(collection(db, "creatives"), {
-              productId: activeProduct.id, userId: user.uid, url: mediaImages[i],
-              name: `Website Image ${i + 1}`, createdAt: new Date().toISOString(),
+              productId: activeProduct.id, 
+              userId: user.uid, 
+              url: mediaImages[i],
+              name: `Website Showcase Asset ${i + 1}`, 
+              assetType: 'website_showcase',
+              source: 'scraped_website',
+              createdAt: new Date().toISOString(),
             });
           }
         } catch (err) {

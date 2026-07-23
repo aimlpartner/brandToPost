@@ -244,7 +244,7 @@ const CoverPage = forwardRef<HTMLDivElement, { type: 'front' | 'back' }>(({ type
             <div className="artbook-cover-accent" />
             <div className="artbook-cover-body">
               <img
-                src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+                src="/B2PLOGO.png"
                 alt="Logo"
                 className="artbook-cover-logo"
               />

@@ -133,7 +133,7 @@ We will apply our exact core overlay and offscreen Puppeteer rendering architect
         phone: oneDayPhone,
         address: oneDayAddress,
         backgroundImage: oneDayAttachedImage || undefined,
-        dnaUrl: activeProduct?.logoLightUrl || activeProduct?.logoUrl || "https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+        dnaUrl: activeProduct?.logoLightUrl || activeProduct?.logoUrl || "/B2PLOGO.png"
       });
 
       setOneDayStatus("Rendering text-contrast overlay...");
@@ -445,7 +445,7 @@ We are keeping your photo EXACTLY the same to skip background generation. We are
           phone: cleanPhone,
           address: cleanAddress,
           backgroundImage: attachedImg,
-          dnaUrl: activeProduct?.logoLightUrl || activeProduct?.logoUrl || "https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+          dnaUrl: activeProduct?.logoLightUrl || activeProduct?.logoUrl || "/B2PLOGO.png"
         });
 
         const successTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -490,7 +490,7 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
           aboutBusiness: cleanAbout,
           phone: cleanPhone,
           address: cleanAddress,
-          dnaUrl: activeProduct?.logoLightUrl || activeProduct?.logoUrl || "https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+          dnaUrl: activeProduct?.logoLightUrl || activeProduct?.logoUrl || "/B2PLOGO.png"
         });
 
         const successTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -542,7 +542,7 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
           <Link to="/" className="flex items-center gap-3 group">
             <div className="w-8 h-8 rounded-lg bg-[#7C3AED] p-[1px] shadow-[0_0_15px_rgba(124,58,237,0.3)]">
               <div className="w-full h-full bg-[#1C1C22] rounded-[7px] flex items-center justify-center">
-                <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-5 h-5 object-contain" />
+                <img src="/B2PLOGO.png" alt="Logo" className="w-5 h-5 object-contain" />
               </div>
             </div>
             <span className="text-xl tracking-tight font-display text-white font-medium">BrandToPost</span>
@@ -766,7 +766,7 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
                       {/* Header */}
                       <div className="absolute top-2 left-2 z-10 flex gap-1 items-center">
                         <div className="w-5 h-5 bg-white/20 backdrop-blur rounded p-[1px] flex items-center justify-center">
-                          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-3 h-3 object-contain" />
+                          <img src="/B2PLOGO.png" alt="Logo" className="w-3 h-3 object-contain" />
                         </div>
                         <span className="text-[7px] text-white/50 tracking-widest font-mono">Tror Canvas</span>
                       </div>
@@ -830,9 +830,9 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
                           audience: activeProduct?.audience || "",
                           tone: activeProduct?.tone || "",
                           stage: activeProduct?.stage || "",
-                          logoUrl: "https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png",
-                          logoLightUrl: "https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png",
-                          logoDarkUrl: "https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png",
+                          logoUrl: "/B2PLOGO.png",
+                          logoLightUrl: "/B2PLOGO.png",
+                          logoDarkUrl: "/B2PLOGO.png",
                           visualData: {
                             colors: ["#10B981", "#050508"],
                             fonts: {
@@ -1060,7 +1060,7 @@ Since you didn't share an image, I will generate a premium, contextually optimiz
               <div className="bg-[#0b141a] pt-6 pb-2.5 px-4 shadow-md flex items-center gap-3 border-b border-white/5 sticky top-0 z-20 shrink-0">
                 <div className="relative">
                   <div className="w-10 h-10 rounded-full border border-emerald-400 bg-slate-900 flex items-center justify-center overflow-hidden">
-                    <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="Tror Specialist" className="w-9 h-9 object-cover" />
+                    <img src="/B2P AVATAR.png" alt="Tror Specialist" className="w-9 h-9 object-cover" />
                   </div>
                   <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#0b141a] rounded-full"></div>
                 </div>

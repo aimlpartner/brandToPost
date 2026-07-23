@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
-import { toJpeg } from "html-to-image";
+import { Stage, Layer, Image as KonvaImage, Text, Rect, Group } from "react-konva";
+import useImage from "use-image";
 import { Download, Loader2, Image as ImageIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 import { ProductDNA } from "../types";
@@ -25,48 +26,59 @@ interface VisualEngineProps {
   onImageGenerated?: (dataUrl: string) => void;
 }
 
-// Small helper for powerful-quote template name
-function uniqueName(name: string) {
-  return <div className="text-gray-400 tracking-widest uppercase font-bold text-[min(3vw,16px)]">{name}</div>;
-}
-
-const replaceLogoPlaceholder = (html: string, logoUrl: string | null | undefined): string => {
-  if (!html || !logoUrl) return html;
-  return html.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
-    const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
-    if (isLogo) {
-      return `<img${p1}src="${logoUrl}"${p3}>`;
-    }
-    return match;
-  });
-};
-
 const getProxiedImageUrl = (url: string | null | undefined): string => {
-  if (!url) return '';
-  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/') || url.startsWith('http://localhost') || url.startsWith('https://localhost')) {
+  if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("blob:") || url.startsWith("/") || url.startsWith("http://localhost") || url.startsWith("https://localhost")) {
     return url;
   }
   return `/api/proxy-image?url=${encodeURIComponent(url)}`;
 };
 
-
-
-export function VisualEngine({ visualType, visualData, imageUrl, dna, className, fallbackText, onImageGenerated, activeLogo: propsActiveLogo }: VisualEngineProps) {
-  const nodeRef = useRef<HTMLDivElement>(null);
+export function VisualEngine({
+  visualType,
+  visualData,
+  imageUrl,
+  dna,
+  className,
+  fallbackText,
+  onImageGenerated,
+  activeLogo: propsActiveLogo
+}: VisualEngineProps) {
+  const stageRef = useRef<any>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [mergedImage, setMergedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(true);
-  
-  // Use brand colors or defaults
+  const [redrawCounter, setRedrawCounter] = useState(0);
+
+  // Brand colors or defaults
   const primaryColor = dna?.visualData?.colors?.[0] || "#4F46E5";
   const secondaryColor = dna?.visualData?.colors?.[1] || "#111827";
-  
-  // Font Family style extraction
-  const fontFamilyStyle = {
-    fontFamily: dna?.visualData?.fonts?.primary 
-      ? `"${dna.visualData.fonts.primary}", sans-serif`
-      : "Inter, sans-serif"
-  };
+
+  // Font family determination
+  const primaryFont = dna?.visualData?.fonts?.primary || "Inter";
+  const fontFamily = primaryFont.includes(" ") && !primaryFont.includes("'") 
+    ? `'${primaryFont}'` 
+    : primaryFont;
+
+  // Load custom fonts dynamically into the DOM
+  useEffect(() => {
+    const fn = primaryFont.replace(/["']/g, "").trim();
+    if (fn && fn !== "System Default" && fn !== "Inter") {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = `https://fonts.googleapis.com/css2?family=${fn.replace(/ /g, "+")}:wght@400;500;600;700;800;900&display=swap`;
+      document.head.appendChild(link);
+      
+      // Listen for font load completion to trigger redraw
+      document.fonts.ready.then(() => {
+        setRedrawCounter(prev => prev + 1);
+      });
+
+      return () => {
+        document.head.removeChild(link);
+      };
+    }
+  }, [primaryFont]);
 
   // Normalize visualType
   let safeVisualType = visualType ? visualType.toLowerCase() : "";
@@ -83,74 +95,50 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
   const rawLogo = propsActiveLogo || (isDarkTemplate ? dna?.logoLightUrl : dna?.logoDarkUrl) || dna?.logoUrl;
   const activeLogo = getProxiedImageUrl(rawLogo);
 
+  // Load canvas images
+  const [bgImage, bgStatus] = useImage(imageUrl || "", "anonymous");
+  const [logoImage, logoStatus] = useImage(activeLogo || "", "anonymous");
+
+  // Run the canvas compilation and export once everything is loaded
   useEffect(() => {
-    let mounted = true;
-    
     if (!safeVisualType || safeVisualType === "none") {
       setIsGenerating(false);
       return;
     }
 
-    setMergedImage(null);
-    setIsGenerating(true);
+    const bgReady = !imageUrl || bgStatus === "loaded" || bgStatus === "failed";
+    const logoReady = !activeLogo || logoStatus === "loaded" || logoStatus === "failed";
 
-    const generateMergedImage = async () => {
-      try {
-        // Wait for rendering and image loading
-        // Wait for ALL images inside nodeRef to load
-        await new Promise<void>((resolve) => {
-          if (!nodeRef.current) return resolve();
-          const images = Array.from(nodeRef.current.querySelectorAll("img"));
-          if (images.length === 0) return resolve();
-          let loadedCount = 0;
-          const checkDone = () => {
-             loadedCount++;
-             if (loadedCount >= images.length) resolve();
-          };
-          images.forEach((img) => {
-             if (img.complete) {
-               checkDone();
-             } else {
-               img.onload = checkDone;
-               img.onerror = checkDone;
-             }
+    if (!bgReady || !logoReady) {
+      setIsGenerating(true);
+      return;
+    }
+
+    // Wait 150ms to ensure font rendering settles
+    const timer = setTimeout(() => {
+      if (stageRef.current) {
+        try {
+          const dataUrl = stageRef.current.toDataURL({
+            pixelRatio: 1,
+            mimeType: "image/jpeg",
+            quality: 0.95
           });
-          // Fallback timeout of 5s just in case
-          setTimeout(resolve, 5000);
-        });
-
-        // Small delay to ensure CSS applies
-        await new Promise(r => setTimeout(r, 100)); 
-        
-        if (!nodeRef.current) return;
-        
-        const dataUrl = await toJpeg(nodeRef.current, { 
-          quality: 0.95,
-          pixelRatio: 1, // Keep it exactly 1080x1080
-          
-          cacheBust: true,
-        });
-
-        if (mounted) {
           setMergedImage(dataUrl);
           setIsGenerating(false);
           if (onImageGenerated) onImageGenerated(dataUrl);
+        } catch (err) {
+          console.error("Failed to generate canvas image:", err);
+          setIsGenerating(false);
         }
-      } catch (err) {
-        console.error("Failed to generate merged image:", err);
-        if (mounted) setIsGenerating(false);
       }
-    };
+    }, 150);
 
-    generateMergedImage();
-    
-    return () => { mounted = false; };
-  }, [safeVisualType, visualData, imageUrl, dna, fallbackText]);
+    return () => clearTimeout(timer);
+  }, [safeVisualType, visualData, imageUrl, activeLogo, bgStatus, logoStatus, redrawCounter]);
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!mergedImage && (!safeVisualType || safeVisualType === "none") && imageUrl) {
-       // Download plain image if no template
        const link = document.createElement("a");
        link.download = `${dna?.name || "brand"}_post.jpg`;
        link.href = imageUrl;
@@ -173,6 +161,48 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
     }
   };
 
+  // Determine smart non-overlapping logo calculations
+  const getLogoPlacement = () => {
+    let resolvedTextPos = visualData?.layout?.textPosition || "bottom";
+    if (safeVisualType === "creative-story") {
+      resolvedTextPos = "bottom";
+    } else if (safeVisualType === "abstract-announcement") {
+      resolvedTextPos = "middle";
+    } else if (safeVisualType === "powerful-quote") {
+      resolvedTextPos = "middle";
+    } else if (safeVisualType === "data-infographic") {
+      resolvedTextPos = "top";
+    }
+
+    let resolvedLogoPos = visualData?.layout?.logoPosition;
+    if (!resolvedLogoPos) {
+      resolvedLogoPos = resolvedTextPos === "bottom" ? "top-right" : "bottom-right";
+    }
+
+    if (resolvedTextPos === "bottom" && resolvedLogoPos.startsWith("bottom")) {
+      resolvedLogoPos = resolvedLogoPos.replace("bottom", "top");
+    } else if (resolvedTextPos === "top" && resolvedLogoPos.startsWith("top")) {
+      resolvedLogoPos = resolvedLogoPos.replace("top", "bottom");
+    }
+
+    let x = 820;
+    let y = 880;
+
+    if (resolvedLogoPos === "top-left") { x = 80; y = 80; }
+    else if (resolvedLogoPos === "top-center") { x = 450; y = 80; }
+    else if (resolvedLogoPos === "top-right") { x = 820; y = 80; }
+    else if (resolvedLogoPos === "middle-left") { x = 80; y = 500; }
+    else if (resolvedLogoPos === "center") { x = 450; y = 500; }
+    else if (resolvedLogoPos === "middle-right") { x = 820; y = 500; }
+    else if (resolvedLogoPos === "bottom-left") { x = 80; y = 880; }
+    else if (resolvedLogoPos === "bottom-center") { x = 450; y = 880; }
+    else if (resolvedLogoPos === "bottom-right") { x = 820; y = 880; }
+
+    return { x, y };
+  };
+
+  const logoPos = getLogoPlacement();
+
   if (!safeVisualType || safeVisualType === "none") {
     return (
       <div className={cn("relative group overflow-hidden rounded-xl border border-gray-800", className)}>
@@ -187,232 +217,362 @@ export function VisualEngine({ visualType, visualData, imageUrl, dna, className,
     );
   }
 
+  const headlineText = visualData?.headline || fallbackText || "Your disruptive quote goes here.";
+  const subtextText = visualData?.subtext || "";
+
   return (
     <div className={cn("relative group border border-gray-800 rounded-xl overflow-hidden bg-black", className)}>
       
-      {/* Hidden 1080x1080 rendering container used only for toJpeg capturing */}
+      {/* Hidden 1080x1080 rendering canvas */}
       <div className="absolute opacity-0 pointer-events-none" style={{ left: "-9999px", top: 0, width: "1080px", height: "1080px" }}>
-        <div 
-          ref={nodeRef} 
-          className="w-full h-full relative flex flex-col justify-center overflow-hidden bg-black"
-          style={{ ...fontFamilyStyle, width: "1080px", height: "1080px" }}
-        >
-          
-          {/* TEMPLATE 1: Cinematic Human */}
-          {safeVisualType === "creative-story" && (
-            <>
-              {imageUrl ? (
-                 <img 
-                   src={imageUrl || undefined} 
-                   crossOrigin={imageUrl?.startsWith("data:") ? undefined : "anonymous"} 
-                   className="absolute inset-0 w-full h-full object-cover" 
-                   alt="Background" 
-                 />
-              ) : (
-                 <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
-                   <ImageIcon className="w-32 h-32 text-gray-700" />
-                 </div>
-              )}
-              {/* Translucent solid black overlay on the left */}
-              <div className="absolute inset-0 bg-black/60 pointer-events-none" />
-              
-              <div className="relative z-10 p-24 h-full flex flex-col justify-center w-[85%]">
-                {visualData?.subtext && (
-                   <div className="mb-8 text-indigo-400 font-bold uppercase tracking-[0.2em] text-[24px]">
-                     — {visualData.subtext}
-                   </div>
-                )}
-                <h2 className={`text-white font-extrabold leading-[1.15] tracking-tight drop-shadow-2xl ${(visualData?.headline || fallbackText || "").length > 150 ? "text-[48px]" : (visualData?.headline || fallbackText || "").length > 80 ? "text-[64px]" : "text-[80px]"}`}>
-                  {visualData?.headline || fallbackText || "Your disruptive quote goes here."}
-                </h2>
-              </div>
-            </>
-          )}
+        <Stage width={1080} height={1080} ref={stageRef}>
+          <Layer>
+            {/* Background Rect for safety */}
+            <Rect x={0} y={0} width={1080} height={1080} fill="#000000" />
 
-          {/* TEMPLATE 2: Abstract Apology / Announcement */}
-          {safeVisualType === "abstract-announcement" && (
-            <>
-              <div 
-                 className="absolute inset-0 opacity-80"
-                 style={{ 
-                   backgroundColor: secondaryColor || "#0B0F19"
-                 }}
+            {/* TEMPLATE 1: Cinematic Human */}
+            {safeVisualType === "creative-story" && (
+              <>
+                {bgImage ? (
+                  <KonvaImage image={bgImage} x={0} y={0} width={1080} height={1080} />
+                ) : (
+                  <Rect x={0} y={0} width={1080} height={1080} fill="#111827" />
+                )}
+                {/* Dark transparent left-side overlay */}
+                <Rect x={0} y={0} width={1080} height={1080} fill="rgba(0,0,0,0.6)" />
+
+                {/* Subtext */}
+                {subtextText && (
+                  <Text
+                    x={80}
+                    y={320}
+                    text={`— ${subtextText.toUpperCase()}`}
+                    fontFamily={fontFamily}
+                    fontSize={24}
+                    fill="#818CF8"
+                    fontStyle="bold"
+                    letterSpacing={4}
+                  />
+                )}
+
+                {/* Headline */}
+                <Text
+                  x={80}
+                  y={380}
+                  width={820}
+                  text={headlineText}
+                  fontFamily={fontFamily}
+                  fontSize={headlineText.length > 150 ? 44 : headlineText.length > 80 ? 56 : 68}
+                  fill="#FFFFFF"
+                  fontStyle="900"
+                  lineHeight={1.2}
+                />
+              </>
+            )}
+
+            {/* TEMPLATE 2: Abstract Announcement */}
+            {safeVisualType === "abstract-announcement" && (
+              <>
+                <Rect x={0} y={0} width={1080} height={1080} fill={secondaryColor || "#0B0F19"} />
+                {bgImage && (
+                  <KonvaImage 
+                    image={bgImage} 
+                    x={0} 
+                    y={0} 
+                    width={1080} 
+                    height={1080} 
+                    opacity={0.3}
+                  />
+                )}
+
+                {/* Glassmorphic box representation */}
+                <Rect
+                  x={140}
+                  y={240}
+                  width={800}
+                  height={600}
+                  fill="rgba(255,255,255,0.08)"
+                  stroke="rgba(255,255,255,0.15)"
+                  strokeWidth={2}
+                  cornerRadius={48}
+                />
+
+                {/* Headline */}
+                <Text
+                  x={180}
+                  y={320}
+                  width={720}
+                  text={headlineText}
+                  fontFamily={fontFamily}
+                  fontSize={headlineText.length > 150 ? 38 : headlineText.length > 80 ? 48 : 60}
+                  fill="#FFFFFF"
+                  fontStyle="bold"
+                  align="center"
+                  lineHeight={1.2}
+                />
+
+                {/* Divider Line */}
+                {subtextText && (
+                  <Rect
+                    x={470}
+                    y={520}
+                    width={140}
+                    height={4}
+                    fill="rgba(255,255,255,0.3)"
+                  />
+                )}
+
+                {/* Subtext */}
+                {subtextText && (
+                  <Text
+                    x={180}
+                    y={560}
+                    width={720}
+                    text={subtextText}
+                    fontFamily={fontFamily}
+                    fontSize={subtextText.length > 150 ? 24 : 32}
+                    fill="#D1D5DB"
+                    fontStyle="normal"
+                    align="center"
+                    lineHeight={1.4}
+                  />
+                )}
+              </>
+            )}
+
+            {/* TEMPLATE 3: Data Bento Grid */}
+            {safeVisualType === "data-infographic" && (
+              <>
+                <Rect x={0} y={0} width={1080} height={1080} fill="#F8FAFC" />
+
+                {/* Top Section */}
+                <Text
+                  x={80}
+                  y={100}
+                  width={920}
+                  text={headlineText}
+                  fontFamily={fontFamily}
+                  fontSize={headlineText.length > 150 ? 38 : headlineText.length > 80 ? 48 : 60}
+                  fill="#0F172A"
+                  fontStyle="900"
+                  align="center"
+                  lineHeight={1.2}
+                />
+
+                {subtextText && (
+                  <Text
+                    x={80}
+                    y={200}
+                    width={920}
+                    text={subtextText}
+                    fontFamily={fontFamily}
+                    fontSize={24}
+                    fill="#64748B"
+                    fontStyle="500"
+                    align="center"
+                  />
+                )}
+
+                {/* Grid stats */}
+                {(() => {
+                  const items = (visualData?.stats && visualData.stats.length > 0 ? visualData.stats : [
+                    { label: "Default Metric A", value: "85%" },
+                    { label: "Default Metric B", value: "2.4x" },
+                    { label: "Default Metric C", value: "$4M+" },
+                    { label: "Default Metric D", value: "99%" }
+                  ]).slice(0, 4);
+
+                  const cardBgs = ["#EFF6FF", "#FFF7ED", "#FAF5FF", "#ECFDF5"];
+                  const textColors = ["#1E40AF", "#9A3412", "#6B21A8", "#065F46"];
+                  
+                  const coords = [
+                    { x: 80, y: 350 },
+                    { x: 560, y: 350 },
+                    { x: 80, y: 680 },
+                    { x: 560, y: 680 }
+                  ];
+
+                  return items.map((stat, i) => {
+                    const pos = coords[i];
+                    return (
+                      <Group key={i}>
+                        <Rect
+                          x={pos.x}
+                          y={pos.y}
+                          width={440}
+                          height={260}
+                          fill={cardBgs[i % cardBgs.length]}
+                          cornerRadius={32}
+                          stroke="#E2E8F0"
+                          strokeWidth={1}
+                        />
+                        <Text
+                          x={pos.x + 40}
+                          y={pos.y + 40}
+                          width={360}
+                          text={stat.label}
+                          fontFamily={fontFamily}
+                          fontSize={28}
+                          fill={textColors[i % textColors.length]}
+                          fontStyle="bold"
+                          opacity={0.8}
+                        />
+                        <Text
+                          x={pos.x + 40}
+                          y={pos.y + 110}
+                          width={360}
+                          text={stat.value}
+                          fontFamily={fontFamily}
+                          fontSize={84}
+                          fill={textColors[i % textColors.length]}
+                          fontStyle="900"
+                        />
+                      </Group>
+                    );
+                  });
+                })()}
+              </>
+            )}
+
+            {/* TEMPLATE 4: Powerful Quote */}
+            {safeVisualType === "powerful-quote" && (
+              <>
+                <Rect x={0} y={0} width={1080} height={1080} fill={secondaryColor || "#000000"} />
+
+                {/* Quotation Mark */}
+                <Text
+                  x={80}
+                  y={120}
+                  width={920}
+                  text={'"'}
+                  fontFamily="Georgia, serif"
+                  fontSize={160}
+                  fill="rgba(255,255,255,0.15)"
+                  align="center"
+                />
+
+                {/* Quote text */}
+                <Text
+                  x={120}
+                  y={280}
+                  width={840}
+                  text={headlineText}
+                  fontFamily={fontFamily}
+                  fontSize={headlineText.length > 150 ? 38 : headlineText.length > 80 ? 48 : 60}
+                  fill="#FFFFFF"
+                  fontStyle="900"
+                  align="center"
+                  lineHeight={1.2}
+                />
+
+                {/* Accent bar */}
+                <Rect
+                  x={490}
+                  y={580}
+                  width={100}
+                  height={8}
+                  fill={primaryColor}
+                />
+
+                {/* Author / Brand name */}
+                <Text
+                  x={120}
+                  y={630}
+                  width={840}
+                  text={(dna?.name || "The Vision").toUpperCase()}
+                  fontFamily={fontFamily}
+                  fontSize={28}
+                  fill="#9CA3AF"
+                  fontStyle="bold"
+                  align="center"
+                  letterSpacing={6}
+                />
+              </>
+            )}
+
+            {/* TEMPLATE 5: Custom Overlay */}
+            {safeVisualType === "custom-overlay" && (
+              <>
+                {bgImage ? (
+                  <KonvaImage image={bgImage} x={0} y={0} width={1080} height={1080} />
+                ) : (
+                  <Rect x={0} y={0} width={1080} height={1080} fill="#1F2937" />
+                )}
+                {/* Darkness gradient at the bottom */}
+                <Rect
+                  x={0}
+                  y={400}
+                  width={1080}
+                  height={680}
+                  fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                  fillLinearGradientEndPoint={{ x: 0, y: 680 }}
+                  fillLinearGradientColorStops={[0, "rgba(0,0,0,0)", 1, "rgba(0,0,0,0.85)"]}
+                />
+
+                {/* Headline */}
+                <Text
+                  x={80}
+                  y={700}
+                  width={920}
+                  text={headlineText}
+                  fontFamily={fontFamily}
+                  fontSize={headlineText.length > 150 ? 38 : headlineText.length > 80 ? 48 : 60}
+                  fill="#FFFFFF"
+                  fontStyle="bold"
+                  lineHeight={1.2}
+                />
+
+                {/* Subtext */}
+                {subtextText && (
+                  <Text
+                    x={80}
+                    y={880}
+                    width={920}
+                    text={subtextText}
+                    fontFamily={fontFamily}
+                    fontSize={28}
+                    fill="#E5E7EB"
+                    fontStyle="normal"
+                  />
+                )}
+              </>
+            )}
+
+            {/* Brand Logo Overlay */}
+            {logoImage && (
+              <KonvaImage
+                image={logoImage}
+                x={logoPos.x}
+                y={logoPos.y}
+                width={180}
+                height={70}
+                sceneFunc={(context, shape) => {
+                  // Keep aspect ratio containment
+                  const img = (shape as any).image();
+                  if (img) {
+                    const ratio = img.width / img.height;
+                    const w = Math.min(180, 70 * ratio);
+                    const h = Math.min(70, 180 / ratio);
+                    context.drawImage(img, 0, 0, w, h);
+                  }
+                }}
               />
-              {imageUrl && (
-                <img 
-                  src={imageUrl || undefined}
-                  crossOrigin={imageUrl?.startsWith("data:") ? undefined : "anonymous"}
-                  alt="Background"
-                  className="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-overlay"
-                />
-              )}
-              
-              <div className="relative z-10 w-full max-w-[85%] mx-auto bg-white/10 backdrop-blur-3xl border border-white/20 p-20 rounded-[3rem] shadow-2xl text-center">
-                <h2 className={`text-white font-bold leading-[1.1] tracking-tight mb-10 ${(visualData?.headline || fallbackText || "").length > 150 ? "text-[36px]" : (visualData?.headline || fallbackText || "").length > 80 ? "text-[48px]" : "text-[64px]"}`}>
-                  {visualData?.headline || fallbackText || "Important Announcement"}
-                </h2>
-                {visualData?.subtext && (
-                  <div className="h-1 w-32 bg-white/30 mx-auto my-12 rounded-full" />
-                )}
-                {visualData?.subtext && (
-                  <p className={`text-gray-300 font-medium leading-relaxed ${(visualData?.subtext || "").length > 150 ? "text-[24px]" : "text-[32px]"}`}>
-                    {visualData.subtext}
-                  </p>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* TEMPLATE 3: Data Bento Grid */}
-          {safeVisualType === "data-infographic" && (
-            <div className="absolute inset-0 bg-[#F8FAFC] flex flex-col p-20">
-              <div className="mb-16 text-center">
-                <h2 className={`text-gray-900 font-extrabold tracking-tight ${(visualData?.headline || fallbackText || "").length > 150 ? "text-[42px]" : (visualData?.headline || fallbackText || "").length > 80 ? "text-[56px]" : "text-[72px]"} leading-tight`}>
-                  {visualData?.headline || "Industry Benchmarks"}
-                </h2>
-                {visualData?.subtext && (
-                   <p className={`text-gray-500 mt-6 font-medium ${(visualData?.subtext || "").length > 150 ? "text-[24px]" : "text-[32px]"}`}>{visualData.subtext}</p>
-                )}
-              </div>
-              
-              <div className="flex-1 grid grid-cols-2 gap-10">
-                {(visualData?.stats && visualData.stats.length > 0 ? visualData.stats : [
-                  { label: "Default Metric A", value: "85%" },
-                  { label: "Default Metric B", value: "2.4x" },
-                  { label: "Default Metric C", value: "$4M+" },
-                  { label: "Default Metric D", value: "99%" }
-                ]).slice(0, 4).map((stat, i) => {
-                   const bgs = ["bg-blue-100", "bg-orange-100", "bg-purple-100", "bg-emerald-100"];
-                   const textColors = ["text-blue-900", "text-orange-900", "text-purple-900", "text-emerald-900"];
-                   
-                   return (
-                     <div key={i} className={cn("rounded-[3rem] p-16 flex flex-col justify-end border-2 border-gray-100 shadow-sm", bgs[i % bgs.length])}>
-                       <div className={cn("text-[36px] font-bold mb-4 opacity-80", textColors[i % textColors.length])}>
-                          {stat.label}
-                       </div>
-                       <div className={cn("text-[110px] font-black leading-none", textColors[i % textColors.length])}>
-                          {stat.value}
-                       </div>
-                     </div>
-                   );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* TEMPLATE 4: Powerful Quote */}
-          {safeVisualType === "powerful-quote" && (
-            <div className="absolute inset-0 flex flex-col justify-center items-center p-24 text-center"
-                 style={{ backgroundColor: secondaryColor || "#000000" }}
-            >
-              <div className="text-[140px] text-white/20 mb-10 font-serif leading-none">"</div>
-              <h2 className={`text-white font-black leading-[1.1] tracking-tight drop-shadow-md pb-8 ${(visualData?.headline || fallbackText || "").length > 150 ? "text-[42px]" : (visualData?.headline || fallbackText || "").length > 80 ? "text-[56px]" : "text-[72px]"}`}
-              >
-                {visualData?.headline || fallbackText || "The old way of working is broken beyond repair."}
-              </h2>
-              <div className="w-32 h-2 mt-16 mb-12" style={{ backgroundColor: primaryColor }} />
-              <div className={`text-gray-400 tracking-widest uppercase font-bold ${(visualData?.subtext || "").length > 150 ? "text-[24px]" : "text-[32px]"}`}>{dna?.name || "The Vision"}</div>
-            </div>
-          )}
-
-          {/* TEMPLATE 5: Custom dynamically generated HTML overlay */}
-          {safeVisualType === "custom-overlay" && (
-            <>
-              {imageUrl && (
-                 <img
-                   className="absolute inset-0 w-full h-full object-cover" 
-                   src={imageUrl || undefined} 
-                   crossOrigin={imageUrl?.startsWith("data:") ? undefined : "anonymous"}
-                   alt="Background" 
-                 />
-              )}
-              {/* Overlay with dangerouslySetInnerHTML */}
-              {visualData?.customHtml ? (
-                <div 
-                  className="absolute inset-0 w-full h-full mix-blend-normal"
-                  dangerouslySetInnerHTML={{ __html: replaceLogoPlaceholder(visualData.customHtml, activeLogo) }} 
-                />
-              ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-end p-24 text-center bg-black/60">
-                   <h2 className={`text-white font-extrabold leading-[1.1] mb-6 drop-shadow-lg ${(visualData?.headline || fallbackText || "").length > 150 ? "text-[36px]" : (visualData?.headline || fallbackText || "").length > 80 ? "text-[48px]" : "text-[64px]"}`}>
-                      {visualData?.headline || fallbackText}
-                   </h2>
-                   {visualData?.subtext && (
-                       <p className={`text-gray-200 font-medium drop-shadow-md ${(visualData?.subtext || "").length > 150 ? "text-[24px]" : "text-[32px]"}`}>
-                           {visualData.subtext}
-                       </p>
-                   )}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Global Logo Overlay */}
-          {activeLogo && (() => {
-             // Smart non-overlapping logo calculations
-             let resolvedTextPos = visualData?.layout?.textPosition || 'bottom';
-             if (safeVisualType === 'creative-story') {
-               resolvedTextPos = 'bottom';
-             } else if (safeVisualType === 'abstract-announcement') {
-               resolvedTextPos = 'middle';
-             } else if (safeVisualType === 'powerful-quote') {
-               resolvedTextPos = 'middle';
-             } else if (safeVisualType === 'data-infographic') {
-               resolvedTextPos = 'top';
-             }
-
-             let resolvedLogoPos = visualData?.layout?.logoPosition;
-             if (!resolvedLogoPos) {
-               if (resolvedTextPos === 'bottom') {
-                 resolvedLogoPos = 'top-right';
-               } else if (resolvedTextPos === 'top') {
-                 resolvedLogoPos = 'bottom-right';
-               } else {
-                 resolvedLogoPos = 'bottom-right';
-               }
-             }
-
-             // Overlap prevention guardrail: if text and logo are both at the bottom or both at the top,
-             // push the logo to the opposite vertical side to ensure zero overlap.
-             if (resolvedTextPos === 'bottom' && resolvedLogoPos.startsWith('bottom')) {
-               resolvedLogoPos = resolvedLogoPos.replace('bottom', 'top');
-             } else if (resolvedTextPos === 'top' && resolvedLogoPos.startsWith('top')) {
-               resolvedLogoPos = resolvedLogoPos.replace('top', 'bottom');
-             }
-
-             // Map to absolute positioning styles for 1080x1080 canvas
-             let logoPlacementStyle: React.CSSProperties = { position: 'absolute', bottom: '80px', right: '80px' };
-             const pos = resolvedLogoPos;
-             if (pos === 'top-left') logoPlacementStyle = { position: 'absolute', top: '80px', left: '80px' };
-             if (pos === 'top-center') logoPlacementStyle = { position: 'absolute', top: '80px', left: '50%', transform: 'translateX(-50%)' };
-             if (pos === 'top-right') logoPlacementStyle = { position: 'absolute', top: '80px', right: '80px' };
-             if (pos === 'middle-left') logoPlacementStyle = { position: 'absolute', top: '50%', left: '80px', transform: 'translateY(-50%)' };
-             if (pos === 'center') logoPlacementStyle = { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
-             if (pos === 'middle-right') logoPlacementStyle = { position: 'absolute', top: '50%', right: '80px', transform: 'translateY(-50%)' };
-             if (pos === 'bottom-left') logoPlacementStyle = { position: 'absolute', bottom: '80px', left: '80px' };
-             if (pos === 'bottom-center') logoPlacementStyle = { position: 'absolute', bottom: '80px', left: '50%', transform: 'translateX(-50%)' };
-             if (pos === 'bottom-right') logoPlacementStyle = { position: 'absolute', bottom: '80px', right: '80px' };
-
-             return (
-               <div style={{ ...logoPlacementStyle, zIndex: 100 }}>
-                 <img src={activeLogo || undefined} crossOrigin={activeLogo?.startsWith("data:") ? undefined : "anonymous"} alt="Logo" className="object-contain drop-shadow-2xl" style={{ maxHeight: '70px', maxWidth: '180px' }} />
-               </div>
-             );
-          })()}
-        </div>
+            )}
+          </Layer>
+        </Stage>
       </div>
 
       {/* Visible UI */}
       {isGenerating ? (
         <div className="w-full aspect-square flex flex-col items-center justify-center bg-gray-900 border border-[#7C3AED]/20 animate-pulse">
           <Loader2 className="w-8 h-8 animate-spin text-gray-400 mb-4" />
-          <span className="text-[15px] font-medium text-gray-400">Rendering visual...</span>
+          <span className="text-[15px] font-medium text-gray-400">Rendering visual canvas...</span>
         </div>
       ) : mergedImage ? (
         <img src={mergedImage || undefined} alt="Merged visual post" className="w-full h-full object-cover aspect-square" />
       ) : (
         <div className="w-full aspect-square flex items-center justify-center bg-gray-900 text-gray-500">
-          Failed to generate visual
+          Failed to render visual
         </div>
       )}
 

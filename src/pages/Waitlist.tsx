@@ -276,7 +276,7 @@ export function Waitlist() {
             title="OPEN BRANDTOPOST RESEARCH EVALUATION"
           >
             <img
-              src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+              src="/B2PLOGO.png"
               alt="BrandToPost Logo"
               className="w-5 h-5 object-contain"
             />

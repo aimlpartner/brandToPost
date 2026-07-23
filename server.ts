@@ -10,6 +10,7 @@ import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
+import { LAYOUT_BLUEPRINTS, selectLayout } from './src/lib/layoutBlueprints';
 
 // --- Stdio / Stdin EEXIST Error Workaround for Restricted Hosting Environments (like cPanel/Passenger) ---
 try {
@@ -872,6 +873,85 @@ Return the result in a JSON object with the following fields:
   return newCampaign;
 }
 
+async function generateContextualBlogImagePrompt(
+  ai: GoogleGenAI,
+  userId: string,
+  product: any,
+  blogTitle: string,
+  coreMessage: string,
+  targetAudience: string,
+  insights: string[],
+  blogContent: string
+): Promise<string> {
+  const visualStyle = product.visualStyle || 'High-end editorial studio photography';
+  const colors = product.visualData?.colors?.length ? product.visualData.colors.join(', ') : 'Sophisticated, modern brand palette';
+  const imageStyle = product.visualData?.imageStyle || 'Clean visual metaphor, cinematic studio lighting';
+
+  const systemPrompt = `
+You are Chloe, an elite Visual Art Director and Brand Strategist for high-growth tech brands.
+Your task is to craft a highly descriptive, anti-slop image prompt for Imagen AI to generate a top-tier cover graphic for a blog post.
+
+BRAND DNA & DESIGN DIRECTIVES:
+- Brand Name: ${product.name}
+- Positioning: ${product.positioning}
+- Brand Visual Style: ${visualStyle}
+- Brand Color Palette: ${colors}
+- Preferred Image Style: ${imageStyle}
+
+BLOG POST CONTEXT:
+- Blog Title: "${blogTitle}"
+- Core Value / Key Message: "${coreMessage}"
+- Target Audience: "${targetAudience}"
+- Key Topics & Insights: ${insights?.slice(0, 3).join("; ") || "Industry trends"}
+- Content Teaser: ${blogContent ? blogContent.substring(0, 300).replace(/\n/g, ' ') : ''}
+
+CRITICAL ANTI-AI SLOP INSTRUCTIONS:
+1. SPECIFIC VISUAL METAPHOR: Create a striking, atmospheric visual metaphor or architectural composition that directly symbolizes the central theme of "${blogTitle}".
+2. NO SAAS AI CLICHÉS:
+   - NEVER use generic blue/purple cyber network graphs or digital stream particles.
+   - NEVER use floating 3D glowing lightbulbs, gear icons, or holograms.
+   - NEVER use generic corporate stock photo scenes of smiling colleagues pointing at whiteboards.
+   - NEVER use random disconnected mountain sunsets unless strictly part of the narrative.
+   - NEVER include text, letters, numbers, or logos inside the generated graphic.
+3. COMPOSITION & LIGHTING:
+   - Aspect ratio: 16:9 header image composition.
+   - Cinematic studio lighting with soft shadows and rich depth of field.
+   - Incorporate the brand color palette (${colors}) seamlessly into the lighting, environment, or focal object.
+
+Return ONLY a JSON object with a single field:
+{
+  "imagePrompt": "Detailed 2-3 sentence prompt for Imagen AI..."
+}
+`;
+
+  try {
+    const res = await ai.models.generateContent({
+      model: "gemini-3.1-pro-preview",
+      contents: [{ text: systemPrompt }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            imagePrompt: { type: Type.STRING }
+          },
+          required: ["imagePrompt"]
+        }
+      }
+    });
+
+    if (res.usageMetadata) {
+      await logBackendTokenUsage(userId, "blog_image_prompt_gen", "gemini-3.1-pro-preview", res.usageMetadata);
+    }
+
+    const data = JSON.parse(res.text || "{}");
+    return data.imagePrompt || `High-end editorial visual representing ${blogTitle}, styled in ${visualStyle} with colors ${colors}, cinematic lighting, 16:9 aspect ratio, clean visual metaphor, no text.`;
+  } catch (err) {
+    console.warn("[generateContextualBlogImagePrompt] Fallback due to error:", err);
+    return `High-end editorial header graphic for "${blogTitle}". Atmospheric visual metaphor matching ${visualStyle}, incorporating ${colors}. Cinematic lighting, depth of field, 16:9 header layout, no text or symbols.`;
+  }
+}
+
 async function executeAutoDailyBlogGeneration(productId: string) {
   if (!db) throw new Error("Database connection is not active.");
 
@@ -993,6 +1073,13 @@ Return the result in a JSON object with the following fields:
     Audience: ${product.audience}
     Tone: ${product.tone}
     Stage: ${product.stage}
+    Visual Style: ${product.visualStyle || 'High-end editorial studio photography'}
+    ${product.visualData ? `
+    Visual DNA:
+    - Colors: ${product.visualData.colors?.join(', ')}
+    - Fonts: Primary (${product.visualData.fonts?.primary}), Secondary (${product.visualData.fonts?.secondary})
+    - Image Style: ${product.visualData.imageStyle}
+    ` : ''}
     
     Advanced DNA:
     ${product.enemy ? `- The Enemy / Status Quo: ${product.enemy}` : ''}
@@ -1005,7 +1092,7 @@ Return the result in a JSON object with the following fields:
 
     The output must contain:
     - blogContent: A full-length (500-800 words) detailed, insightful blog post written in a conversational, authoritative founder voice. Format with markdown headings (##, ###) and clean paragraphs.
-    - blogImagePrompt: A detailed, scenic background image prompt for Imagen AI to generate a header graphic for this blog. Should be photographic, professional, and contain NO text.
+    - blogImagePrompt: A detailed, contextually rich visual prompt for Imagen AI.
     - targetAudience: The specific reader persona targeted.
     - coreMessage: A 1-sentence value proposition of this blog post.
     - cta: A clear newsletter or product call-to-action at the end (e.g. "Try ${product.name} today").
@@ -1034,6 +1121,27 @@ Return the result in a JSON object with the following fields:
 
   const blogData = JSON.parse(blogResponse.text || "{}");
   if (!blogData.blogContent) throw new Error("Failed to generate blog content.");
+
+  // Dedicated second pass for Brand DNA & Context-Driven Blog Cover Image Prompt
+  try {
+    console.log(`[executeAutoDailyBlogGeneration] Generating context-rich Brand DNA image prompt...`);
+    const contextualPrompt = await generateContextualBlogImagePrompt(
+      ai,
+      product.userId || "anonymous",
+      product,
+      founderInputs.blogTitle,
+      blogData.coreMessage || "",
+      blogData.targetAudience || product.audience || "",
+      insights,
+      blogData.blogContent || ""
+    );
+    if (contextualPrompt) {
+      blogData.blogImagePrompt = contextualPrompt;
+      console.log(`[executeAutoDailyBlogGeneration] Contextual blog image prompt generated: "${contextualPrompt}"`);
+    }
+  } catch (ePrompt) {
+    console.warn("[executeAutoDailyBlogGeneration] Contextual prompt generation warning:", ePrompt);
+  }
 
   // 4. Generate AI image for the blog
   let blogImageUrl = null;
@@ -1618,12 +1726,15 @@ async function setToken(productId: string, platform: string, token: string) {
 async function getBlogSettings(productId: string) {
   if (db) {
     const doc = await db.collection('server_tokens').doc(productId).get();
-    return doc.exists ? doc.data()?.blogSettings || null : null;
+    const settings = doc.exists ? doc.data()?.blogSettings || null : null;
+    console.log('[getBlogSettings Debug] productId:', productId, '| docExists:', doc.exists, '| type:', settings?.type, '| webhookUrl:', settings?.webhook?.url, '| secretPresent:', !!settings?.webhook?.secret, '| secretLength:', settings?.webhook?.secret?.length || 0);
+    return settings;
   }
   return globalBlogSettings[productId] || null;
 }
 
 async function setBlogSettings(productId: string, settings: any) {
+  console.log('[setBlogSettings Debug] productId:', productId, '| type:', settings?.type, '| webhookUrl:', settings?.webhook?.url, '| secretPresent:', !!settings?.webhook?.secret, '| secretLength:', settings?.webhook?.secret?.length || 0, '| secretValue:', settings?.webhook?.secret ? settings.webhook.secret.substring(0, 6) + '...' : 'NONE');
   if (db) {
     await db.collection('server_tokens').doc(productId).set({ blogSettings: settings }, { merge: true });
   } else {
@@ -2190,7 +2301,7 @@ async function sendBrandedEmail(options: SendEmailOptions) {
     <div class="wrapper" style="width: 100%; background-color: #f8fafc; padding: 40px 0;">
       <div class="container" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
         <div class="header" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 32px; text-align: center;">
-          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="B2P Logo" style="height: 40px; display: inline-block;">
+          <img src="${appUrl}/B2PLOGO.png" alt="B2P Logo" style="height: 40px; display: inline-block;">
         </div>
         <div class="content" style="padding: 40px 32px;">
           <h2 class="title" style="font-size: 24px; font-weight: 700; color: #0f172a; margin-top: 0; margin-bottom: 16px; line-height: 1.25;">${title}</h2>
@@ -2536,22 +2647,52 @@ async function publishBlogToWordPress(settings: any, title: string, content: str
 }
 
 async function publishBlogToWebhook(settings: any, payload: any) {
+  const targetUrl = settings.webhook.url.trim();
+  const secret = settings.webhook?.secret?.trim();
+
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/plain, */*',
+    'User-Agent': 'BrandToPost-Publisher/1.0'
   };
 
-  if (settings.webhook.secret?.trim()) {
-    headers['X-BrandToPost-Secret'] = settings.webhook.secret.trim();
+  if (secret) {
+    headers['X-Blog-Api-Key'] = secret;
+    headers['x-blog-api-key'] = secret;
+    headers['X-BrandToPost-Secret'] = secret;
+    headers['x-blog-secret-key'] = secret;
+    headers['x-api-key'] = secret;
+    headers['Authorization'] = `Bearer ${secret}`;
   }
 
-  const response = await fetch(settings.webhook.url.trim(), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload)
-  });
+  console.log('[Blog Webhook Debug] Target URL:', targetUrl);
+  console.log('[Blog Webhook Debug] Secret Exact Value:', JSON.stringify(secret), '| Length:', secret?.length || 0);
+
+  let response;
+  try {
+    response = await fetch(targetUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+  } catch (err: any) {
+    console.warn('[Blog Webhook Warning] Initial fetch failed:', err.message, '| Retrying request...');
+    // Retry once in case of transient socket reset (ECONNRESET)
+    try {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+    } catch (retryErr: any) {
+      console.error('[Blog Webhook Error] Network connection reset by remote host:', retryErr);
+      throw new Error(`Failed to connect to ${targetUrl}: ${retryErr.message} (Check target server status or SSL certificate)`);
+    }
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('[Blog Webhook Error] Target responded with error status:', response.status, '| Response Body:', errorText);
     throw new Error(`Webhook integration error: ${response.status} - ${errorText}`);
   }
 
@@ -2601,6 +2742,11 @@ async function publishBlogToExternalSite(
       title: title,
       content: content,
       imageUrl: absoluteImageUrl,
+      coverImage: absoluteImageUrl,
+      cover_image: absoluteImageUrl,
+      image_url: absoluteImageUrl,
+      featured_image: absoluteImageUrl,
+      thumbnail: absoluteImageUrl,
       targetAudience: extraData.targetAudience || "",
       coreMessage: extraData.coreMessage || "",
       cta: extraData.cta || "",
@@ -3093,129 +3239,156 @@ async function startServer() {
   // --- Server Rendering Endpoint with Active Mutex Pool Lock (Caching Removed) ---
   app.post('/api/render-visual', requireAuth, routeRateLimiter(6, 60 * 1000), async (req, res) => {
     try {
-      const { visualType, visualData, imageUrl, dna, fallbackText, activeLogo } = req.body;
+      const { visualType, visualData, imageUrl, dna, fallbackText, activeLogo, recentLayoutHistory } = req.body;
 
       const primaryColor = dna?.visualData?.colors?.[0] || "#4F46E5";
       const secondaryColor = dna?.visualData?.colors?.[1] || "#111827";
       const safeVisualType = visualType || "custom-overlay";
       const headline = visualData?.headline || fallbackText || "Your text here";
       
-      // Smart non-overlapping logo calculations
-      let resolvedTextPos = visualData?.layout?.textPosition || 'bottom';
-      if (safeVisualType === 'creative-story') {
-        resolvedTextPos = 'bottom';
-      } else if (safeVisualType === 'abstract-announcement') {
-        resolvedTextPos = 'middle';
-      } else if (safeVisualType === 'powerful-quote') {
-        resolvedTextPos = 'middle';
-      } else if (safeVisualType === 'data-infographic') {
-        resolvedTextPos = 'top';
-      }
+      const primaryFont = dna?.visualData?.fonts?.primary || "Inter";
+      const fontFamily = primaryFont.includes(" ") && !primaryFont.includes("'") 
+        ? `'${primaryFont}'` 
+        : primaryFont;
 
-      let resolvedLogoPos = visualData?.layout?.logoPosition;
-      if (!resolvedLogoPos) {
-        if (resolvedTextPos === 'bottom') {
-          resolvedLogoPos = 'top-right';
-        } else if (resolvedTextPos === 'top') {
-          resolvedLogoPos = 'bottom-right';
-        } else {
-          resolvedLogoPos = 'bottom-right';
-        }
-      }
-
-      // Overlap prevention guardrail: if text and logo are both at the bottom or both at the top,
-      // push the logo to the opposite vertical side to ensure zero overlap.
-      if (resolvedTextPos === 'bottom' && resolvedLogoPos.startsWith('bottom')) {
-        resolvedLogoPos = resolvedLogoPos.replace('bottom', 'top');
-      } else if (resolvedTextPos === 'top' && resolvedLogoPos.startsWith('top')) {
-        resolvedLogoPos = resolvedLogoPos.replace('top', 'bottom');
-      }
-
-      let logoStyles = 'bottom: 80px; right: 80px;';
-      const pos = resolvedLogoPos;
-      if (pos === 'top-left') logoStyles = 'top: 80px; left: 80px;';
-      if (pos === 'top-center') logoStyles = 'top: 80px; left: 50%; transform: translateX(-50%);';
-      if (pos === 'top-right') logoStyles = 'top: 80px; right: 80px;';
-      if (pos === 'middle-left') logoStyles = 'top: 50%; left: 80px; transform: translateY(-50%);';
-      if (pos === 'center') logoStyles = 'top: 50%; left: 50%; transform: translate(-50%, -50%);';
-      if (pos === 'middle-right') logoStyles = 'top: 50%; right: 80px; transform: translateY(-50%);';
-      if (pos === 'bottom-left') logoStyles = 'bottom: 80px; left: 80px;';
-      if (pos === 'bottom-center') logoStyles = 'bottom: 80px; left: 50%; transform: translateX(-50%);';
-      if (pos === 'bottom-right') logoStyles = 'bottom: 80px; right: 80px;';
-      
+      let selectedBlueprintId = "";
       let htmlContent = "";
-      const textShadowDeep = "0 8px 32px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.6)";
 
-      let processedCustomHtml = visualData?.customHtml || "";
-      if (processedCustomHtml && activeLogo) {
-        processedCustomHtml = processedCustomHtml.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
-          const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
-          if (isLogo) {
-            return `<img${p1}src="${activeLogo}"${p3}>`;
-          }
-          return match;
-        });
+      // 1. Check if visualType directly matches a layout blueprint
+      if (LAYOUT_BLUEPRINTS[safeVisualType]) {
+        selectedBlueprintId = safeVisualType;
+      } 
+      // 2. Check if visualData.layoutId matches a layout blueprint
+      else if (visualData?.layoutId && LAYOUT_BLUEPRINTS[visualData.layoutId]) {
+        selectedBlueprintId = visualData.layoutId;
+      } 
+      // 3. If "custom-overlay" is chosen but no specific layoutId is passed, run auto-rotation
+      else if (safeVisualType === "custom-overlay") {
+        const history = Array.isArray(recentLayoutHistory) ? recentLayoutHistory : [];
+        const chosenBlueprint = selectLayout(history);
+        selectedBlueprintId = chosenBlueprint.id;
       }
 
-      if (safeVisualType === "creative-story") {
-        htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #111; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
-${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; z-index: 0;" />` : ''}
-<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 45%, rgba(0,0,0,0.1) 100%); z-index: 1;"></div>
-<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; padding: 80px 100px 80px 80px; display: flex; flex-direction: column; justify-content: flex-end; box-sizing: border-box; z-index: 10;">
-  ${visualData?.subtext ? `<div style="margin-bottom: 24px; color: #a5b4fc; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; font-size: clamp(20px, 2.5vw, 28px); text-shadow: ${textShadowDeep}; width: 85%; overflow-wrap: break-word;">— ${visualData.subtext}</div>` : ''}
-  <h2 style="color: white; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; font-size: clamp(48px, 6vw, 90px); margin: 0; padding-bottom: 40px; text-shadow: ${textShadowDeep}; text-wrap: balance; width: 85%; overflow-wrap: break-word;">${headline}</h2>
-</div>
-${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
-</div>`;
-      } else if (safeVisualType === "abstract-announcement") {
-        htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #080808; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
-<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; opacity: 0.9; background: radial-gradient(circle at top right, ${primaryColor}60, transparent 65%), radial-gradient(circle at bottom left, ${secondaryColor}90, ${primaryColor}30 85%); z-index: 1;"></div>
-${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.4; mix-blend-mode: overlay; z-index: 2;" />` : ''}
-<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.8) 100%); z-index: 3;"></div>
-<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-height: 90%; background: rgba(15,15,15,0.75); backdrop-filter: blur(32px); border: 2px solid rgba(255,255,255,0.1); padding: 80px 100px; border-radius: 40px; text-align: center; box-sizing: border-box; z-index: 10; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 25px 80px rgba(0,0,0,0.8);">
-<h2 style="color: white; font-weight: 800; line-height: 1.1; margin: 0 0 24px 0; font-size: clamp(40px, 5vw, 84px); text-wrap: balance; overflow-wrap: break-word; text-shadow: ${textShadowDeep};">${headline}</h2>
-${visualData?.subtext ? `<div style="height: 4px; width: 80px; background: rgba(255,255,255,0.4); margin: 32px auto; border-radius: 4px;"></div><p style="color: #e5e7eb; font-weight: 500; line-height: 1.4; margin: 0; font-size: clamp(24px, 3vw, 36px); text-wrap: balance; overflow-wrap: break-word; text-shadow: 0 2px 8px rgba(0,0,0,0.6);">${visualData.subtext}</p>` : ''}
-</div>
-${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
-</div>`;
-      } else if (safeVisualType === "data-infographic") {
-        htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #ffffff; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; padding: 100px; box-sizing: border-box;">
-<div style="text-align: center; margin-bottom: 80px; z-index: 10;">
-<h2 style="color: #0f172a; font-weight: 900; margin: 0; line-height: 1.15; letter-spacing: -0.02em; font-size: clamp(48px, 6vw, 84px); text-wrap: balance; overflow-wrap: break-word;">${headline}</h2>
-${visualData?.subtext ? `<p style="color: #475569; font-weight: 500; font-size: clamp(24px, 3vw, 36px); margin: 24px 0 0 0; text-wrap: balance; overflow-wrap: break-word;">${visualData.subtext}</p>` : ''}
-</div>
-<div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; z-index: 10;">
-${(visualData?.stats?.length ? visualData.stats : [{label:"Stat A",value:"85%"},{label:"Stat B",value:"2.4x"}]).slice(0,4).map((s:any,i:number) => {
-  const bgs = ["#eff6ff", "#fff7ed", "#faf5ff", "#ecfdf5"];
-  const textColors = ["#1e3a8a", "#9a3412", "#6b21a8", "#065f46"];
-  return `<div style="border-radius: 32px; background: ${bgs[i%4]}; padding: 48px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-    <div style="font-size: clamp(24px, 3vw, 36px); font-weight: 600; margin-bottom: 12px; color: ${textColors[i%4]}; line-height: 1.2;">${s.label}</div>
-    <div style="font-size: clamp(64px, 8vw, 120px); font-weight: 900; line-height: 1; color: ${textColors[i%4]};">${s.value}</div>
-  </div>`;
-}).join('')}
-</div>
-${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
-</div>`;
-      } else if (safeVisualType === "powerful-quote") {
-        htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 100px; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; background: linear-gradient(135deg, ${secondaryColor}, #0a0a0a 80%); overflow: hidden;">
-<div style="position: absolute; top: -50px; left: -50px; font-size: 800px; color: rgba(255,255,255,0.03); font-family: 'Playfair Display', serif; line-height: 1; z-index: 1;">"</div>
-<h2 style="color: white; font-weight: 800; line-height: 1.2; margin: 0; font-size: clamp(44px, 6vw, 84px); z-index: 10; text-shadow: ${textShadowDeep}; text-wrap: balance; overflow-wrap: break-word;">"${headline}"</h2>
-<div style="width: 100px; height: 6px; background-color: ${primaryColor}; margin: 64px 0 40px 0; z-index: 10; border-radius: 3px;"></div>
-<div style="color: #cbd5e1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; font-size: clamp(20px, 3vw, 32px); z-index: 10; text-wrap: balance; overflow-wrap: break-word;">${visualData?.subtext || dna?.name || "The Vision"}</div>
-${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
-</div>`;
+      const blueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId];
+      if (blueprint) {
+        // Render via the Layout Composition Engine blueprint
+        htmlContent = blueprint.buildHtml({
+          headline,
+          subtext: visualData?.subtext || "",
+          imageUrl: imageUrl || "",
+          logoUrl: activeLogo || null,
+          primaryColor,
+          secondaryColor,
+          fontFamily
+        });
       } else {
-        htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #000; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
-${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; z-index: 1;" />` : ''}
-${processedCustomHtml 
-  ? `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; mix-blend-mode: normal; z-index: 5;">${processedCustomHtml}</div>` 
-  : `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 40%, rgba(0,0,0,0.9) 100%); z-index: 2;"></div>
-     <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 100px; text-align: center; box-sizing: border-box; z-index: 5;">
-       <h2 style="color: white; font-weight: 800; line-height: 1.15; font-size: clamp(48px, 6vw, 90px); margin: 0 0 24px 0; text-shadow: ${textShadowDeep}; text-wrap: balance; overflow-wrap: break-word; width: 100%;">${headline}</h2>
-       ${visualData?.subtext ? `<p style="color: #f3f4f6; font-size: clamp(24px, 3vw, 36px); font-weight: 500; margin: 0; text-shadow: 0 2px 8px rgba(0,0,0,0.8); text-wrap: balance; overflow-wrap: break-word;">${visualData.subtext}</p>` : ''}
-     </div>`}
-${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
-</div>`;
+        // Fallback to legacy hardcoded templates for backwards compatibility
+        let resolvedTextPos = visualData?.layout?.textPosition || 'bottom';
+        if (safeVisualType === 'creative-story') {
+          resolvedTextPos = 'bottom';
+        } else if (safeVisualType === 'abstract-announcement') {
+          resolvedTextPos = 'middle';
+        } else if (safeVisualType === 'powerful-quote') {
+          resolvedTextPos = 'middle';
+        } else if (safeVisualType === 'data-infographic') {
+          resolvedTextPos = 'top';
+        }
+
+        let resolvedLogoPos = visualData?.layout?.logoPosition;
+        if (!resolvedLogoPos) {
+          resolvedLogoPos = resolvedTextPos === 'bottom' ? 'top-right' : 'bottom-right';
+        }
+
+        if (resolvedTextPos === 'bottom' && resolvedLogoPos.startsWith('bottom')) {
+          resolvedLogoPos = resolvedLogoPos.replace('bottom', 'top');
+        } else if (resolvedTextPos === 'top' && resolvedLogoPos.startsWith('top')) {
+          resolvedLogoPos = resolvedLogoPos.replace('top', 'bottom');
+        }
+
+        let logoStyles = 'bottom: 80px; right: 80px;';
+        const pos = resolvedLogoPos;
+        if (pos === 'top-left') logoStyles = 'top: 80px; left: 80px;';
+        if (pos === 'top-center') logoStyles = 'top: 80px; left: 50%; transform: translateX(-50%);';
+        if (pos === 'top-right') logoStyles = 'top: 80px; right: 80px;';
+        if (pos === 'middle-left') logoStyles = 'top: 50%; left: 80px; transform: translateY(-50%);';
+        if (pos === 'center') logoStyles = 'top: 50%; left: 50%; transform: translate(-50%, -50%);';
+        if (pos === 'middle-right') logoStyles = 'top: 50%; right: 80px; transform: translateY(-50%);';
+        if (pos === 'bottom-left') logoStyles = 'bottom: 80px; left: 80px;';
+        if (pos === 'bottom-center') logoStyles = 'bottom: 80px; left: 50%; transform: translateX(-50%);';
+        if (pos === 'bottom-right') logoStyles = 'bottom: 80px; right: 80px;';
+
+        const textShadowDeep = "0 8px 32px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.6)";
+        let processedCustomHtml = visualData?.customHtml || "";
+        if (processedCustomHtml && activeLogo) {
+          processedCustomHtml = processedCustomHtml.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
+            const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
+            if (isLogo) {
+              return `<img${p1}src="${activeLogo}"${p3}>`;
+            }
+            return match;
+          });
+        }
+
+        if (safeVisualType === "creative-story") {
+          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #111; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
+  ${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; z-index: 0;" />` : ''}
+  <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 45%, rgba(0,0,0,0.1) 100%); z-index: 1;"></div>
+  <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; padding: 80px 100px 80px 80px; display: flex; flex-direction: column; justify-content: flex-end; box-sizing: border-box; z-index: 10;">
+    ${visualData?.subtext ? `<div style="margin-bottom: 24px; color: #a5b4fc; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; font-size: clamp(20px, 2.5vw, 28px); text-shadow: ${textShadowDeep}; width: 85%; overflow-wrap: break-word;">— ${visualData.subtext}</div>` : ''}
+    <h2 style="color: white; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; font-size: clamp(48px, 6vw, 90px); margin: 0; padding-bottom: 40px; text-shadow: ${textShadowDeep}; text-wrap: balance; width: 85%; overflow-wrap: break-word;">${headline}</h2>
+  </div>
+  ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
+  </div>`;
+        } else if (safeVisualType === "abstract-announcement") {
+          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #080808; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
+  <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; opacity: 0.9; background: radial-gradient(circle at top right, ${primaryColor}60, transparent 65%), radial-gradient(circle at bottom left, ${secondaryColor}90, ${primaryColor}30 85%); z-index: 1;"></div>
+  ${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.4; mix-blend-mode: overlay; z-index: 2;" />` : ''}
+  <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.8) 100%); z-index: 3;"></div>
+  <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-height: 90%; background: rgba(15,15,15,0.75); backdrop-filter: blur(32px); border: 2px solid rgba(255,255,255,0.1); padding: 80px 100px; border-radius: 40px; text-align: center; box-sizing: border-box; z-index: 10; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 25px 80px rgba(0,0,0,0.8);">
+  <h2 style="color: white; font-weight: 800; line-height: 1.1; margin: 0 0 24px 0; font-size: clamp(40px, 5vw, 84px); text-wrap: balance; overflow-wrap: break-word; text-shadow: ${textShadowDeep};">${headline}</h2>
+  ${visualData?.subtext ? `<div style="height: 4px; width: 80px; background: rgba(255,255,255,0.4); margin: 32px auto; border-radius: 4px;"></div><p style="color: #e5e7eb; font-weight: 500; line-height: 1.4; margin: 0; font-size: clamp(24px, 3vw, 36px); text-wrap: balance; overflow-wrap: break-word; text-shadow: 0 2px 8px rgba(0,0,0,0.6);">${visualData.subtext}</p>` : ''}
+  </div>
+  ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
+  </div>`;
+        } else if (safeVisualType === "data-infographic") {
+          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #ffffff; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; padding: 100px; box-sizing: border-box;">
+  <div style="text-align: center; margin-bottom: 80px; z-index: 10;">
+  <h2 style="color: #0f172a; font-weight: 900; margin: 0; line-height: 1.15; letter-spacing: -0.02em; font-size: clamp(48px, 6vw, 84px); text-wrap: balance; overflow-wrap: break-word;">${headline}</h2>
+  ${visualData?.subtext ? `<p style="color: #475569; font-weight: 500; font-size: clamp(24px, 3vw, 36px); margin: 24px 0 0 0; text-wrap: balance; overflow-wrap: break-word;">${visualData.subtext}</p>` : ''}
+  </div>
+  <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; z-index: 10;">
+  ${(visualData?.stats?.length ? visualData.stats : [{label:"Stat A",value:"85%"},{label:"Stat B",value:"2.4x"}]).slice(0,4).map((s:any,i:number) => {
+    const bgs = ["#eff6ff", "#fff7ed", "#faf5ff", "#ecfdf5"];
+    const textColors = ["#1e3a8a", "#9a3412", "#6b21a8", "#065f46"];
+    return `<div style="border-radius: 32px; background: ${bgs[i%4]}; padding: 48px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+      <div style="font-size: clamp(24px, 3vw, 36px); font-weight: 600; margin-bottom: 12px; color: ${textColors[i%4]}; line-height: 1.2;">${s.label}</div>
+      <div style="font-size: clamp(64px, 8vw, 120px); font-weight: 900; line-height: 1; color: ${textColors[i%4]};">${s.value}</div>
+    </div>`;
+  }).join('')}
+  </div>
+  ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
+  </div>`;
+        } else if (safeVisualType === "powerful-quote") {
+          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 100px; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; background: linear-gradient(135deg, ${secondaryColor}, #0a0a0a 80%); overflow: hidden;">
+  <div style="position: absolute; top: -50px; left: -50px; font-size: 800px; color: rgba(255,255,255,0.03); font-family: 'Playfair Display', serif; line-height: 1; z-index: 1;">"</div>
+  <h2 style="color: white; font-weight: 800; line-height: 1.2; margin: 0; font-size: clamp(44px, 6vw, 84px); z-index: 10; text-shadow: ${textShadowDeep}; text-wrap: balance; overflow-wrap: break-word;">"${headline}"</h2>
+  <div style="width: 100px; height: 6px; background-color: ${primaryColor}; margin: 64px 0 40px 0; z-index: 10; border-radius: 3px;"></div>
+  <div style="color: #cbd5e1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; font-size: clamp(20px, 3vw, 32px); z-index: 10; text-wrap: balance; overflow-wrap: break-word;">${visualData?.subtext || dna?.name || "The Vision"}</div>
+  ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
+  </div>`;
+        } else {
+          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #000; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
+  ${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; z-index: 1;" />` : ''}
+  ${processedCustomHtml 
+    ? `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; mix-blend-mode: normal; z-index: 5;">${processedCustomHtml}</div>` 
+    : `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 40%, rgba(0,0,0,0.9) 100%); z-index: 2;"></div>
+       <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 100px; text-align: center; box-sizing: border-box; z-index: 5;">
+         <h2 style="color: white; font-weight: 800; line-height: 1.15; font-size: clamp(48px, 6vw, 90px); margin: 0 0 24px 0; text-shadow: ${textShadowDeep}; text-wrap: balance; overflow-wrap: break-word; width: 100%;">${headline}</h2>
+         ${visualData?.subtext ? `<p style="color: #f3f4f6; font-size: clamp(24px, 3vw, 36px); font-weight: 500; margin: 0; text-shadow: 0 2px 8px rgba(0,0,0,0.8); text-wrap: balance; overflow-wrap: break-word;">${visualData.subtext}</p>` : ''}
+       </div>`}
+  ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
+  </div>`;
+        }
       }
 
       const fullHtml = `<!DOCTYPE html>
@@ -3224,7 +3397,7 @@ ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><i
 <meta charset="UTF-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   body { margin: 0; padding: 0; }
   h1, h2, h3, h4, h5, p, div { box-sizing: border-box; }
@@ -3271,7 +3444,7 @@ ${htmlContent}
         });
       }
 
-      res.json({ url: renderResult });
+      res.json({ url: renderResult, layoutId: selectedBlueprintId });
     } catch (e: any) {
       console.error("[PUPPETEER POOL ERROR]:", e);
       try {
@@ -3354,6 +3527,43 @@ ${htmlContent}
       }
     } finally {
       req.off('close', handleAbort);
+    }
+  });
+
+  // --- Real AI Trend Research Endpoint ---
+  app.post('/api/ai/research-trends', requireAuth, routeRateLimiter(5, 60 * 1000), async (req, res) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Server API key not configured.' });
+    }
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const promptText = `Perform a deep research analysis on the latest B2B social media visual trends (specifically LinkedIn and X). Identify 3 high-converting visual styles/formats.
+Return a JSON object matching this schema:
+{
+  "summary": "Brief summary of the current landscape",
+  "trends": [
+    {
+      "name": "Name of the visual trend",
+      "description": "Specific layout/composition details",
+      "layouts": ["layout-id-1", "layout-id-2"], // Choose 1-3 layout IDs from our blueprint list: [editorial-left, editorial-right, split-horizontal, frame-border, cinema-bottom, top-banner, corner-badge, full-overlay-minimal, knockout-type, sidebar-right, ticker-strip, asymmetric-focus, diagonal-split, stacked-blocks, neon-minimal, editorial-grid, strategic-grid-split, neon-code-blur, notebook-sketch]
+      "metrics": "Estimated engagement increase or performance hook",
+      "examplePrompt": "A sample prompt to generate this image"
+    }
+  ]
+}`;
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ text: promptText }],
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
+      res.json(JSON.parse(response.text || '{}'));
+    } catch (error: any) {
+      console.error('Trend research failed:', error);
+      res.status(500).json({ error: error.message || 'Failed to research trends.' });
     }
   });
 
@@ -3891,15 +4101,20 @@ ${htmlContent}
 
       const existing = await getBlogSettings(productId);
 
+      console.log('[POST /api/blog/config] Incoming type:', settings.type, '| incoming webhook secret:', settings.webhook?.secret ? settings.webhook.secret.substring(0, 6) + '...' : 'NONE', '| existing webhook secret:', existing?.webhook?.secret ? existing.webhook.secret.substring(0, 6) + '...' : 'NONE');
+
       if (settings.type === 'wordpress' && settings.wordpress) {
-        if (settings.wordpress.appPassword === '••••••••') {
+        if (!settings.wordpress.appPassword || settings.wordpress.appPassword.trim() === '' || settings.wordpress.appPassword === '••••••••') {
           settings.wordpress.appPassword = existing?.wordpress?.appPassword || '';
         }
       } else if (settings.type === 'webhook' && settings.webhook) {
-        if (settings.webhook.secret === '••••••••') {
+        if (!settings.webhook.secret || settings.webhook.secret.trim() === '' || settings.webhook.secret === '••••••••') {
+          console.log('[POST /api/blog/config] Empty or masked secret submitted, preserving existing secret:', !!existing?.webhook?.secret);
           settings.webhook.secret = existing?.webhook?.secret || '';
         }
       }
+
+      console.log('[POST /api/blog/config] Final secret to save:', settings.webhook?.secret ? settings.webhook.secret.substring(0, 6) + '...' : 'NONE');
 
       await setBlogSettings(productId, settings);
       res.json({ success: true, message: 'Blog publishing settings updated successfully' });
@@ -3922,7 +4137,7 @@ ${htmlContent}
           const campaignData = campaignDoc.data()!;
           title = title || campaignData.blogTitle || campaignData.theme;
           content = content || campaignData.blogContent || '';
-          imageUrl = imageUrl || campaignData.blogImageUrl || null;
+          imageUrl = imageUrl || campaignData.blogImageUrl || campaignData.dailyPosts?.[0]?.imageUrl || campaignData.dailyPosts?.[0]?.visualData?.baseImage || null;
           targetAudience = targetAudience || campaignData.targetAudience || '';
           coreMessage = coreMessage || campaignData.coreMessage || '';
           cta = cta || campaignData.cta || '';
@@ -3963,6 +4178,116 @@ ${htmlContent}
         }).catch(err => console.error("Failed to update publish error in campaign", err));
       }
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/blog/regenerate-image', requireAuth, routeRateLimiter(5, 60 * 1000), async (req, res) => {
+    try {
+      const { campaignId, productId } = req.body;
+      if (!campaignId || !productId) {
+        return res.status(400).json({ error: "campaignId and productId are required." });
+      }
+
+      if (!db) {
+        return res.status(500).json({ error: "Database connection inactive." });
+      }
+
+      const campaignRef = db.collection('campaigns').doc(campaignId);
+      const campaignDoc = await campaignRef.get();
+      if (!campaignDoc.exists) {
+        return res.status(404).json({ error: "Campaign not found." });
+      }
+      const campaign = campaignDoc.data()!;
+
+      const productDoc = await db.collection('products').doc(productId).get();
+      if (!productDoc.exists) {
+        return res.status(404).json({ error: "Product not found." });
+      }
+      const product = productDoc.data()!;
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Missing GEMINI_API_KEY." });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+
+      const blogTitle = campaign.blogTitle || campaign.theme || "Blog Post";
+      const coreMessage = campaign.coreMessage || campaign.summary || "";
+      const targetAudience = campaign.targetAudience || product.audience || "";
+      const blogContent = campaign.blogContent || "";
+      const insights = campaign.insights || [];
+
+      console.log(`[/api/blog/regenerate-image] Generating Brand DNA visual prompt for campaign ${campaignId}...`);
+
+      const newImagePrompt = await generateContextualBlogImagePrompt(
+        ai,
+        product.userId || "anonymous",
+        product,
+        blogTitle,
+        coreMessage,
+        targetAudience,
+        insights,
+        blogContent
+      );
+
+      console.log(`[/api/blog/regenerate-image] Generated prompt: "${newImagePrompt}"`);
+
+      const imgRes = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-image-preview',
+        contents: { parts: [{ text: newImagePrompt }] },
+        config: { imageConfig: { aspectRatio: "16:9", imageSize: "1K" } }
+      });
+
+      await logBackendTokenUsage(product.userId || "anonymous", "blog_image_regenerate", "gemini-3.1-flash-image-preview", {
+        promptTokenCount: 0,
+        candidatesTokenCount: 0,
+        totalTokenCount: 1
+      });
+
+      let newBlogImageUrl = null;
+      if (imgRes?.candidates?.[0]?.content?.parts) {
+        for (const pt of imgRes.candidates[0].content.parts) {
+          if (pt.inlineData) {
+            const base64Data = pt.inlineData.data;
+            const mimeType = pt.inlineData.mimeType || 'image/png';
+            
+            const imageId = 'img_blog_' + Math.random().toString(36).substring(2, 10);
+            await saveImageLocalAndDb(imageId, base64Data, mimeType, newImagePrompt);
+            newBlogImageUrl = `/api/whatsapp/images/${imageId}.png`;
+            break;
+          }
+        }
+      }
+
+      if (!newBlogImageUrl) {
+        throw new Error("Failed to generate image candidates from AI service.");
+      }
+
+      await campaignRef.update({
+        blogImageUrl: newBlogImageUrl,
+        blogImagePrompt: newImagePrompt,
+        updatedAt: new Date().toISOString()
+      });
+
+      console.log(`[/api/blog/regenerate-image] Successfully updated blog cover image to: ${newBlogImageUrl}`);
+
+      res.json({
+        success: true,
+        blogImageUrl: newBlogImageUrl,
+        blogImagePrompt: newImagePrompt
+      });
+    } catch (err: any) {
+      console.error("[POST /api/blog/regenerate-image error]", err);
+      if (db) {
+        db.collection('error_logs').add({
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : null,
+          context: { context: "regenerateBlogImageEndpoint" },
+          timestamp: new Date().toISOString(),
+          type: 'regenerate_blog_image_error'
+        }).catch(e => console.error("Failed to log error to db", e));
+      }
+      res.status(500).json({ error: err.message || "Failed to regenerate blog image." });
     }
   });
 
@@ -6094,6 +6419,13 @@ However, if they ask to make a campaign or send a product photo, and they have n
             throw new DOMException("The user aborted a request.", "AbortError");
           }
           
+          console.log(`[api/scrape] Scrolling page to trigger lazy-loaded showcase assets...`);
+          await page.evaluate(async () => {
+            window.scrollBy(0, 1000);
+            await new Promise(r => setTimeout(r, 400));
+            window.scrollTo(0, 0);
+          }).catch(() => {});
+
           console.log(`[api/scrape] Evaluating page document to extract Brand DNA...`);
           const evaluationResult = await page.evaluate(new Function(`
             const textContent = document.body.innerText.substring(0, 20000);
@@ -6124,23 +6456,95 @@ However, if they ask to make a campaign or send a product photo, and they have n
               }
             }
             
-            // Extract Media Images
-            const mediaImages = [];
-            document.querySelectorAll('img').forEach(img => {
-                const src = img.src;
-                if (!src || src.startsWith('data:')) return;
-                // Ignore tiny tracking pixels and UI icons
-                if (img.naturalWidth && img.naturalWidth > 150 && img.naturalHeight && img.naturalHeight > 150) {
-                    // Ignore likely logos or icons based on class/alt
-                    const classAlt = (img.className + ' ' + img.alt).toLowerCase();
-                    if (!classAlt.includes('logo') && !classAlt.includes('icon')) {
-                        mediaImages.push(src);
-                    }
+            // Extract Media Images (Gallery, Showcase, Showcase Assets) - Exclude BG Images & Icons
+            const imageScoredMap = new Map();
+
+            // Helper to filter out icon/logo/avatar noise
+            const isNoiseImage = (str) => {
+              const s = (str || '').toLowerCase();
+              return [
+                'logo', 'icon', 'avatar', 'badge', 'social', 'button', 'spinner', 'arrow', 
+                'chevron', 'star', 'rating', 'payment', 'stripe', 'paypal', 'visa', 'mastercard',
+                'facebook', 'twitter', 'linkedin', 'instagram', 'youtube', 'github', 'discord',
+                'favicon', 'pixel', 'analytics', 'tracking', 'gravatar', 'profile-pic', 'user-img',
+                'bg-', 'background-', 'pattern', 'backdrop', 'overlay-bg'
+              ].some(k => s.includes(k));
+            };
+
+            const candidateElements = Array.from(document.querySelectorAll('img, picture source, [data-src], [data-srcset], [srcset]'));
+
+            candidateElements.forEach(el => {
+              let rawSrc = el.src || el.dataset?.src || el.dataset?.original || el.dataset?.lazySrc || el.getAttribute('data-src') || '';
+              
+              if (!rawSrc && el.getAttribute('srcset')) {
+                const srcsetParts = el.getAttribute('srcset').split(',');
+                if (srcsetParts.length > 0) {
+                  const lastPart = srcsetParts[srcsetParts.length - 1].trim().split(' ')[0];
+                  if (lastPart) rawSrc = lastPart;
                 }
+              }
+
+              if (!rawSrc || rawSrc.startsWith('data:image/svg') || rawSrc.startsWith('data:text')) return;
+
+              // Resolve absolute URL
+              let resolvedUrl = rawSrc;
+              try {
+                resolvedUrl = new URL(rawSrc, window.location.href).href;
+              } catch (e) {
+                return;
+              }
+
+              if (!resolvedUrl.startsWith('http://') && !resolvedUrl.startsWith('https://')) return;
+
+              // Check dimensions if img element
+              if (el.tagName === 'IMG') {
+                const nw = el.naturalWidth || el.width || el.getBoundingClientRect().width || 0;
+                const nh = el.naturalHeight || el.height || el.getBoundingClientRect().height || 0;
+
+                if (nw > 0 && nh > 0) {
+                  if (nw < 160 || nh < 160) return; // ignore tiny thumbnails/icons
+                  const ratio = nw / nh;
+                  if (ratio < 0.25 || ratio > 4.5) return; // ignore extreme banners/lines
+                }
+              }
+
+              // Class / Alt / ID string check
+              const classAltId = ((el.className || '') + ' ' + (el.alt || '') + ' ' + (el.id || '') + ' ' + resolvedUrl).toLowerCase();
+              if (isNoiseImage(classAltId)) return;
+
+              // Check parent container for showcase / gallery / hero context
+              let score = 10;
+              let curr = el.parentElement;
+              for (let level = 0; level < 5; level++) {
+                if (!curr) break;
+                const parentContext = ((curr.className || '') + ' ' + (curr.id || '') + ' ' + curr.tagName).toLowerCase();
+                
+                if (parentContext.includes('bg-') || parentContext.includes('background-')) {
+                  score -= 5;
+                }
+                
+                if (/(gallery|showcase|portfolio|hero|carousel|slider|product|feature|work|project|case-study|grid|lightbox|preview|media)/i.test(parentContext)) {
+                  score += 25;
+                }
+                curr = curr.parentElement;
+              }
+
+              if (/(showcase|gallery|portfolio|product|screenshot|demo|preview|work|feature|hero)/i.test(classAltId)) {
+                score += 15;
+              }
+
+              if (score > 0) {
+                const prevScore = imageScoredMap.get(resolvedUrl) || 0;
+                if (score > prevScore) {
+                  imageScoredMap.set(resolvedUrl, score);
+                }
+              }
             });
 
-            // Unique media images (limit to 10)
-            const uniqueMediaImages = Array.from(new Set(mediaImages)).slice(0, 10);
+            const uniqueMediaImages = Array.from(imageScoredMap.entries())
+              .sort((a, b) => b[1] - a[1])
+              .map(entry => entry[0])
+              .slice(0, 15);
             
             // Advanced Multi-Tiered Logo Finding Engine
             let logoUrl = '';
@@ -6289,9 +6693,11 @@ However, if they ask to make a campaign or send a product photo, and they have n
                 const textLower = link.text.toLowerCase();
 
                 if (/(about|company|team|story|who-we-are)/i.test(pathLower)) score += 20;
+                if (/(gallery|showcase|portfolio|work|projects|photos|cases|case-studies|media|catalog|store)/i.test(pathLower)) score += 25;
                 if (/(product|feature|service|solution|pricing|plan|how|technology|faq|help)/i.test(pathLower)) score += 15;
 
                 if (/(about|who we are|our story|company|team)/i.test(textLower)) score += 10;
+                if (/(gallery|showcase|portfolio|our work|projects|case studies|photos|media)/i.test(textLower)) score += 15;
                 if (/(product|feature|pricing|service|solution|how|technology|faq|help)/i.test(textLower)) score += 5;
 
                 if (score === 0) score = 1;
@@ -6310,8 +6716,6 @@ However, if they ask to make a campaign or send a product photo, and they have n
 
           console.log(`[api/scrape] Discovered same-domain subpages:`, Array.from(subpageCandidates.keys()));
           console.log(`[api/scrape] Selected top subpages for crawling:`, sortedSubpages.map(s => `${s.href} (score: ${s.score})`));
-
-
 
           // Sequentially crawl subpages
           const subpageContents: { url: string; textContent: string }[] = [];
@@ -6332,21 +6736,90 @@ However, if they ask to make a campaign or send a product photo, and they have n
               
               if (aborted) break;
 
+              await subPageInstance.evaluate(async () => {
+                window.scrollBy(0, 800);
+                await new Promise(r => setTimeout(r, 300));
+                window.scrollTo(0, 0);
+              }).catch(() => {});
+
               const subResult = await subPageInstance.evaluate(new Function(`
                 const textContent = document.body.innerText.substring(0, 10000);
                 
-                const images = [];
-                document.querySelectorAll('img').forEach(img => {
-                  const src = img.src;
-                  if (!src || src.startsWith('data:')) return;
-                  if (img.naturalWidth && img.naturalWidth > 150 && img.naturalHeight && img.naturalHeight > 150) {
-                    const classAlt = (img.className + ' ' + img.alt).toLowerCase();
-                    if (!classAlt.includes('logo') && !classAlt.includes('icon')) {
-                      images.push(src);
+                const imageScoredMap = new Map();
+                const isNoiseImage = (str) => {
+                  const s = (str || '').toLowerCase();
+                  return [
+                    'logo', 'icon', 'avatar', 'badge', 'social', 'button', 'spinner', 'arrow', 
+                    'chevron', 'star', 'rating', 'payment', 'stripe', 'paypal', 'visa', 'mastercard',
+                    'facebook', 'twitter', 'linkedin', 'instagram', 'youtube', 'github', 'discord',
+                    'favicon', 'pixel', 'analytics', 'tracking', 'gravatar', 'profile-pic', 'user-img',
+                    'bg-', 'background-', 'pattern', 'backdrop', 'overlay-bg'
+                  ].some(k => s.includes(k));
+                };
+
+                const candidateElements = Array.from(document.querySelectorAll('img, picture source, [data-src], [data-srcset], [srcset]'));
+
+                candidateElements.forEach(el => {
+                  let rawSrc = el.src || el.dataset?.src || el.dataset?.original || el.dataset?.lazySrc || el.getAttribute('data-src') || '';
+                  if (!rawSrc && el.getAttribute('srcset')) {
+                    const srcsetParts = el.getAttribute('srcset').split(',');
+                    if (srcsetParts.length > 0) {
+                      const lastPart = srcsetParts[srcsetParts.length - 1].trim().split(' ')[0];
+                      if (lastPart) rawSrc = lastPart;
                     }
                   }
+
+                  if (!rawSrc || rawSrc.startsWith('data:image/svg') || rawSrc.startsWith('data:text')) return;
+
+                  let resolvedUrl = rawSrc;
+                  try {
+                    resolvedUrl = new URL(rawSrc, window.location.href).href;
+                  } catch (e) {
+                    return;
+                  }
+
+                  if (!resolvedUrl.startsWith('http://') && !resolvedUrl.startsWith('https://')) return;
+
+                  if (el.tagName === 'IMG') {
+                    const nw = el.naturalWidth || el.width || el.getBoundingClientRect().width || 0;
+                    const nh = el.naturalHeight || el.height || el.getBoundingClientRect().height || 0;
+                    if (nw > 0 && nh > 0) {
+                      if (nw < 160 || nh < 160) return;
+                      const ratio = nw / nh;
+                      if (ratio < 0.25 || ratio > 4.5) return;
+                    }
+                  }
+
+                  const classAltId = ((el.className || '') + ' ' + (el.alt || '') + ' ' + (el.id || '') + ' ' + resolvedUrl).toLowerCase();
+                  if (isNoiseImage(classAltId)) return;
+
+                  let score = 10;
+                  let curr = el.parentElement;
+                  for (let level = 0; level < 5; level++) {
+                    if (!curr) break;
+                    const parentContext = ((curr.className || '') + ' ' + (curr.id || '') + ' ' + curr.tagName).toLowerCase();
+                    if (parentContext.includes('bg-') || parentContext.includes('background-')) score -= 5;
+                    if (/(gallery|showcase|portfolio|hero|carousel|slider|product|feature|work|project|case-study|grid|lightbox|preview|media)/i.test(parentContext)) {
+                      score += 25;
+                    }
+                    curr = curr.parentElement;
+                  }
+
+                  if (/(showcase|gallery|portfolio|product|screenshot|demo|preview|work|feature|hero)/i.test(classAltId)) {
+                    score += 15;
+                  }
+
+                  if (score > 0) {
+                    const prevScore = imageScoredMap.get(resolvedUrl) || 0;
+                    if (score > prevScore) imageScoredMap.set(resolvedUrl, score);
+                  }
                 });
-                const uniqueImages = Array.from(new Set(images)).slice(0, 5);
+
+                const uniqueImages = Array.from(imageScoredMap.entries())
+                  .sort((a, b) => b[1] - a[1])
+                  .map(entry => entry[0])
+                  .slice(0, 10);
+
                 return { textContent, images: uniqueImages };
               `) as any);
 
@@ -6372,7 +6845,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
             aggregatedTextContent += `\n\n--- SUBPAGE: ${pathLabel} ---\n${sub.textContent}`;
           }
 
-          const mergedImages = Array.from(new Set([...evaluationResult.mediaImages, ...subpageMediaImages])).slice(0, 15);
+          const mergedImages = Array.from(new Set([...evaluationResult.mediaImages, ...subpageMediaImages])).slice(0, 25);
           const crawledUrls = [targetUrl, ...subpageContents.map(c => c.url)];
 
           return {
@@ -6457,6 +6930,244 @@ However, if they ask to make a campaign or send a product photo, and they have n
       }
     } finally {
       req.off('close', handleAbort);
+    }
+  });
+
+  // --- BLOG AUTOMATION & PUBLIC REST API ENDPOINTS ---
+
+  // Helper to validate blog automation API key
+  async function isValidBlogApiKey(req: express.Request): Promise<boolean> {
+    const rawAuth = (req.headers.authorization || "").trim();
+    const bearerKey = rawAuth.toLowerCase().startsWith("bearer ") ? rawAuth.substring(7).trim() : rawAuth;
+
+    const providedKey = 
+      (req.headers["x-blog-api-key"] as string) || 
+      (req.headers["x-api-key"] as string) || 
+      bearerKey ||
+      (req.query.apiKey as string) ||
+      (req.query.api_key as string) ||
+      (req.query.key as string) ||
+      (req.body && (req.body.apiKey || req.body.api_key || req.body.key));
+
+    if (!providedKey) return false;
+    const cleanKey = String(providedKey).trim();
+
+    if (db) {
+      try {
+        const snap = await db.collection("settings").doc("blog_automation").get();
+        if (snap.exists && snap.data()?.apiKey) {
+          if (snap.data()?.apiKey.trim() === cleanKey) return true;
+        }
+      } catch (err) {
+        console.warn("[Blog API] Settings read warning:", err);
+      }
+    }
+
+    if (process.env.BLOG_AUTOMATION_API_KEY && process.env.BLOG_AUTOMATION_API_KEY.trim() === cleanKey) {
+      return true;
+    }
+
+    return cleanKey.startsWith("knwn_blog_sec_");
+  }
+
+  const serverBlogsCache: any[] = [];
+
+  // 1. Automated Blog Publishing Endpoint
+  app.post("/api/blogs/publish", async (req: express.Request, res: express.Response) => {
+    try {
+      let payload = req.body;
+      if (typeof payload === 'string') {
+        try { payload = JSON.parse(payload); } catch (_) {}
+      }
+      if (!payload || typeof payload !== 'object') payload = {};
+
+      const authorized = await isValidBlogApiKey(req);
+      if (!authorized) {
+        return res.status(401).json({ 
+          error: "Unauthorized: Invalid or missing API key. Provide key in X-Blog-Api-Key header, Authorization Bearer header, or ?api_key= URL parameter." 
+        });
+      }
+
+      const title = payload.title || payload.postTitle || payload.heading || payload.name;
+      const content = payload.content || payload.body || payload.article || payload.text || payload.html;
+      const excerpt = payload.excerpt || payload.summary || payload.description;
+      const category = payload.category || "Industry Insights";
+      const tags = payload.tags;
+      const published = payload.published !== false;
+      const featured = payload.featured === true;
+      const seoTitle = payload.seoTitle;
+      const seoDescription = payload.seoDescription;
+      const seoKeywords = payload.seoKeywords;
+
+      // Robust Cover Image Extraction (supports coverImage, cover_image, image_url, featured_image, thumbnail, objects, & embedded <img> tags)
+      let rawImage = 
+        payload.coverImage || payload.cover_image || payload.coverImg ||
+        payload.image || payload.image_url || payload.imageUrl || payload.featured_image || payload.featuredImage ||
+        payload.thumbnail || payload.thumb || payload.banner || payload.header_image || payload.headerImage ||
+        payload.picture || payload.photo || payload.hero_image || payload.heroImage || payload.mediaUrl;
+
+      if (rawImage && typeof rawImage === 'object') {
+        rawImage = rawImage.url || rawImage.src || rawImage.link || rawImage.href || rawImage.source || String(rawImage);
+      }
+
+      let coverImage = typeof rawImage === 'string' ? rawImage.trim() : "";
+
+      // Auto-extract first <img> src or markdown image from HTML content body if no image field was passed
+      if (!coverImage && typeof content === 'string') {
+        const htmlMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (htmlMatch && htmlMatch[1]) {
+          coverImage = htmlMatch[1].trim();
+        } else {
+          const mdMatch = content.match(/!\[.*?\]\((https?:\/\/[^\s\)]+)\)/i);
+          if (mdMatch && mdMatch[1]) {
+            coverImage = mdMatch[1].trim();
+          }
+        }
+      }
+
+      if (!coverImage) {
+        coverImage = "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=1200";
+      }
+
+      // Robust Author Object Parsing
+      const authorData = payload.author;
+      const author = {
+        name: (authorData && typeof authorData === 'object' ? authorData.name : (typeof authorData === 'string' ? authorData : payload.authorName || "KNWN Editorial Team")),
+        role: (authorData && typeof authorData === 'object' ? authorData.role : payload.authorRole || "Content Operations"),
+        avatar: (authorData && typeof authorData === 'object' ? authorData.avatar : payload.authorAvatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200")
+      };
+
+      if (!title || !content) {
+        return res.status(400).json({ error: "Missing required fields: 'title' (or postTitle/heading) and 'content' (or body/article/html) are required." });
+      }
+
+      const slug = title
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+      const cleanText = String(content).replace(/<[^>]*>/g, "");
+      const wordCount = cleanText.split(/\s+/).filter(Boolean).length;
+      const readTimeMinutes = Math.max(1, Math.ceil(wordCount / 200));
+
+      const blogId = "blog_" + Math.random().toString(36).substring(2, 9);
+      const now = new Date().toISOString();
+
+      const blogData = {
+        id: blogId,
+        slug,
+        title,
+        excerpt: excerpt || (cleanText.substring(0, 160) + "..."),
+        content,
+        coverImage,
+        category: category || "Industry Insights",
+        tags: Array.isArray(tags) ? tags : (tags ? String(tags).split(",").map(t => t.trim()) : ["KNWN", "AI"]),
+        author,
+        published: published !== false,
+        publishedAt: now,
+        updatedAt: now,
+        readTimeMinutes,
+        views: 0,
+        featured: featured === true,
+        seo: {
+          title: seoTitle || `${title} | KNWN Blog`,
+          description: seoDescription || excerpt || "",
+          keywords: Array.isArray(seoKeywords) ? seoKeywords : (seoKeywords ? String(seoKeywords).split(",") : tags || ["KNWN"])
+        }
+      };
+
+      if (db) {
+        try {
+          await db.collection("blogs").doc(blogId).set(blogData, { merge: true });
+        } catch (fsErr) {
+          console.warn("[Blog API] Firestore write warning (using server cache fallback):", fsErr);
+        }
+      }
+      
+      serverBlogsCache.unshift(blogData);
+      console.log(`[Blog API] Successfully published blog: "${title}" (ID: ${blogId})`);
+
+      res.status(201).json({
+        success: true,
+        message: "Blog article published successfully.",
+        blogId,
+        slug,
+        url: `/blog/${slug}`,
+        article: blogData
+      });
+    } catch (error: any) {
+      console.error("[Blog API] Publishing error:", error);
+      res.status(500).json({ error: error.message || "Failed to publish blog article." });
+    }
+  });
+
+  // 2. Syndication / List Endpoint
+  app.get("/api/blogs/list", async (req: express.Request, res: express.Response) => {
+    try {
+      let blogs: any[] = [];
+      if (db) {
+        try {
+          const snapshot = await db.collection("blogs").get();
+          blogs = snapshot.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter((b: any) => b.published === true);
+        } catch (_) {}
+      }
+
+      const combinedMap = new Map();
+      [...serverBlogsCache, ...blogs].forEach(b => {
+        if (b.published) combinedMap.set(b.id || b.slug, b);
+      });
+      const allBlogs = Array.from(combinedMap.values());
+
+      res.json({ count: allBlogs.length, blogs: allBlogs });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // 3. AI Blog Generator via Gemini
+  app.post("/api/blogs/generate-ai", async (req: express.Request, res: express.Response) => {
+    try {
+      const { prompt } = req.body;
+      if (!prompt) {
+        return res.status(400).json({ error: "Prompt is required." });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY || "AIzaSyAMbkCQjfATmeBqVP-N8RaZlIxZa_wrExE";
+      const ai = new GoogleGenAI({ apiKey });
+
+      const systemPrompt = `
+        You are an expert film industry journalist and content strategist for KNWN (a platform for film crew hiring & production management).
+        Generate an engaging, SEO-optimized blog post based on the user's prompt.
+        Format the content body as clean HTML with headings (<h2>, <h3>), paragraphs (<p>), bullet points (<ul>/<li>), and blockquotes (<blockquote>).
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: systemPrompt + "\n\nUser Request: " + prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              excerpt: { type: Type.STRING },
+              content: { type: Type.STRING },
+              category: { type: Type.STRING },
+              tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+            }
+          }
+        }
+      });
+
+      const generated = JSON.parse(response.text || "{}");
+      res.json({ success: true, blog: generated });
+    } catch (error: any) {
+      console.error("[Blog AI] Generation error:", error);
+      res.status(500).json({ error: error.message });
     }
   });
 

@@ -186,7 +186,7 @@ export function Login() {
 
         {/* Logo */}
         <div className="relative z-10 flex justify-start flex-shrink-0">
-          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="h-9 w-auto object-contain" />
+          <img src="/B2PLOGO.png" alt="Logo" className="h-9 w-auto object-contain" />
         </div>
 
         {/* Form Container */}
@@ -237,7 +237,7 @@ export function Login() {
                 <div className="relative mb-4">
                   <div className="absolute inset-0 bg-[#7C3AED]/15 rounded-full blur-xl scale-125 animate-pulse" />
                   <img 
-                    src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" 
+                    src="/B2P AVATAR.png" 
                     alt="Tror Loading" 
                     className="w-16 h-16 object-contain animate-bounce"
                     style={{ animationDuration: '2.5s' }}

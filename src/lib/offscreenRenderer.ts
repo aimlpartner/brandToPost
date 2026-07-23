@@ -11,8 +11,9 @@ export const renderVisualToJpegOffscreen = async (
   imageUrl: string,
   dna: any,
   productName: string,
-  productLogo: string | null
-): Promise<string> => {
+  productLogo: string | null,
+  recentLayoutHistory?: string[]
+): Promise<any> => {
   try {
     const token = await auth.currentUser?.getIdToken();
     
@@ -30,7 +31,8 @@ export const renderVisualToJpegOffscreen = async (
           imageUrl,
           dna,
           fallbackText: productName,
-          activeLogo: productLogo
+          activeLogo: productLogo,
+          recentLayoutHistory
         })
       });
 
@@ -48,9 +50,10 @@ export const renderVisualToJpegOffscreen = async (
       data = await performFetch();
     }
 
-    return data.url || imageUrl;
+    // Return the full data containing both url and layoutId
+    return data;
   } catch (e) {
     console.error("Render to visual error (fallback to original):", e);
-    return imageUrl;
+    return { url: imageUrl };
   }
 };

@@ -191,7 +191,71 @@ Return the result in a JSON object with the following fields:
     });
 
     const blogData = JSON.parse(blogResponse.text || "{}");
-    console.log("Blog data generated. Prompt:", blogData.blogImagePrompt);
+    console.log("Blog data generated.");
+
+    // Dedicated second pass for Brand DNA & Context-Driven Blog Cover Image Prompt
+    try {
+      console.log(`[test] Generating context-rich Brand DNA image prompt...`);
+      const visualStyle = product.visualStyle || 'High-end editorial studio photography';
+      const colors = product.visualData?.colors?.length ? product.visualData.colors.join(', ') : 'Sophisticated, modern brand palette';
+      const imageStyle = product.visualData?.imageStyle || 'Clean visual metaphor, cinematic studio lighting';
+
+      const promptRes = await ai.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: [{ text: `
+You are Chloe, an elite Visual Art Director and Brand Strategist for high-growth tech brands.
+Your task is to craft a highly descriptive, anti-slop image prompt for Imagen AI to generate a top-tier cover graphic for a blog post.
+
+BRAND DNA & DESIGN DIRECTIVES:
+- Brand Name: ${product.name}
+- Positioning: ${product.positioning}
+- Brand Visual Style: ${visualStyle}
+- Brand Color Palette: ${colors}
+- Preferred Image Style: ${imageStyle}
+
+BLOG POST CONTEXT:
+- Blog Title: "${founderInputs.blogTitle}"
+- Core Value / Key Message: "${blogData.coreMessage || ''}"
+- Target Audience: "${blogData.targetAudience || product.audience || ''}"
+- Key Topics & Insights: ${insights?.slice(0, 3).join("; ") || "Industry trends"}
+
+CRITICAL ANTI-AI SLOP INSTRUCTIONS:
+1. SPECIFIC VISUAL METAPHOR: Create a striking, atmospheric visual metaphor or architectural composition that directly symbolizes the central theme of "${founderInputs.blogTitle}".
+2. NO SAAS AI CLICHÉS:
+   - NEVER use generic blue/purple cyber network graphs or digital stream particles.
+   - NEVER use floating 3D glowing lightbulbs, gear icons, or holograms.
+   - NEVER use generic corporate stock photo scenes of smiling colleagues pointing at whiteboards.
+   - NEVER use random disconnected mountain sunsets unless strictly part of the narrative.
+   - NEVER include text, letters, numbers, or logos inside the generated graphic.
+3. COMPOSITION & LIGHTING:
+   - Aspect ratio: 16:9 header image composition.
+   - Cinematic studio lighting with soft shadows and rich depth of field.
+   - Incorporate the brand color palette (${colors}) seamlessly into the lighting, environment, or focal object.
+
+Return ONLY a JSON object with a single field:
+{
+  "imagePrompt": "Detailed 2-3 sentence prompt for Imagen AI..."
+}
+        ` }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              imagePrompt: { type: Type.STRING }
+            },
+            required: ["imagePrompt"]
+          }
+        }
+      });
+      const parsedPrompt = JSON.parse(promptRes.text || "{}");
+      if (parsedPrompt.imagePrompt) {
+        blogData.blogImagePrompt = parsedPrompt.imagePrompt;
+        console.log(`[test] Enhanced contextual blogImagePrompt created: "${parsedPrompt.imagePrompt}"`);
+      }
+    } catch (eP) {
+      console.warn("[test] Failed to generate enhanced contextual prompt:", eP);
+    }
 
     // 4. Generate AI image for the blog
     let blogImageUrl = null;

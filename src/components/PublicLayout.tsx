@@ -84,7 +84,7 @@ export function PublicLayout({ children, transparentNavbar = false }: { children
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex justify-between items-center">
             <Link to="/" className="flex items-center gap-3 group shrink-0">
-              <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-8 h-8 object-contain" />
+              <img src="/B2PLOGO.png" alt="Logo" className="w-8 h-8 object-contain" />
               <span className={`text-xl tracking-tight font-display font-bold transition-colors duration-300 ${isLight ? 'text-slate-900' : 'text-white'}`}>BrandToPost</span>
             </Link>
             
@@ -111,7 +111,7 @@ export function PublicLayout({ children, transparentNavbar = false }: { children
           
           <div className="md:col-span-4 space-y-4">
             <div className="flex items-center gap-3">
-              <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-8 h-8 object-contain" />
+              <img src="/B2PLOGO.png" alt="Logo" className="w-8 h-8 object-contain" />
               <span className="text-xl font-bold font-display tracking-tight text-slate-900">BrandToPost</span>
             </div>
             <p className="text-xs font-light text-slate-500 leading-relaxed max-w-sm">
@@ -211,7 +211,7 @@ export function PublicLayout({ children, transparentNavbar = false }: { children
               </linearGradient>
             </defs>
             <image
-              href="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+              href="/B2PLOGO.png"
               x="170"
               y="30"
               width="140"

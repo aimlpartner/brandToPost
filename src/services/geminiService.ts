@@ -41,6 +41,7 @@ export interface LayoutConfig {
 }
 
 import { renderVisualToJpegOffscreen } from '../lib/offscreenRenderer';
+import { LAYOUT_BLUEPRINTS, selectLayout } from '../lib/layoutBlueprints';
 
 export const flattenVisualData = async (imageUrl: string, customHtml: string | undefined, activeLogo: string | null, layout?: LayoutConfig): Promise<string> => {
   return renderVisualToJpegOffscreen(
@@ -737,7 +738,7 @@ const campaignSchema = {
   required: ["theme", "targetAudience", "coreMessage", "hook", "cta", "contentFormat", "dailyPosts", "repurposingNotes", "confidenceScore", "pillar", "researchSummary"]
 };
 
-export async function generateCampaign(dna: ProductDNA, focus: string, insights: string[], generateImages: boolean = false, feedback?: string, previousDraft?: Omit<WeeklyCampaign, 'id' | 'createdAt'>, channels: string[] = ['LinkedIn', 'X', 'Instagram', 'Facebook', 'Reddit'], campaignTheme?: string, subCategory?: string, userId?: string, aspectRatio?: string, onProgress?: (step: number, total: number, msg: string) => void, customToken?: string): Promise<Omit<WeeklyCampaign, 'id' | 'createdAt'>> {
+export async function generateCampaign(dna: ProductDNA, focus: string, insights: string[], generateImages: boolean = false, feedback?: string, previousDraft?: Omit<WeeklyCampaign, 'id' | 'createdAt'>, channels: string[] = ['LinkedIn', 'X', 'Instagram', 'Facebook', 'Reddit'], campaignTheme?: string, subCategory?: string, userId?: string, aspectRatio?: string, onProgress?: (step: number, total: number, msg: string) => void, customToken?: string, recentLayoutHistory?: string[]): Promise<Omit<WeeklyCampaign, 'id' | 'createdAt'>> {
   // Fetch creatives if generateImages is false
   let creatives: Creative[] = [];
   if (!generateImages && dna.id && userId) {
@@ -998,9 +999,6 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
       try {
         cachedLogoBase64 = await new Promise<string | null>((resolve) => {
           const img = new Image();
-          if (!dna.logoUrl!.startsWith('data:')) {
-            img.crossOrigin = "anonymous";
-          }
           img.onload = () => {
             const canvas = document.createElement('canvas');
             canvas.width = img.width;
@@ -1011,7 +1009,15 @@ export async function generateCampaign(dna: ProductDNA, focus: string, insights:
             resolve(canvas.toDataURL('image/png'));
           };
           img.onerror = () => resolve(null);
-          img.src = dna.logoUrl!;
+          
+          if (!dna.logoUrl!.startsWith('data:')) {
+            img.crossOrigin = "anonymous";
+            img.src = dna.logoUrl!.startsWith('blob:') || dna.logoUrl!.startsWith('/')
+              ? dna.logoUrl!
+              : `/api/proxy-image?url=${encodeURIComponent(dna.logoUrl!)}`;
+          } else {
+            img.src = dna.logoUrl!;
+          }
         });
       } catch (e) {
         console.error("Failed to pre-fetch logo", e);
@@ -1377,10 +1383,55 @@ Output JSON exactly:
     // Helper to generate image
     const generateImage = async (prompt: string, targetObj: any, label: string) => {
       try {
-        loggerService.addLog("image", "info", `[AI Backdrop Generation: ${label}] Submitting graphic description prompt to Imagen AI...`, prompt);
+        // Select blueprint deterministically first to align prompt styling
+        let selectedBlueprintId = "";
+        if (targetObj.visualType && LAYOUT_BLUEPRINTS[targetObj.visualType]) {
+          selectedBlueprintId = targetObj.visualType;
+        } else if (targetObj.visualData?.layoutId && LAYOUT_BLUEPRINTS[targetObj.visualData.layoutId]) {
+          selectedBlueprintId = targetObj.visualData.layoutId;
+        } else {
+          const history = Array.isArray(recentLayoutHistory) ? recentLayoutHistory : [];
+          const chosenBlueprint = selectLayout(history);
+          selectedBlueprintId = chosenBlueprint.id;
+        }
+
+        const blueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId];
+        let alignedPrompt = prompt;
+        if (blueprint) {
+          const isSplitOrFramed = [
+            "editorial-left",
+            "editorial-right",
+            "split-horizontal",
+            "frame-border",
+            "sidebar-right",
+            "diagonal-split",
+            "stacked-blocks",
+            "editorial-grid",
+            "strategic-grid-split",
+            "notebook-sketch"
+          ].includes(blueprint.id);
+
+          if (blueprint.isLightBg) {
+            if (isSplitOrFramed) {
+              alignedPrompt += ", bright minimal setup, high-key lighting, rich detailed composition, full-bleed photography, aesthetic setup";
+            } else {
+              alignedPrompt += ", bright minimal setup, high-key lighting, clean white background, empty negative space, aesthetic flatlay";
+            }
+          } else {
+            if (isSplitOrFramed) {
+              alignedPrompt += ", dark moody backdrop, cinematic lighting, dramatic shadows, rich detailed composition, full-bleed photography, premium editorial style";
+            } else {
+              alignedPrompt += ", dark moody backdrop, cinematic lighting, dramatic shadows, vast black negative space, premium editorial style";
+            }
+          }
+          if (!targetObj.visualData) targetObj.visualData = {};
+          targetObj.visualData.layoutId = selectedBlueprintId;
+        }
+
+        loggerService.addLog("image", "info", `[AI Backdrop Generation: ${label}] Submitting graphic description prompt to Imagen AI (Layout: ${selectedBlueprintId})...`, alignedPrompt);
         const imgRes = await generateContentProxy(
           'gemini-3.1-flash-image-preview',
-          prompt,
+          alignedPrompt,
           {
             imageConfig: {
               imageSize: "1K",
@@ -1406,32 +1457,24 @@ Output JSON exactly:
             
             if (targetObj.visualType && targetObj.visualType !== 'none') {
               const baseImg = finalImage;
-              let layoutConfig: any = undefined;
               
-              if (targetObj.visualType === 'custom-overlay' && targetObj.visualData?.customHtml) {
-                const htmlText = targetObj.visualData.customHtml.replace(/<[^>]*>?/gm, '');
-                loggerService.addLog("overlay", "info", `[Overlay Layout Scan: ${label}] Scanning negative space of generated image via multimodal Gemini...`);
-                layoutConfig = await analyzeCreativeLayout(finalImage, htmlText);
-                loggerService.addLog("overlay", "info", `[Overlay Layout Scan: ${label}] Layout mapped. Muted space at: ${layoutConfig.textPosition}, align: ${layoutConfig.textAlign}`);
-                targetObj.visualData = {
-                  ...targetObj.visualData,
-                  layout: layoutConfig
-                };
-              }
-
               loggerService.addLog("overlay", "info", `[Puppeteer Render: ${label}] Launching headless Puppeteer instance for HTML overlay flattening...`, `Type: ${targetObj.visualType}`);
-              finalImage = await renderVisualToJpegOffscreen(
+              const renderResult = await renderVisualToJpegOffscreen(
                 targetObj.visualType,
                 targetObj.visualData,
                 baseImg,
                 dna,
                 dna?.name || "Brand",
-                cachedLogoBase64 || null
+                cachedLogoBase64 || null,
+                recentLayoutHistory
               );
+
+              finalImage = renderResult.url || baseImg;
 
               targetObj.visualData = {
                  ...targetObj.visualData,
-                 baseImage: baseImg
+                 baseImage: baseImg,
+                 layoutId: renderResult.layoutId || selectedBlueprintId || undefined
               };
             } else if (cachedLogoBase64) {
               loggerService.addLog("overlay", "info", `[Logo overlay: ${label}] Applying brand logo onto the center bottom of graphic card...`);
@@ -1443,6 +1486,7 @@ Output JSON exactly:
             finalImage = await compressImage(finalImage, 0.85);
             
             targetObj.imageUrl = finalImage;
+            targetObj.layoutId = selectedBlueprintId;
             loggerService.addLog("image", "success", `[AI Backdrop Generation: ${label}] Finished flattening & post-processing.`);
             break;
           }
@@ -1453,31 +1497,8 @@ Output JSON exactly:
           loggerService.addLog("image", "error", `[AI Backdrop Generation: ${label}] No valid inline image chunks received from Gemini Imagen payload.`);
           throw new Error("No candidates returned from image generation.");
         }
-      } catch (e: any) {
-        loggerService.addLog("image", "error", `[AI Backdrop Generation: ${label}] Error encountered:`, String(e));
-        logSilentError(`Failed to generate image for ${label}`, { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined, context: "generateCampaignImages" });
-        // Fallback placeholder image so rendering doesn't crash to a black screen
-        targetObj.imageUrl = "https://placehold.co/1080x1080/000000/FFFFFF.png?text=Image+Generation+Timeout";
-        
-        // Process through VisualEngine just in case it is custom-overlay
-        if (targetObj.visualType && targetObj.visualType !== 'none') {
-           try {
-              loggerService.addLog("overlay", "warn", `[AI Backdrop Generation: ${label}] Rendering fallback layout on empty background canvas...`);
-              let finalImage = await renderVisualToJpegOffscreen(
-                targetObj.visualType,
-                targetObj.visualData,
-                targetObj.imageUrl,
-                dna,
-                dna?.name || "Brand",
-                cachedLogoBase64 || null
-              );
-              targetObj.imageUrl = finalImage;
-              loggerService.addLog("overlay", "success", `[AI Backdrop Generation: ${label}] Fallback card canvas rendered successfully.`);
-           } catch(renderingErr: any) {
-              loggerService.addLog("overlay", "error", `[AI Backdrop Generation: ${label}] Rendering fallback layout failed:`, String(renderingErr));
-              console.warn("Failed rendering fallback image");
-           }
-        }
+      } catch (err) {
+        loggerService.addLog("image", "error", `[AI Backdrop Generation: ${label}] Image generation error:`, String(err));
       }
     };
 
@@ -1897,14 +1918,17 @@ export async function generateGeneralFounderPost(params: {
   founderAgent: any;
   userId?: string;
   customToken?: string;
+  layoutId?: string;
+  recentLayoutHistory?: string[];
 }): Promise<{
   postCopy: string;
   imagePrompt?: string;
   headline?: string;
   subtext?: string;
   imageUrl?: string;
+  layoutId?: string;
 }> {
-  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, userId, customToken } = params;
+  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, userId, customToken, layoutId, recentLayoutHistory } = params;
 
   // Perform social media trend research first
   let trendResearch = "";
@@ -1951,8 +1975,9 @@ CRITICAL rules:
   if (attachmentStyle === "image-overlay") {
     prompt += `
 Since this post will have a custom graphic with text overlaid, you must also generate:
-- A short, punchy headline (1-5 words) to overlay on the image (e.g. "Kill the Status Quo", "ARR is a Lie").
-- A brief subtext (1-2 lines) to support the headline on the image.
+- A short, punchy headline (1-5 words) to overlay on the image.
+  CRITICAL: Do NOT write generic topic titles like "Ad Budgets" or "Hiring Tip". Instead, write a high-conviction, contrarian, or value-first visual hook that provokes immediate curiosity or challenges a status quo (e.g. "The Ad Budget Trap", "ARR is a Lie", "Stop Hiring Specialists", "Marginal Failure"). Max 4-5 words.
+- A brief subtext (1-2 lines) to support and detail the hook on the image. It must outline a concrete lesson, metric, or question (e.g. "Why broad digital campaigns are destroying your pipeline (and how to fix it).", "How generalist squads out-deliver outsourced agencies by 3x.").
 - A descriptive image prompt for an AI photo generator to create a beautiful, modern background graphic. It should specify high-quality editorial photography, cinematic lighting, and vast empty negative space (left, right, or top) for overlaying text. Do NOT instruct the generator to include any letters or words.
 `;
   } else if (attachmentStyle === "image-only") {
@@ -1996,9 +2021,52 @@ Return a JSON object with the following fields:
   
   // If image requested, trigger Imagen generation
   let imageUrl = "";
-  const finalImagePrompt = customImagePrompt || result.imagePrompt;
+  let finalImagePrompt = customImagePrompt || result.imagePrompt;
+  let chosenLayoutId = "";
+
   if ((attachmentStyle === "image-only" || attachmentStyle === "image-overlay") && finalImagePrompt) {
     try {
+      // Determine blueprint to align backdrop lighting (light mode vs dark mode)
+      let selectedBlueprintId = "";
+      if (layoutId && LAYOUT_BLUEPRINTS[layoutId]) {
+        selectedBlueprintId = layoutId;
+      } else if (attachmentStyle === "image-overlay") {
+        const history = Array.isArray(recentLayoutHistory) ? recentLayoutHistory : [];
+        const chosenBlueprint = selectLayout(history);
+        selectedBlueprintId = chosenBlueprint.id;
+      }
+      
+      const blueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId];
+      if (blueprint) {
+        chosenLayoutId = blueprint.id;
+        const isSplitOrFramed = [
+          "editorial-left",
+          "editorial-right",
+          "split-horizontal",
+          "frame-border",
+          "sidebar-right",
+          "diagonal-split",
+          "stacked-blocks",
+          "editorial-grid",
+          "strategic-grid-split",
+          "notebook-sketch"
+        ].includes(blueprint.id);
+
+        if (blueprint.isLightBg) {
+          if (isSplitOrFramed) {
+            finalImagePrompt += ", bright minimal setup, high-key lighting, rich detailed composition, full-bleed photography, aesthetic setup";
+          } else {
+            finalImagePrompt += ", bright minimal setup, high-key lighting, clean white background, empty negative space, aesthetic flatlay";
+          }
+        } else {
+          if (isSplitOrFramed) {
+            finalImagePrompt += ", dark moody backdrop, cinematic lighting, dramatic shadows, rich detailed composition, full-bleed photography, premium editorial style";
+          } else {
+            finalImagePrompt += ", dark moody backdrop, cinematic lighting, dramatic shadows, vast black negative space, premium editorial style";
+          }
+        }
+      }
+
       const imgRes = await generateContentProxy(
         'gemini-3.1-flash-image-preview',
         finalImagePrompt,
@@ -2026,6 +2094,28 @@ Return a JSON object with the following fields:
           }
         }
       }
+
+      // If text overlaid style is requested, flatten the graphic with text offscreen
+      if (attachmentStyle === "image-overlay" && imageUrl && selectedBlueprintId) {
+        loggerService.addLog("overlay", "info", `[Founder Post Overlay] Flattening visual using blueprint: ${selectedBlueprintId}...`);
+        const renderRes = await renderVisualToJpegOffscreen(
+          "custom-overlay",
+          {
+            headline: result.headline || "",
+            subtext: result.subtext || "",
+            layoutId: selectedBlueprintId
+          },
+          imageUrl,
+          null,
+          founderAgent.personaName || "Founder",
+          null, // No product logo on general posts
+          recentLayoutHistory
+        );
+        if (renderRes && renderRes.url) {
+          imageUrl = renderRes.url;
+          if (renderRes.layoutId) chosenLayoutId = renderRes.layoutId;
+        }
+      }
     } catch (err) {
       console.error("Failed to generate general post image background:", err);
     }
@@ -2036,7 +2126,8 @@ Return a JSON object with the following fields:
     imagePrompt: result.imagePrompt,
     headline: result.headline,
     subtext: result.subtext,
-    imageUrl: imageUrl || undefined
+    imageUrl: imageUrl || undefined,
+    layoutId: chosenLayoutId || undefined
   };
 }
 
@@ -2113,14 +2204,17 @@ export async function generateBrandedFounderPost(params: {
   product: any;
   userId?: string;
   customToken?: string;
+  layoutId?: string;
+  recentLayoutHistory?: string[];
 }): Promise<{
   postCopy: string;
   imagePrompt?: string;
   headline?: string;
   subtext?: string;
   imageUrl?: string;
+  layoutId?: string;
 }> {
-  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, product, userId, customToken } = params;
+  const { topic, referencePosts, attachmentStyle, customImagePrompt, founderAgent, product, userId, customToken, layoutId, recentLayoutHistory } = params;
 
   // Perform social media trend research first
   let trendResearch = "";
@@ -2177,8 +2271,9 @@ CRITICAL rules:
   if (attachmentStyle === "image-overlay") {
     prompt += `
 Since this post will have a custom graphic with text overlaid, you must also generate:
-- A short, punchy headline (1-5 words) to overlay on the image (e.g. "Kill the Status Quo", "ARR is a Lie").
-- A brief subtext (1-2 lines) to support the headline on the image.
+- A short, punchy headline (1-5 words) to overlay on the image. 
+  CRITICAL: Do NOT write generic topic titles like "Ad Budgets" or "Hiring Tip". Instead, write a high-conviction, contrarian, or value-first visual hook that provokes immediate curiosity or challenges a status quo (e.g. "The Ad Budget Trap", "ARR is a Lie", "Stop Hiring Specialists", "Marginal Failure"). Max 4-5 words.
+- A brief subtext (1-2 lines) to support and detail the hook on the image. It must outline a concrete lesson, metric, or question (e.g. "Why broad digital campaigns are destroying your pipeline (and how to fix it).", "How generalist squads out-deliver outsourced agencies by 3x.").
 - A descriptive image prompt for an AI photo generator to create a beautiful, modern background graphic. It should specify high-quality editorial photography, cinematic lighting, and vast empty negative space (left, right, or top) for overlaying text. Do NOT instruct the generator to include any letters or words.
 `;
   } else if (attachmentStyle === "image-only") {
@@ -2221,9 +2316,52 @@ Return a JSON object with the following fields:
   const result = JSON.parse(response.text || "{}");
   
   let imageUrl = "";
-  const finalImagePrompt = customImagePrompt || result.imagePrompt;
+  let finalImagePrompt = customImagePrompt || result.imagePrompt;
+  let chosenLayoutId = "";
+
   if ((attachmentStyle === "image-only" || attachmentStyle === "image-overlay") && finalImagePrompt) {
     try {
+      // Determine blueprint to align backdrop lighting (light mode vs dark mode)
+      let selectedBlueprintId = "";
+      if (layoutId && LAYOUT_BLUEPRINTS[layoutId]) {
+        selectedBlueprintId = layoutId;
+      } else if (attachmentStyle === "image-overlay") {
+        const history = Array.isArray(recentLayoutHistory) ? recentLayoutHistory : [];
+        const chosenBlueprint = selectLayout(history);
+        selectedBlueprintId = chosenBlueprint.id;
+      }
+      
+      const blueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId];
+      if (blueprint) {
+        chosenLayoutId = blueprint.id;
+        const isSplitOrFramed = [
+          "editorial-left",
+          "editorial-right",
+          "split-horizontal",
+          "frame-border",
+          "sidebar-right",
+          "diagonal-split",
+          "stacked-blocks",
+          "editorial-grid",
+          "strategic-grid-split",
+          "notebook-sketch"
+        ].includes(blueprint.id);
+
+        if (blueprint.isLightBg) {
+          if (isSplitOrFramed) {
+            finalImagePrompt += ", bright minimal setup, high-key lighting, rich detailed composition, full-bleed photography, aesthetic setup";
+          } else {
+            finalImagePrompt += ", bright minimal setup, high-key lighting, clean white background, empty negative space, aesthetic flatlay";
+          }
+        } else {
+          if (isSplitOrFramed) {
+            finalImagePrompt += ", dark moody backdrop, cinematic lighting, dramatic shadows, rich detailed composition, full-bleed photography, premium editorial style";
+          } else {
+            finalImagePrompt += ", dark moody backdrop, cinematic lighting, dramatic shadows, vast black negative space, premium editorial style";
+          }
+        }
+      }
+
       const imgRes = await generateContentProxy(
         'gemini-3.1-flash-image-preview',
         finalImagePrompt,
@@ -2251,6 +2389,28 @@ Return a JSON object with the following fields:
           }
         }
       }
+
+      // If text overlaid style is requested, flatten the graphic with text offscreen
+      if (attachmentStyle === "image-overlay" && imageUrl && selectedBlueprintId) {
+        loggerService.addLog("overlay", "info", `[Founder Post Branded Overlay] Flattening visual using blueprint: ${selectedBlueprintId}...`);
+        const renderRes = await renderVisualToJpegOffscreen(
+          "custom-overlay",
+          {
+            headline: result.headline || "",
+            subtext: result.subtext || "",
+            layoutId: selectedBlueprintId
+          },
+          imageUrl,
+          product, // Pass full product context to use brand colors and fonts
+          product.name,
+          product.logoUrl || null,
+          recentLayoutHistory
+        );
+        if (renderRes && renderRes.url) {
+          imageUrl = renderRes.url;
+          if (renderRes.layoutId) chosenLayoutId = renderRes.layoutId;
+        }
+      }
     } catch (err) {
       console.error("Failed to generate branded post image background:", err);
     }
@@ -2261,7 +2421,119 @@ Return a JSON object with the following fields:
     imagePrompt: result.imagePrompt,
     headline: result.headline,
     subtext: result.subtext,
-    imageUrl: imageUrl || undefined
+    imageUrl: imageUrl || undefined,
+    layoutId: chosenLayoutId || undefined
   };
 }
+
+export interface RawDiscoveredTemplate {
+  id: string;
+  name: string;
+  sourceTrend: string;
+  viralityScore: string;
+  whyViral: string;
+  isLightBg: boolean;
+  rawHtml: string;
+}
+
+export interface VisualTrendReport {
+  summary: string;
+  viralPick: {
+    name: string;
+    templateId: string;
+    viralityScore: string;
+    whyViral: string;
+  };
+  discoveredTemplates: RawDiscoveredTemplate[];
+}
+
+export async function researchVisualTrends(): Promise<VisualTrendReport> {
+  const promptText = `You are a world-class B2B visual marketing researcher and HTML/CSS layout architect.
+Perform a deep market research evaluation of current top-performing B2B LinkedIn & X/Twitter visual formats (founder posts, single-image briefs, carousels, and infographic quotes).
+
+Do NOT pick from or restrict yourself to any predefined template library.
+Instead, synthesize 3 RAW, DYNAMIC, COMPLETELY ORIGINAL HTML/CSS layout templates representing the exact visual trends dominating the market right now.
+
+Each template's 'rawHtml' field MUST contain a self-contained 1080px by 1080px HTML layout using inline CSS styles.
+Dimensions MUST be exactly 1080px wide by 1080px high (style="width: 1080px; height: 1080px; box-sizing: border-box; position: relative; overflow: hidden;").
+
+Use ONLY these exact text placeholder tokens inside rawHtml:
+- {{HEADLINE}} : Main hook headline text
+- {{SUBTEXT}} : Supporting thesis text
+- {{IMAGE_URL}} : Background or featured image URL
+- {{LOGO_URL}} : Brand logo container/image placeholder
+- {{PRIMARY_COLOR}} : Primary brand color hex
+- {{SECONDARY_COLOR}} : Secondary color hex
+- {{FONT_FAMILY}} : Font family name
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "summary": "Brief high-level summary of active visual positioning trends in the market",
+  "viralPick": {
+    "name": "Name of the #1 most viral discovered trend",
+    "templateId": "discovered-1",
+    "viralityScore": "98/100 Virality Index",
+    "whyViral": "Detailed explanation of why this layout structure converts"
+  },
+  "discoveredTemplates": [
+    {
+      "id": "discovered-1",
+      "name": "Discovered Trend Name",
+      "sourceTrend": "Trending format on LinkedIn/X",
+      "viralityScore": "98/100",
+      "whyViral": "Market research breakdown",
+      "isLightBg": false,
+      "rawHtml": "<div style=\\"width: 1080px; height: 1080px; ...\\">... {{HEADLINE}} ... {{SUBTEXT}} ... <img src=\\"{{IMAGE_URL}}\\" /> ... {{LOGO_URL}} ...</div>"
+    }
+  ]
+}`;
+
+  const modelsToTry = ["gemini-3.1-pro-preview", "gemini-3.5-flash", "gemini-2.5-flash"];
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    try {
+      console.log(`[researchVisualTrends] Attempting model: ${model}`);
+      const response = await generateContentProxy(
+        model,
+        [{ text: promptText }],
+        { responseMimeType: "application/json" }
+      );
+
+      const rawText = extractJSON(response?.text || "{}");
+      return JSON.parse(rawText);
+    } catch (err: any) {
+      console.warn(`[researchVisualTrends] Model ${model} failed, attempting fallback:`, err);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error("Failed to generate research trends with available Gemini models.");
+}
+
+export async function regenerateBlogCoverImage(
+  campaignId: string,
+  productId: string
+): Promise<{ blogImageUrl: string; blogImagePrompt: string }> {
+  const currentUser = auth.currentUser;
+  const token = currentUser ? await currentUser.getIdToken() : '';
+
+  const res = await fetch('/api/blog/regenerate-image', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ campaignId, productId })
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to regenerate blog cover image');
+  }
+
+  return await res.json();
+}
+
+
 

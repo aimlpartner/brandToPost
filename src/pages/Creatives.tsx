@@ -407,7 +407,7 @@ export function Creatives() {
           </div>
         ) : creatives.length === 0 ? (
           <div className="text-center py-8 md:py-16 px-4 bg-[#1C1C22]/50 rounded-xl border border-[#7C3AED]/20 border-dashed flex flex-col items-center">
-            <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="Tror" className="h-24 md:h-32 w-auto mb-4 drop-shadow-[0_0_15px_rgba(124,58,237,0.3)] animate-[pulse_5s_ease-in-out_infinite]" />
+            <img src="/B2P AVATAR.png" alt="Tror" className="h-24 md:h-32 w-auto mb-4 drop-shadow-[0_0_15px_rgba(124,58,237,0.3)] animate-[pulse_5s_ease-in-out_infinite]" />
             <h3 className="text-base md:text-lg font-bold text-white font-display">No creatives yet</h3>
             <p className="text-xs md:text-sm text-gray-300 mt-2 max-w-md">Connect your Drive and import a folder to let Tror start using your assets in campaigns.</p>
           </div>

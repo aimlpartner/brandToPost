@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Brain, Cpu, Upload, Loader2, Sparkles, Save, Target, MessageSquare, 
   Zap, Clock, Globe, FileText, CheckCircle2, ChevronRight, Play, Check,
-  Palette, Type, Download, Copy, RefreshCw, FileSignature, Linkedin
+  Palette, Type, Download, Copy, RefreshCw, FileSignature, Linkedin, Image as ImageIcon
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
@@ -186,6 +186,166 @@ export function MasterFounder() {
   const { products, updateProduct } = useProducts();
   const [activeTab, setActiveTab] = useState<"brain" | "brands" | "generator">("brain");
 
+  const renderMiniLayoutPreview = (id: string) => {
+    switch (id) {
+      case "auto":
+        return (
+          <div className="w-full h-20 bg-violet-50 rounded-lg overflow-hidden border border-violet-100 flex flex-col items-center justify-center text-violet-500 space-y-1">
+            <Sparkles className="h-5 w-5 text-violet-500 animate-pulse" />
+            <span className="text-[8px] font-bold tracking-wider">AUTO ROTATE</span>
+          </div>
+        );
+      case "editorial-left":
+        return (
+          <div className="w-full h-20 bg-slate-800 rounded-lg overflow-hidden flex border border-slate-200">
+            <div className="w-[40%] bg-[#1e293b] p-1 flex flex-col justify-between border-r border-violet-500/20">
+              <div className="space-y-0.5">
+                <div className="h-0.5 w-3 bg-violet-400 rounded"></div>
+                <div className="h-1.5 w-full bg-white/80 rounded"></div>
+                <div className="h-1 w-3/4 bg-slate-400 rounded"></div>
+              </div>
+              <div className="h-1.5 w-4 bg-slate-500/50 rounded"></div>
+            </div>
+            <div className="w-[60%] bg-slate-200 flex items-center justify-center">
+              <ImageIcon className="h-4 w-4 text-slate-400" />
+            </div>
+          </div>
+        );
+      case "editorial-right":
+        return (
+          <div className="w-full h-20 bg-slate-800 rounded-lg overflow-hidden flex border border-slate-200">
+            <div className="w-[60%] bg-slate-200 flex items-center justify-center">
+              <ImageIcon className="h-4 w-4 text-slate-400" />
+            </div>
+            <div className="w-[40%] bg-[#1e293b] p-1 flex flex-col justify-between border-l border-violet-500/20">
+              <div className="space-y-0.5">
+                <div className="h-0.5 w-3 bg-violet-400 rounded"></div>
+                <div className="h-1.5 w-full bg-white/80 rounded"></div>
+                <div className="h-1 w-3/4 bg-slate-400 rounded"></div>
+              </div>
+              <div className="h-1.5 w-4 bg-slate-500/50 rounded"></div>
+            </div>
+          </div>
+        );
+      case "cinema-bottom":
+        return (
+          <div className="w-full h-20 bg-slate-200 rounded-lg overflow-hidden relative border border-slate-200 flex items-center justify-center">
+            <ImageIcon className="h-4 w-4 text-slate-400" />
+            <div className="absolute bottom-0 left-0 w-full h-[35%] bg-slate-900/90 border-t border-violet-500 p-1 flex justify-between items-center">
+              <div className="space-y-0.5 w-[70%]">
+                <div className="h-1.5 w-full bg-white rounded"></div>
+                <div className="h-0.5 w-3/4 bg-slate-400 rounded"></div>
+              </div>
+              <div className="h-1 w-3 bg-slate-500/50 rounded"></div>
+            </div>
+          </div>
+        );
+      case "knockout-type":
+        return (
+          <div className="w-full h-20 bg-slate-300 rounded-lg overflow-hidden relative border border-slate-200 flex items-center justify-center">
+            <div className="absolute inset-0 bg-slate-900/40 z-0"></div>
+            <ImageIcon className="h-4 w-4 text-slate-400/60" />
+            <div className="absolute inset-0 p-1.5 flex flex-col justify-end z-10 space-y-0.5">
+              <div className="h-1 w-4 bg-violet-500 rounded"></div>
+              <div className="h-2 w-4/5 bg-white rounded"></div>
+              <div className="h-2 w-3/5 bg-white rounded"></div>
+              <div className="h-1 w-1/2 bg-slate-300 rounded"></div>
+            </div>
+          </div>
+        );
+      case "ticker-strip":
+        return (
+          <div className="w-full h-20 bg-slate-200 rounded-lg overflow-hidden relative border border-slate-200 flex items-center justify-center">
+            <ImageIcon className="h-4 w-4 text-slate-400" />
+            <div className="absolute top-[35%] left-0 w-full h-[30%] bg-slate-950/95 border-y border-violet-500 p-1 flex justify-between items-center">
+              <div className="h-1.5 w-2/3 bg-white rounded"></div>
+              <div className="h-1 w-3 bg-slate-500/50 rounded"></div>
+            </div>
+          </div>
+        );
+      case "stacked-blocks":
+        return (
+          <div className="w-full h-20 bg-slate-200 rounded-lg overflow-hidden relative border border-slate-200 flex items-center justify-center">
+            <ImageIcon className="h-4 w-4 text-slate-400" />
+            <div className="absolute bottom-1 left-1.5 space-y-0.5 flex flex-col items-start max-w-[90%]">
+              <div className="bg-slate-900 text-white px-1 py-0.5 rounded shadow border-b border-violet-500">
+                <div className="h-1.5 w-8 bg-white rounded"></div>
+              </div>
+              <div className="bg-white px-1 py-0.5 rounded shadow">
+                <div className="h-1 w-10 bg-slate-700 rounded"></div>
+              </div>
+            </div>
+          </div>
+        );
+      case "frame-border":
+        return (
+          <div className="w-full h-20 bg-slate-50 rounded-lg p-1 overflow-hidden flex flex-col justify-between border border-slate-200">
+            <div className="w-full h-[70%] bg-slate-200 rounded flex items-center justify-center">
+              <ImageIcon className="h-3 w-3 text-slate-400" />
+            </div>
+            <div className="flex justify-between items-center px-0.5">
+              <div className="space-y-0.5">
+                <div className="h-1 w-10 bg-slate-800 rounded"></div>
+                <div className="h-0.5 w-6 bg-slate-400 rounded"></div>
+              </div>
+              <div className="h-1 w-3 bg-slate-350 rounded"></div>
+            </div>
+          </div>
+        );
+      case "diagonal-split":
+        return (
+          <div className="w-full h-20 bg-[#111827] rounded-lg overflow-hidden relative border border-slate-200">
+            <div className="absolute inset-0 bg-slate-200" style={{ clipPath: "polygon(0 0, 100% 0, 100% 50%, 0% 75%)" }}>
+              <div className="w-full h-full flex items-center justify-center">
+                <ImageIcon className="h-4 w-4 text-slate-400" />
+              </div>
+            </div>
+            <div className="absolute bottom-1 left-1 right-1 flex justify-between items-end z-10">
+              <div className="space-y-0.5 max-w-[70%]">
+                <div className="h-1.5 w-full bg-white rounded border-l border-violet-500 pl-0.5"></div>
+                <div className="h-0.5 w-3/4 bg-slate-400 rounded pl-0.5"></div>
+              </div>
+              <div className="h-1 w-3 bg-slate-500/50 rounded"></div>
+            </div>
+          </div>
+        );
+      case "neon-minimal":
+        return (
+          <div className="w-full h-20 bg-slate-200 rounded-lg overflow-hidden relative border border-slate-200 flex items-center justify-center">
+            <div className="absolute inset-0 bg-slate-900/30"></div>
+            <ImageIcon className="h-4 w-4 text-slate-400" />
+            <div className="absolute bottom-1.5 left-1.5 right-1.5 space-y-0.5">
+              <div className="flex gap-0.5">
+                <div className="h-1.5 w-4 bg-violet-500 rounded"></div>
+                <div className="h-1.5 w-6 bg-white rounded"></div>
+                <div className="h-1.5 w-3 bg-violet-500 rounded"></div>
+              </div>
+              <div className="h-0.5 w-8 bg-slate-300 rounded"></div>
+            </div>
+          </div>
+        );
+      case "editorial-grid":
+        return (
+          <div className="w-full h-20 bg-slate-50 rounded-lg p-1 overflow-hidden flex justify-between items-center border border-slate-200">
+            <div className="w-[50%] space-y-1 pl-0.5">
+              <div className="h-0.5 w-4 bg-violet-500 rounded"></div>
+              <div className="h-2 w-full bg-slate-800 rounded"></div>
+              <div className="h-1 w-3/4 bg-slate-400 rounded"></div>
+            </div>
+            <div className="w-[45%] h-[85%] bg-slate-200 rounded flex items-center justify-center border border-white shadow-sm">
+              <ImageIcon className="h-3 w-3 text-slate-400" />
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <div className="w-full h-20 bg-slate-200 rounded-lg flex items-center justify-center">
+            <ImageIcon className="h-4 w-4 text-slate-400" />
+          </div>
+        );
+    }
+  };
+
   // Profiler collapsible control & Success Modal states
   const [showProfiler, setShowProfiler] = useState(true);
   const [hasInitializedProfilerState, setHasInitializedProfilerState] = useState(false);
@@ -346,6 +506,7 @@ export function MasterFounder() {
   const [postTopic, setPostTopic] = useState("");
   const [postReference, setPostReference] = useState("");
   const [nbAttachmentStyle, setNbAttachmentStyle] = useState<"text-only" | "image-only" | "image-overlay">("text-only");
+  const [nbSelectedLayout, setNbSelectedLayout] = useState<string>("auto");
   const [nbCustomImagePrompt, setNbCustomImagePrompt] = useState("");
   const [isGeneratingPost, setIsGeneratingPost] = useState(false);
   const [generatorLogs, setGeneratorLogs] = useState<string[]>([]);
@@ -356,6 +517,7 @@ export function MasterFounder() {
     headline?: string;
     subtext?: string;
     imageUrl?: string;
+    layoutId?: string;
   } | null>(null);
 
   // Suggestions states
@@ -647,6 +809,13 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
     setIsGeneratingPost(true);
     setGeneratorLogs(["Spawning virtual Founder Brain...", `Topic: "${postTopic}"`]);
 
+    const recentLayoutHistory = automatedPosts
+      .map((p: any) => p.layoutId)
+      .filter(Boolean)
+      .slice(0, 10);
+
+    const layoutIdParam = nbSelectedLayout === "auto" ? undefined : nbSelectedLayout;
+
     try {
       if (postScope === "general") {
         const t1 = setTimeout(() => setGeneratorLogs(p => [...p, "Analyzing behavioral heuristics for tone match..."]), 850);
@@ -658,7 +827,9 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
           attachmentStyle: nbAttachmentStyle,
           customImagePrompt: nbCustomImagePrompt,
           founderAgent: userProfile.founderAgentSynthesized,
-          userId: user?.uid
+          userId: user?.uid,
+          layoutId: layoutIdParam,
+          recentLayoutHistory
         });
 
         clearTimeout(t1); clearTimeout(t2);
@@ -678,6 +849,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
           headline: result.headline || null,
           subtext: result.subtext || null,
           imagePrompt: result.imagePrompt || null,
+          layoutId: result.layoutId || null,
           createdAt: new Date().toISOString(),
           status: "scheduled",
           topic: result.headline || "Manual Insight",
@@ -706,7 +878,9 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
             customImagePrompt: nbCustomImagePrompt,
             founderAgent: userProfile.founderAgentSynthesized,
             product: pData,
-            userId: user?.uid
+            userId: user?.uid,
+            layoutId: layoutIdParam,
+            recentLayoutHistory
           });
 
           const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
@@ -718,6 +892,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
             headline: result.headline || null,
             subtext: result.subtext || null,
             imagePrompt: result.imagePrompt || null,
+            layoutId: result.layoutId || null,
             createdAt: new Date().toISOString(),
             status: "scheduled",
             topic: `Focus: ${pData.name}`,
@@ -1911,17 +2086,63 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                   </div>
 
                   {nbAttachmentStyle !== "text-only" && (
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-555 uppercase tracking-wider mb-2">
-                        Custom Image Backdrop Prompt (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={nbCustomImagePrompt}
-                        onChange={(e) => setNbCustomImagePrompt(e.target.value)}
-                        placeholder="e.g. modern laptop desk with coffee mug, dramatic warm lighting"
-                        className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-colors"
-                      />
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-555 uppercase tracking-wider mb-2">
+                          Custom Image Backdrop Prompt (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={nbCustomImagePrompt}
+                          onChange={(e) => setNbCustomImagePrompt(e.target.value)}
+                          placeholder="e.g. modern laptop desk with coffee mug, dramatic warm lighting"
+                          className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-colors"
+                        />
+                      </div>
+
+                      {nbAttachmentStyle === "image-overlay" && (
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-555 uppercase tracking-wider mb-2">
+                            Post Visual Layout Template
+                          </label>
+                          <div className="grid grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-1">
+                            {[
+                              { id: "auto", name: "Auto-Rotate (Variety)", desc: "Cycles all compositions" },
+                              { id: "editorial-left", name: "Editorial Left Panel", desc: "Left sidebar column layout" },
+                              { id: "editorial-right", name: "Editorial Right Panel", desc: "Right sidebar column layout" },
+                              { id: "cinema-bottom", name: "Cinematic Bottom Bar", desc: "Wide widescreen base bar" },
+                              { id: "knockout-type", name: "Heavy Typography", desc: "Bold statement text overlay" },
+                              { id: "ticker-strip", name: "Ticker Strip", desc: "Center horizontal strip block" },
+                              { id: "stacked-blocks", name: "Bauhaus Block Stack", desc: "Offset geometric stickered look" },
+                              { id: "frame-border", name: "Classic Polaroid Frame", desc: "Border frame photo layout" },
+                              { id: "diagonal-split", name: "Diagonal Split Slice", desc: "Modern angled split canvas" },
+                              { id: "neon-minimal", name: "Highlight Accent", desc: "Highlighted brand word accents" },
+                              { id: "editorial-grid", name: "Clean Asymmetric Grid", desc: "Asymmetric sidebar block" }
+                            ].map((lt) => (
+                              <button
+                                key={lt.id}
+                                type="button"
+                                onClick={() => setNbSelectedLayout(lt.id)}
+                                className={`p-2 rounded-xl transition-all border text-left flex flex-col gap-2 relative group ${
+                                  nbSelectedLayout === lt.id
+                                    ? "bg-violet-50/70 border-violet-500 ring-2 ring-violet-500/20 shadow-sm"
+                                    : "bg-white border-slate-200 hover:border-slate-350 hover:shadow-xs text-slate-705"
+                                }`}
+                              >
+                                {renderMiniLayoutPreview(lt.id)}
+                                <div className="px-0.5">
+                                  <span className="text-[11px] font-bold text-slate-800 leading-tight block truncate group-hover:text-violet-700 transition-colors">
+                                    {lt.name}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 leading-normal font-light block truncate mt-0.5">
+                                    {lt.desc}
+                                  </span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -2064,19 +2285,14 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                       />
                     </div>
 
-                    {/* Visual Graphic canvas inline */}
+                    {/* Visual Graphic preview inline */}
                     {generatedPost.imageUrl && (
                       <div className="border border-slate-150 rounded-xl overflow-hidden bg-slate-50 p-4 flex justify-center">
                         <div className="w-[min(100%,360px)] aspect-square rounded-lg overflow-hidden shadow bg-white">
-                          <VisualEngine
-                            visualType={nbAttachmentStyle === "image-overlay" ? "custom-overlay" : "none"}
-                            imageUrl={generatedPost.imageUrl}
-                            visualData={{
-                              headline: generatedPost.headline || "",
-                              subtext: generatedPost.subtext || ""
-                            }}
-                            dna={mockNbDna}
-                            activeLogo=""
+                          <img
+                            src={generatedPost.imageUrl}
+                            alt="Visual graphic attachment"
+                            className="w-full h-full object-contain"
                           />
                         </div>
                       </div>
@@ -2093,7 +2309,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                 <SectionTitle icon={FileText} title="Recent Automated & Generated Insights" iconColor="text-violet-650" />
                 <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
                   {automatedPosts.map((post) => (
-                    <div key={post.id} className="bg-slate-50/50 hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-5 flex flex-col md:flex-row gap-5 transition-all duration-200 text-left">
+                    <div key={post.id} className="bg-slate-50/50 hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-5 flex flex-col md:flex-row items-start gap-5 transition-all duration-200 text-left">
                       
                       {/* Left: Text copy */}
                       <div className="flex-1 text-left min-w-0">
@@ -2162,7 +2378,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                             </button>
                           </div>
                         </div>
-                        <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-light">
+                        <p className="text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap font-light">
                           {post.postCopy}
                         </p>
                       </div>
@@ -2170,15 +2386,10 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                       {/* Right: Graphic attachment (if any) */}
                       {post.imageUrl && (
                         <div className="w-full md:w-48 aspect-square shrink-0 rounded-xl overflow-hidden shadow-sm border border-slate-150 bg-white">
-                          <VisualEngine
-                            visualType={post.imageUrl && post.headline ? "custom-overlay" : "none"}
-                            imageUrl={post.imageUrl}
-                            visualData={{
-                              headline: post.headline || "",
-                              subtext: post.subtext || ""
-                            }}
-                            dna={mockNbDna}
-                            activeLogo=""
+                          <img
+                            src={post.imageUrl}
+                            alt="Visual graphic attachment"
+                            className="w-full h-full object-contain"
                           />
                         </div>
                       )}

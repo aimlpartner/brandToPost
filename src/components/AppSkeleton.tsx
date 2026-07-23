@@ -6,7 +6,7 @@ export function AppSkeleton() {
       <div className="flex-1 flex items-center justify-center relative">
         <div className="absolute w-[180px] h-[180px] md:w-[240px] md:h-[240px] rounded-full filter blur-[25px] mix-blend-screen opacity-70 animate-pulse bg-[#7C3AED]/30 z-0"></div>
         <img 
-          src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" 
+          src="/B2PLOGO.png" 
           alt="BrandToPost Logo" 
           className="w-24 md:w-36 h-auto object-contain animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite] relative z-10" 
         />
@@ -15,7 +15,7 @@ export function AppSkeleton() {
         <div className="absolute bottom-[30px] w-[140px] h-[80px] rounded-full filter blur-[20px] opacity-70 animate-pulse bg-[#7C3AED]/20 z-0 delay-700"></div>
         <span className="text-gray-400 text-xs mb-2 font-medium tracking-wider relative z-10 uppercase">from</span>
         <img 
-          src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/WhatsApp_Image_2026-04-28_at_12.18.40_AM-removebg-preview.png" 
+          src="/Mascot.png" 
           alt="Parent Company Logo" 
           className="h-10 object-contain relative z-10" 
         />

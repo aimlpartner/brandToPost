@@ -77,11 +77,14 @@ export function Settings() {
 
   // Blog Integration States
   const [blogPlatform, setBlogPlatform] = useState<"none" | "wordpress" | "webhook" | "brandtopost">("none");
+  const [isLoadingBlogConfig, setIsLoadingBlogConfig] = useState(true);
   const [wpUrl, setWpUrl] = useState("");
   const [wpUsername, setWpUsername] = useState("");
   const [wpPassword, setWpPassword] = useState("");
+  const [hasWpPassword, setHasWpPassword] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const [hasWebhookSecret, setHasWebhookSecret] = useState(false);
   const [isSavingBlog, setIsSavingBlog] = useState(false);
   const [isTestingBlog, setIsTestingBlog] = useState(false);
   const [blogSuccessMsg, setBlogSuccessMsg] = useState<string | null>(null);
@@ -91,6 +94,7 @@ export function Settings() {
     if (!activeProduct) return;
     
     let isCancelled = false;
+    setIsLoadingBlogConfig(true);
 
     const loadStatuses = async () => {
       try {
@@ -98,6 +102,36 @@ export function Settings() {
         const headers: HeadersInit = {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         };
+
+        // Fetch Blog config in parallel immediately
+        const blogPromise = (async () => {
+          try {
+            const res = await fetch(`/api/blog/config?productId=${activeProduct.id}`, { headers });
+            if (res.ok) {
+              const data = await res.json();
+              if (!isCancelled) {
+                setBlogPlatform(data.type || "none");
+                if (data.wordpress) {
+                  setWpUrl(data.wordpress.url || "");
+                  setWpUsername(data.wordpress.username || "");
+                  setHasWpPassword(!!data.wordpress.hasPassword);
+                  setWpPassword("");
+                }
+                if (data.webhook) {
+                  setWebhookUrl(data.webhook.url || "");
+                  setHasWebhookSecret(!!data.webhook.hasSecret);
+                  setWebhookSecret("");
+                }
+              }
+            }
+          } catch (e) {
+            logSilentError(e as Error, { context: "fetchBlogConfig" });
+          } finally {
+            if (!isCancelled) {
+              setIsLoadingBlogConfig(false);
+            }
+          }
+        })();
 
         const fetchStatus = async (platform: string) => {
           try {
@@ -140,26 +174,7 @@ export function Settings() {
           logSilentError(e as Error, { context: "fetchWhatsappConfig" });
         }
 
-        try {
-          const res = await fetch(`/api/blog/config?productId=${activeProduct.id}`, { headers });
-          if (res.ok) {
-            const data = await res.json();
-            if (!isCancelled) {
-              setBlogPlatform(data.type || "none");
-              if (data.wordpress) {
-                setWpUrl(data.wordpress.url || "");
-                setWpUsername(data.wordpress.username || "");
-                setWpPassword(data.wordpress.hasPassword ? "••••••••" : "");
-              }
-              if (data.webhook) {
-                setWebhookUrl(data.webhook.url || "");
-                setWebhookSecret(data.webhook.hasSecret ? "••••••••" : "");
-              }
-            }
-          }
-        } catch (e) {
-          logSilentError(e as Error, { context: "fetchBlogConfig" });
-        }
+        await blogPromise;
 
       } catch (err) {
         logSilentError(err as Error, { context: "loadStatuses" });
@@ -438,6 +453,15 @@ export function Settings() {
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.error || 'Failed to save blog configuration');
+      }
+
+      if (blogPlatform === 'wordpress' && wpPassword.trim()) {
+        setHasWpPassword(true);
+        setWpPassword("");
+      }
+      if (blogPlatform === 'webhook' && webhookSecret.trim()) {
+        setHasWebhookSecret(true);
+        setWebhookSecret("");
       }
 
       setBlogSuccessMsg('Blog settings saved successfully.');
@@ -736,7 +760,12 @@ export function Settings() {
       </div>
     )}
 
-    <form onSubmit={handleSaveBlogConfig} className="space-y-4">
+    {isLoadingBlogConfig ? (
+      <div className="py-6 flex items-center gap-2 text-xs text-slate-500 font-medium">
+        <RefreshCw className="w-4 h-4 animate-spin text-[#7C3AED]" /> Loading saved integration settings...
+      </div>
+    ) : (
+      <form onSubmit={handleSaveBlogConfig} className="space-y-4">
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">CMS / Platform Type</label>
         <select
@@ -749,18 +778,10 @@ export function Settings() {
           className="w-full sm:max-w-xs border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
         >
           <option value="none">None / Disabled</option>
-          <option value="brandtopost">BrandToPost Native Blog</option>
           <option value="wordpress">WordPress (Self-Hosted)</option>
           <option value="webhook">Custom Webhook (Wix, Ghost, Custom, Zapier)</option>
         </select>
       </div>
-
-      {blogPlatform === "brandtopost" && (
-        <div className="text-xs text-slate-550 bg-[#FAF9F6] border border-slate-900/10 p-4 rounded-xl space-y-1 animate-in slide-in-from-top-2 duration-200 text-left">
-          <p className="font-semibold text-slate-900 font-sans">Native Blog Publishing:</p>
-          <p className="font-light">No configuration needed. Your generated campaigns will publish directly to the built-in <strong>/blog</strong> section of your website.</p>
-        </div>
-      )}
 
       {blogPlatform === "wordpress" && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-in slide-in-from-top-2 duration-200">
@@ -787,11 +808,14 @@ export function Settings() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Application Password</label>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Application Password</span>
+              {hasWpPassword && <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">✓ Password Saved</span>}
+            </label>
             <input
               type="password"
-              required
-              placeholder="•••• •••• •••• ••••"
+              required={!hasWpPassword}
+              placeholder={hasWpPassword ? "Password configured (Leave blank to keep existing)" : "•••• •••• •••• ••••"}
               value={wpPassword}
               onChange={(e) => setWpPassword(e.target.value)}
               className="border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
@@ -821,10 +845,13 @@ export function Settings() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Secret Header Token (Optional)</label>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Secret Header Token</span>
+              {hasWebhookSecret && <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">✓ Secret Configured</span>}
+            </label>
             <input
               type="password"
-              placeholder="Secret sent in X-BrandToPost-Secret header"
+              placeholder={hasWebhookSecret ? "Secret configured (Leave blank to keep existing)" : "knwn_blog_sec_..."}
               value={webhookSecret}
               onChange={(e) => setWebhookSecret(e.target.value)}
               className="border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
@@ -860,6 +887,7 @@ export function Settings() {
         </div>
       )}
     </form>
+    )}
   </div>
 
   {/* Guided Tour & Setup Wizard Management Section */}

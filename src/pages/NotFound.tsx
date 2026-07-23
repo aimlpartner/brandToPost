@@ -79,7 +79,7 @@ export function NotFound() {
               className="relative cursor-pointer"
             >
               <img
-                src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+                src="/B2P AVATAR.png"
                 alt="Tror Mascot"
                 className="w-52 h-52 object-contain filter drop-shadow-[0_10px_25px_rgba(124,58,237,0.12)] hover:scale-102 transition-transform duration-500"
               />

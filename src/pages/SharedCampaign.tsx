@@ -249,7 +249,7 @@ export function SharedCampaign() {
  <div className="flex items-center gap-3 group">
   <div className="w-8 h-8 rounded-lg bg-[#7C3AED] p-[1px] shadow-[0_0_15px_rgba(124,58,237,0.3)]">
  <div className="w-full h-full bg-[#1C1C22] rounded-[7px] flex items-center justify-center">
- <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-5 h-5 object-contain" />
+ <img src="/B2PLOGO.png" alt="Logo" className="w-5 h-5 object-contain" />
  </div>
  </div>
  <div>
@@ -326,7 +326,7 @@ export function SharedCampaign() {
       <div className="mt-4 bg-[#1C1C22]/95 backdrop-blur-xl border border-[#2583EB]/20 rounded-2xl p-6 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300">
         <div className="flex items-start gap-4">
           <div className="shrink-0 hidden sm:block">
-            <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" alt="Tror" className="w-12 h-12 rounded-full border border-[#2583EB]/50 bg-[#0A0A0F]" />
+            <img src="/B2P AVATAR.png" alt="Tror" className="w-12 h-12 rounded-full border border-[#2583EB]/50 bg-[#0A0A0F]" />
           </div>
           <div>
             <h5 className="text-xs font-bold text-[#2583EB] mb-2 uppercase tracking-wide">Detailed Insights Briefing</h5>

@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Settings, FileText, Megaphone, CalendarClock, ChevronDown, Plus, LogOut, Image as ImageIcon, UserCircle, Clapperboard, Gauge, MessageSquare, Brain, Sparkles } from "lucide-react";
+import { LayoutDashboard, Settings, FileText, Megaphone, CalendarClock, ChevronDown, Plus, LogOut, Image as ImageIcon, UserCircle, Clapperboard, Gauge, MessageSquare, Brain, Sparkles, Layout } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -52,7 +52,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
      className="tour-brand-switcher w-full flex items-center gap-2.5 hover:bg-slate-50 p-2 rounded-xl transition-colors"
     >
-     <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="B2P" className="h-8 w-8 rounded-lg shrink-0 object-contain" />
+     <img src="/B2PLOGO.png" alt="B2P" className="h-8 w-8 rounded-lg shrink-0 object-contain" />
      <div className="flex flex-col items-start flex-1 min-w-0">
        <span className="text-sm font-semibold text-slate-800 truncate w-full text-left">{activeProduct?.name || 'Select Brand'}</span>
      </div>
@@ -186,7 +186,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     {/* DNA Visualizer Demo Link */}
     <div className="mt-2">
       <NavLink
-        to="/dna-demo"
+        to="/templates"
         onClick={onClose}
         className={({ isActive }) =>
           cn(
@@ -197,11 +197,11 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           )
         }
       >
-        <Sparkles
+        <Layout
           className="h-[18px] w-[18px] shrink-0 text-slate-400"
           strokeWidth={1.8}
         />
-        <span className="font-bold flex-1 min-w-0 truncate text-[12px] sm:text-[13px]">DNA Demo Studio</span>
+        <span className="font-bold flex-1 min-w-0 truncate text-[12px] sm:text-[13px]">Visual Template Library</span>
       </NavLink>
     </div>
    </nav>

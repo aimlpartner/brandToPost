@@ -7,6 +7,7 @@ import {
   generateCampaign,
   researchFocus,
   regeneratePostWithFeedback,
+  regenerateBlogCoverImage,
 } from "../services/geminiService";
 import {
   Loader2,
@@ -173,6 +174,31 @@ export function Campaigns() {
   const [queuing, setQueuing] = useState<Record<string, boolean>>({});
   const [queued, setQueued] = useState<Record<string, boolean>>({});
   const [isOverviewExpanded, setIsOverviewExpanded] = useState(false);
+  const [isRegeneratingBlogImage, setIsRegeneratingBlogImage] = useState(false);
+
+  const handleRegenerateBlogImage = async () => {
+    if (!selectedCampaign || !activeProduct) return;
+    setIsRegeneratingBlogImage(true);
+    try {
+      const res = await regenerateBlogCoverImage(selectedCampaign.id, activeProduct.id);
+      setSelectedCampaign((prev: any) => prev ? {
+        ...prev,
+        blogImageUrl: res.blogImageUrl,
+        blogImagePrompt: res.blogImagePrompt
+      } : null);
+
+      setCampaigns((prevList) => prevList.map(c => c.id === selectedCampaign.id ? {
+        ...c,
+        blogImageUrl: res.blogImageUrl,
+        blogImagePrompt: res.blogImagePrompt
+      } : c));
+    } catch (err: any) {
+      console.error("Failed to regenerate blog cover image:", err);
+      alert(err.message || "Failed to regenerate blog cover image.");
+    } finally {
+      setIsRegeneratingBlogImage(false);
+    }
+  };
 
   const [previewPost, setPreviewPost] = useState<{
     platform: string;
@@ -1083,6 +1109,24 @@ export function Campaigns() {
         `Tror is drafting your posts using your Brand DNA...`,
       );
 
+      // Extract recent layout history from existing campaigns of this product to rotation-safeguard
+      const recentLayoutHistory: string[] = [];
+      if (campaigns) {
+        const productCampaigns = campaigns
+          .filter((c: any) => c.productId === activeProduct?.id)
+          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        for (const camp of productCampaigns) {
+          if (camp.dailyPosts) {
+            for (const dp of camp.dailyPosts) {
+              const lid = dp.layoutId || dp.visualData?.layoutId || dp.visualData?.layout?.layoutId;
+              if (lid) recentLayoutHistory.push(lid);
+            }
+          }
+          if (recentLayoutHistory.length >= 12) break;
+        }
+      }
+
       const newCampaignData = await generateCampaign(
         activeProduct!,
         finalFocus,
@@ -1100,6 +1144,8 @@ export function Campaigns() {
           setGenerationTotal(total + 1);
           setGenerationStatus(msg);
         },
+        undefined,
+        recentLayoutHistory
       );
 
       const dayOffsets: Record<string, number> = {
@@ -1158,6 +1204,24 @@ export function Campaigns() {
         : "Tror is reviewing your Brand DNA...",
     );
 
+    // Extract recent layout history from existing campaigns of this product to rotation-safeguard
+    const recentLayoutHistory: string[] = [];
+    if (campaigns) {
+      const productCampaigns = campaigns
+        .filter((c: any) => c.productId === activeProduct?.id)
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      for (const camp of productCampaigns) {
+        if (camp.dailyPosts) {
+          for (const dp of camp.dailyPosts) {
+            const lid = dp.layoutId || dp.visualData?.layoutId || dp.visualData?.layout?.layoutId;
+            if (lid) recentLayoutHistory.push(lid);
+          }
+        }
+        if (recentLayoutHistory.length >= 12) break;
+      }
+    }
+
     try {
       const newCampaignData = await generateCampaign(
         activeProduct!,
@@ -1176,6 +1240,8 @@ export function Campaigns() {
           setGenerationTotal(total);
           setGenerationStatus(msg);
         },
+        undefined,
+        recentLayoutHistory
       );
 
       const dayOffsets: Record<string, number> = {
@@ -1979,7 +2045,7 @@ export function Campaigns() {
                 .length === 0 ? (
                 <>
                   <img
-                    src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+                    src="/B2P AVATAR.png"
                     alt="Tror"
                     className="h-32 w-auto mb-4 drop-shadow-[0_0_15px_rgba(124,58,237,0.3)] animate-[bounce_5s_ease-in-out_infinite]"
                   />
@@ -2206,7 +2272,7 @@ export function Campaigns() {
                     <div className="flex items-start gap-4">
                       <div className="shrink-0 hidden sm:block mt-1">
                         <img
-                          src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+                          src="/B2P AVATAR.png"
                           alt="Tror"
                           className="w-10 h-10 rounded-full border border-blue-250 bg-white"
                         />
@@ -2448,8 +2514,8 @@ export function Campaigns() {
               <div className="space-y-8">
                 {selectedCampaign.isBlog ? (
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
-                    {/* Visual 16:9 Image Backdrop (No Overlay Text) */}
-                    {selectedCampaign.blogImageUrl && (
+                    {/* Visual 16:9 Image Backdrop */}
+                    {selectedCampaign.blogImageUrl ? (
                       <div className="relative aspect-[16/9] w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner group">
                         <img
                           src={selectedCampaign.blogImageUrl}
@@ -2458,6 +2524,15 @@ export function Campaigns() {
                         />
                         <div className="absolute top-4 right-4 flex gap-2">
                           <button
+                            onClick={handleRegenerateBlogImage}
+                            disabled={isRegeneratingBlogImage}
+                            className="bg-black/60 hover:bg-black/80 text-white px-3 py-2 rounded-xl backdrop-blur-md transition-colors text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
+                            title="Regenerate Brand Cover Image"
+                          >
+                            <Sparkles className={`h-3.5 w-3.5 ${isRegeneratingBlogImage ? 'animate-spin text-violet-400' : 'text-amber-300'}`} />
+                            {isRegeneratingBlogImage ? 'Generating...' : 'Regenerate Cover'}
+                          </button>
+                          <button
                             onClick={() => handleDownloadImage(selectedCampaign.blogImageUrl!, `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_visual.png`)}
                             className="bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl backdrop-blur-md transition-colors"
                             title="Download Visual"
@@ -2465,6 +2540,19 @@ export function Campaigns() {
                             <Download className="h-4 w-4" />
                           </button>
                         </div>
+                      </div>
+                    ) : (
+                      <div className="relative aspect-[16/9] w-full rounded-2xl overflow-hidden border border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+                        <ImageIcon className="h-10 w-10 text-slate-400 mb-2" />
+                        <p className="text-sm text-slate-600 font-medium mb-3">No Brand Cover Image Generated Yet</p>
+                        <button
+                          onClick={handleRegenerateBlogImage}
+                          disabled={isRegeneratingBlogImage}
+                          className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-sm disabled:opacity-50"
+                        >
+                          <Sparkles className={`h-4 w-4 ${isRegeneratingBlogImage ? 'animate-spin text-violet-200' : 'text-amber-300'}`} />
+                          {isRegeneratingBlogImage ? 'Generating Cover Image...' : 'Generate Brand Cover Image'}
+                        </button>
                       </div>
                     )}
 
@@ -3293,7 +3381,7 @@ export function Campaigns() {
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <img
-                              src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+                              src="/B2P AVATAR.png"
                               alt="Tror"
                               className="w-4 h-4 rounded-full border border-[#7C3AED]/30"
                             />
@@ -3363,7 +3451,7 @@ export function Campaigns() {
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <img
-                              src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+                              src="/B2P AVATAR.png"
                               alt="Tror"
                               className="w-4 h-4 rounded-full border border-[#7C3AED]/30"
                             />
@@ -3423,7 +3511,7 @@ export function Campaigns() {
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <img
-                              src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+                              src="/B2P AVATAR.png"
                               alt="Tror"
                               className="w-4 h-4 rounded-full border border-[#7C3AED]/30"
                             />

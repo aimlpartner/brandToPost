@@ -363,7 +363,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3 group shrink-0">
-              <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" alt="Logo" className="w-8 h-8 object-contain" />
+              <img src="/B2PLOGO.png" alt="Logo" className="w-8 h-8 object-contain" />
               <span className={`text-xl tracking-tight font-display font-bold ${isScrolled ? 'text-slate-900' : 'text-white'}`}>BrandToPost</span>
             </div>
             
@@ -403,17 +403,25 @@ export function LandingPage() {
         {/* Hero Copy Content Container */}
         <div className="max-w-7xl mx-auto w-full relative z-10 text-left">
           <div className="max-w-3xl space-y-6">
+            
+            {/* Main Headline */}
             <h1 
               className="text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-light tracking-tight leading-[1.1] font-display"
               style={{ color: '#FFFFFF' }}
             >
-              Marketing <br />
-              that <span style={{ color: '#C084FC' }}>runs itself.</span>
+              Consistency <br />
+              is everything <span style={{ color: '#C084FC' }}>in marketing.</span>
             </h1>
             
-            <p className="text-base sm:text-lg font-normal leading-relaxed max-w-xl" style={{ color: '#E2E8F0' }}>
-              Deploy your virtual AI marketing department starting at <span className="font-bold" style={{ color: '#FFFFFF' }}>₹2,499/mo</span>. We auto-publish your content while you scale.
-            </p>
+            {/* Highlighted Subheading & Supporting Copy */}
+            <div className="space-y-2 max-w-xl">
+              <h2 className="text-xl sm:text-2xl font-normal font-display tracking-tight leading-snug" style={{ color: '#FFFFFF' }}>
+                We make sure you <span style={{ color: '#C084FC' }} className="font-semibold">never miss a day.</span>
+              </h2>
+              <p className="text-base sm:text-lg font-light leading-relaxed" style={{ color: '#E2E8F0' }}>
+                Input 1 URL to deploy a virtual AI team that writes, designs, and posts for you on autopilot starting at <span className="font-bold" style={{ color: '#FFFFFF' }}>₹2,499/mo</span>.
+              </p>
+            </div>
             
             <div className="flex flex-col sm:flex-row justify-start items-center gap-4 pt-2">
               <Link to="/login?mode=signup" className="group flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-base transition-all hover:scale-105 active:scale-95 shadow-lg shadow-[#7C3AED]/20 w-full sm:w-auto text-center">
@@ -436,38 +444,17 @@ export function LandingPage() {
               </a>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* 3. METRICS BOARD (Tech Luxury Dark Transition Strip) */}
-      <section ref={setMetricsRef} className="py-14 border-y border-white/5 bg-[#08080C] text-white relative z-10">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center divide-y-0 md:divide-x divide-white/10">
-            <div className="flex flex-col items-center">
-               <div className="text-3xl md:text-5xl font-extrabold font-mono text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 mb-1.5 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
-                 {metrics.prompts}
-               </div>
-               <div className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Prompts Required</div>
-            </div>
-            <div className="flex flex-col items-center">
-               <div className="text-3xl md:text-5xl font-extrabold font-mono text-transparent bg-clip-text bg-gradient-to-r from-[#C084FC] to-[#7C3AED] mb-1.5 drop-shadow-[0_0_15px_rgba(124,58,237,0.2)]">
-                 {metrics.voice}%
-               </div>
-               <div className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Arthur Voice Match</div>
-            </div>
-            <div className="flex flex-col items-center">
-               <div className="text-3xl md:text-5xl font-extrabold font-mono text-[#2583EB] mb-1.5 drop-shadow-[0_0_15px_rgba(37,131,235,0.2)]">
-                 &lt; {metrics.time}m
-               </div>
-               <div className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Total Setup Time</div>
-            </div>
-            <div className="flex flex-col items-center">
-               <div className="text-3xl md:text-5xl font-extrabold font-mono text-[#10B981] mb-1.5 drop-shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                 {metrics.channels}+
-               </div>
-               <div className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Publishing Channels</div>
+          {/* Trusted Company Logos Row (Spreads Across Full Max-W-7XL Width) */}
+          <div className="pt-10 sm:pt-14 border-t border-white/10 mt-12 sm:mt-16 w-full max-w-7xl">
+            <div className="grid grid-cols-2 sm:grid-cols-4 items-center justify-items-center gap-8 sm:gap-12 lg:gap-16">
+              <img src="/MINIM-logo-primary.png" alt="MINIM" className="max-h-10 sm:max-h-14 md:max-h-16 lg:max-h-20 w-auto object-contain brightness-125 hover:scale-105 transition-all" />
+              <img src="/aimlpartner_logo.png" alt="AIMLPARTNER" className="max-h-12 sm:max-h-16 md:max-h-20 lg:max-h-24 w-auto object-contain brightness-125 hover:scale-105 transition-all" />
+              <img src="/superherogym_logo.png" alt="SUPERHERO GYM" className="max-h-11 sm:max-h-15 md:max-h-18 lg:max-h-22 w-auto object-contain brightness-125 hover:scale-105 transition-all" />
+              <img src="/weareknwn_logo.png" alt="WEAREKNWN" className="max-h-10 sm:max-h-14 md:max-h-16 lg:max-h-20 w-auto object-contain brightness-125 hover:scale-105 transition-all" />
             </div>
           </div>
+
         </div>
       </section>
 
@@ -527,32 +514,120 @@ export function LandingPage() {
         <div className="w-full mx-auto max-w-7xl relative z-10">
           
           {/* Section Heading */}
-          <div className="max-w-4xl mb-24">
-            <h2 className="text-4xl md:text-7xl font-light font-display tracking-tight leading-[1.05] text-slate-900">
-              Stop prompting boxes. <br />
-              <span className="font-normal italic text-[#7C3AED]">Build a distribution engine.</span>
+          <div className="max-w-4xl mb-16">
+            <span className="text-xs font-mono tracking-widest text-[#7C3AED] uppercase block mb-3">THE REALITY OF MOST FOUNDERS</span>
+            <h2 className="text-4xl md:text-6xl font-light font-display tracking-tight leading-[1.05] text-slate-900">
+              Why You Stop Posting <br />
+              <span className="font-normal italic text-[#7C3AED]">After Week 1.</span>
             </h2>
           </div>
 
-          {/* Enterprise Comparative Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-start">
+          {/* 4 Life Stages of Founder Social Failure (Pain Hit -> Direct Solution) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
             
-            {/* Left Column: The Prompter's Grind */}
-            <div className="border-t border-slate-900/10 pt-10 space-y-6">
-              <h3 className="text-2xl md:text-3xl font-light font-display text-slate-900">The Prompter's Grind</h3>
-              <p className="text-base text-slate-600 font-light leading-relaxed">
-                Repeating brand context, manually editing generic AI vocabulary, formatting layouts for multiple channels, and copy-pasting posts between browser tabs daily. It introduces a new administrative workload under the promise of speed.
+            {/* Stage 1 */}
+            <div className="border-t border-slate-900/10 pt-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono font-bold text-rose-500 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-100">PAIN 01</span>
+                <h3 className="text-xl font-display font-medium text-slate-900">Blank Screen Paralysis</h3>
+              </div>
+              <p className="text-sm text-slate-600 font-light leading-relaxed">
+                It’s 10 PM on Sunday. You’ve been staring at a blank Google Doc for an hour with zero ideas and zero mental energy left after a long week.
+              </p>
+              <div className="pl-4 border-l-2 border-[#7C3AED] bg-white p-3.5 rounded-r-xl shadow-sm text-xs font-sans text-slate-800 font-light">
+                <strong className="font-semibold text-[#7C3AED]">The Fix:</strong> <strong>Sarah</strong> mines live web signals, industry news, and competitor complaints to deliver 30 fresh, ready-to-write campaign concepts every month automatically.
+              </div>
+            </div>
+
+            {/* Stage 2 */}
+            <div className="border-t border-slate-900/10 pt-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono font-bold text-rose-500 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-100">PAIN 02</span>
+                <h3 className="text-xl font-display font-medium text-slate-900">Fighting ChatGPT Cringe</h3>
+              </div>
+              <p className="text-sm text-slate-600 font-light leading-relaxed">
+                You type a prompt into ChatGPT. It spits out cheesy AI slop packed with rocket emojis. You spend 2 painful hours rewriting it line-by-line.
+              </p>
+              <div className="pl-4 border-l-2 border-[#7C3AED] bg-white p-3.5 rounded-r-xl shadow-sm text-xs font-sans text-slate-800 font-light">
+                <strong className="font-semibold text-[#7C3AED]">The Fix:</strong> <strong>Arthur</strong> locks your founder voice clone, tone constraints, and objection handlers so every generated post sounds genuinely like you.
+              </div>
+            </div>
+
+            {/* Stage 3 */}
+            <div className="border-t border-slate-900/10 pt-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono font-bold text-rose-500 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-100">PAIN 03</span>
+                <h3 className="text-xl font-display font-medium text-slate-900">Formatting Exhaustion</h3>
+              </div>
+              <p className="text-sm text-slate-600 font-light leading-relaxed">
+                You wrote 1 decent post. Now you have to manually reformat it for LinkedIn line breaks, shrink it into X threads, and design graphic cards for Instagram.
+              </p>
+              <div className="pl-4 border-l-2 border-[#7C3AED] bg-white p-3.5 rounded-r-xl shadow-sm text-xs font-sans text-slate-800 font-light">
+                <strong className="font-semibold text-[#7C3AED]">The Fix:</strong> <strong>Alex, Chloe & Julian</strong> format platform-native copy and render high-DPI magazine graphic cards with your logo stamped cleanly in 1 click.
+              </div>
+            </div>
+
+            {/* Stage 4 */}
+            <div className="border-t border-slate-900/10 pt-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono font-bold text-rose-500 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-100">PAIN 04</span>
+                <h3 className="text-xl font-display font-medium text-slate-900">Client Fires & Ghosting</h3>
+              </div>
+              <p className="text-sm text-slate-600 font-light leading-relaxed">
+                A product bug or client fire breaks out on Tuesday. Social posting gets pushed to "tomorrow". 3 weeks pass in total silence. Your channels die.
+              </p>
+              <div className="pl-4 border-l-2 border-[#7C3AED] bg-white p-3.5 rounded-r-xl shadow-sm text-xs font-sans text-slate-800 font-light">
+                <strong className="font-semibold text-[#7C3AED]">The Fix:</strong> <strong>Maya & Max</strong> auto-schedule and publish natively. You spend 2 minutes reviewing on Monday, and autopilot handles the rest.
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* 4. SCARED AN AI WILL POST EMBARRASSING CRINGE? (100% Control & 10-Min Setup Loop) */}
+      <section className="py-24 w-full bg-[#08080C] text-white border-b border-white/10 relative z-10 text-left">
+        <div className="max-w-7xl mx-auto px-6 md:px-16 lg:px-24">
+          
+          <div className="max-w-3xl mb-16">
+            <span className="text-xs font-mono tracking-widest uppercase block mb-3 font-semibold" style={{ color: '#C084FC' }}>
+              ZERO RISK GUARANTEE
+            </span>
+            <h2 className="text-4xl md:text-6xl font-light font-display tracking-tight leading-[1.05]" style={{ color: '#FFFFFF' }}>
+              Scared An AI Will Post <br />
+              <span className="font-normal italic" style={{ color: '#D8B4FE' }}>Embarrassing Cringe Under Your Name?</span>
+            </h2>
+            <p className="text-base font-light mt-4 leading-relaxed max-w-xl" style={{ color: '#E2E8F0' }}>
+              You stay in 100% control. Every Monday, review your queued campaign deck in 2 minutes. Edit any line or swap graphic cards with 1 click. <strong className="font-semibold" style={{ color: '#FFFFFF' }}>Nothing goes live without your green light.</strong>
+            </p>
+          </div>
+
+          {/* 3-Step Setup & Trust Loop */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+            <div className="border border-white/10 bg-white/5 p-8 rounded-2xl space-y-4 relative">
+              <span className="text-xs font-mono uppercase font-bold block" style={{ color: '#C084FC' }}>MIN 0 – 3</span>
+              <h3 className="text-xl font-display font-medium" style={{ color: '#FFFFFF' }}>1. Paste Your Site URL</h3>
+              <p className="text-xs font-light leading-relaxed" style={{ color: '#CBD5E1' }}>
+                Arthur & Sarah scan your website, extracting your brand DNA, tone rules, target ICPs, and core positioning automatically. Zero manual setup.
               </p>
             </div>
 
-            {/* Right Column: The Autonomous Pipeline */}
-            <div className="border-t border-slate-900/10 pt-10 space-y-6">
-              <h3 className="text-2xl md:text-3xl font-light font-display text-[#7C3AED]">The Autonomous Pipeline</h3>
-              <p className="text-base text-slate-655 text-slate-600 font-light leading-relaxed">
-                Provide your product link once. Our agent system processes your brand positioning rules, analyzes live market changes, creates native post formats, and schedules native uploads automatically.
+            <div className="border-2 border-[#7C3AED] bg-white/10 p-8 rounded-2xl space-y-4 relative shadow-lg shadow-[#7C3AED]/10">
+              <span className="text-xs font-mono uppercase font-bold block" style={{ color: '#C084FC' }}>MIN 3 – 8</span>
+              <h3 className="text-xl font-display font-medium" style={{ color: '#FFFFFF' }}>2. 1-Click Review Deck</h3>
+              <p className="text-xs font-light leading-relaxed" style={{ color: '#CBD5E1' }}>
+                Your weekly post deck appears. Tweak a sentence, swap a visual graphic card, or click "Approve All". You hold the master key at all times.
               </p>
             </div>
 
+            <div className="border border-white/10 bg-white/5 p-8 rounded-2xl space-y-4 relative">
+              <span className="text-xs font-mono uppercase font-bold block" style={{ color: '#34D399' }}>MIN 8 – 10</span>
+              <h3 className="text-xl font-display font-medium" style={{ color: '#FFFFFF' }}>3. Hands-Free Auto-Publishing</h3>
+              <p className="text-xs font-light leading-relaxed" style={{ color: '#CBD5E1' }}>
+                Maya & Max schedule and publish approved campaigns natively to your LinkedIn, X, and Instagram accounts at peak algorithmic times.
+              </p>
+            </div>
           </div>
 
         </div>
@@ -567,15 +642,17 @@ export function LandingPage() {
           
           {/* Left Column: Stark Typographic Statement & Elite Styled Copywriting */}
           <div className="lg:col-span-7 space-y-8 select-none relative z-20">
-            <h2 className="gsap-reveal-text text-6xl md:text-9xl font-light font-display text-white tracking-tighter leading-none" style={{ color: '#FFFFFF' }}>
-              Meet <span className="font-semibold text-[#C084FC]">TROR</span>.
+            <span className="text-xs font-mono tracking-widest text-[#C084FC] uppercase block">THE SINGLE ORCHESTRATOR</span>
+            <h2 className="gsap-reveal-text text-4xl md:text-6xl font-light font-display text-white tracking-tight leading-tight" style={{ color: '#FFFFFF' }}>
+              Managing 5 Different Tools <br />
+              <span className="font-normal italic text-[#C084FC]">Is Ruining Your Focus.</span>
             </h2>
             <div className="space-y-6 max-w-xl gsap-reveal-text">
               <p className="text-xl md:text-2xl text-slate-200 font-light tracking-wide leading-snug">
-                The quiet center of a <span className="italic font-serif text-[#C084FC]">loud</span> brand engine.
+                Meet <span className="font-semibold text-white">TROR</span>. The quiet brain of your AI marketing team.
               </p>
               <p className="text-sm md:text-base text-slate-400 font-light leading-relaxed border-l-2 border-[#C084FC]/30 pl-5">
-                TROR coordinates your custom agent network to execute campaigns with <span className="text-white font-medium">zero prompt engineering</span>. It locks your brand voice guidelines, crawls real-time competitive signals, and deploys platform-optimized formats automatically.
+                Stop switching between ChatGPT, Canva, Buffer, and Notion. TROR coordinates your entire 10-specialist network behind the scenes—locking your brand voice, running web research, rendering graphics, and managing schedules automatically.
               </p>
             </div>
           </div>
@@ -714,13 +791,13 @@ export function LandingPage() {
         <div className="pt-12 md:pt-16 pb-12 md:pb-16 px-6 md:px-16 lg:px-24 max-w-7xl mx-auto relative z-10">
           {/* Section Header */}
           <div className="max-w-3xl mb-16 text-left">
-            <p className="text-sm font-medium text-slate-400 mb-4 font-sans">Our output</p>
-            <h2 className="text-4xl md:text-7xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
-              1 URL in. <br />
-              <span className="font-normal italic text-[#7C3AED]">A month of pipeline out.</span>
+            <p className="text-xs font-mono tracking-widest text-[#7C3AED] uppercase mb-3">ACTUAL DELIVERABLES PROOF</p>
+            <h2 className="text-4xl md:text-6xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
+              No Generic Advice. <br />
+              <span className="font-normal italic text-[#7C3AED]">Here Is What Your Channels Will Actually Look Like.</span>
             </h2>
             <p className="text-base text-slate-600 max-w-xl font-light leading-relaxed">
-              We don't give you template libraries. Our AI employees write, design, and assemble ready-to-publish campaigns specifically tailored to your ideal clients.
+              We don't sell blank templates or prompt ebooks. Our AI team writes, designs, and formats ready-to-publish campaigns tailored specifically to your ideal clients.
             </p>
           </div>
 
@@ -958,7 +1035,7 @@ export function LandingPage() {
                           </h4>
                         </div>
                         <div className="flex justify-between items-end border-t border-slate-900/10 pt-3 mt-4">
-                          <img src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png" className="w-4.5 h-4.5 opacity-80" alt="B2P" />
+                          <img src="/B2PLOGO.png" className="w-4.5 h-4.5 opacity-80" alt="B2P" />
                           <span className="font-mono text-[8px] text-slate-400">CALIBRATED SECRETS INDEX</span>
                         </div>
                       </div>
@@ -981,13 +1058,13 @@ export function LandingPage() {
         
         {/* Section Header */}
         <div className="max-w-3xl mb-16 text-left">
-          <p className="text-sm font-medium text-[#7C3AED] mb-4 font-sans">Pricing structure</p>
+          <p className="text-xs font-mono tracking-widest text-[#7C3AED] uppercase mb-3">TRANSPARENT TIERING</p>
           <h2 className="text-4xl md:text-6xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
-            Choose your <br />
-            <span className="font-normal italic text-[#7C3AED]">Virtual Team.</span>
+            Stop Throwing Money At Courses & Tools <br />
+            <span className="font-normal italic text-[#7C3AED]">That Don't Fix Your Consistency.</span>
           </h2>
           <p className="text-base text-slate-600 max-w-xl font-light leading-relaxed mt-4">
-            Select a configuration tier based on the size of the AI marketing specialists you want active. Scale up or down as required.
+            Select a configuration tier based on the size of the AI marketing specialists you want active. Less than the cost of 1 hour of your time per month.
           </p>
         </div>
 
@@ -1164,22 +1241,22 @@ export function LandingPage() {
         
         {/* Section Header */}
         <div className="max-w-3xl mb-16 text-left">
-          <p className="text-sm font-medium text-[#7C3AED] mb-4 font-sans">Questions</p>
+          <p className="text-xs font-mono tracking-widest text-[#7C3AED] uppercase mb-3">CLEAR ANSWERS</p>
           <h2 className="text-4xl md:text-6xl font-light font-display text-slate-900 mb-6 tracking-tight leading-[1.05]">
-            Frequently Asked <br />
-            <span className="font-normal italic text-[#7C3AED]">Questions.</span>
+            Still Wondering If This Will <br />
+            <span className="font-normal italic text-[#7C3AED]">Actually Work For Your Brand?</span>
           </h2>
           <p className="text-base text-slate-600 max-w-xl font-light leading-relaxed">
-            Everything you need to know about cloning your voice, resources, and automation.
+            Direct answers to the questions every founder asks before handing over their content pipeline.
           </p>
         </div>
 
         <div className="space-y-6 text-left">
           {[
-            { q: "How accurate is Arthur at cloning my voice?", a: "Extremely accurate. Arthur doesn't just read your website; he reviews your Founder DNA profile—mapping behavioral traits, core values, vocabulary constraints, and decision heuristics. This allows Arthur to draft copy that sounds exactly like you." },
-            { q: "Do I need to type prompts to run the system?", a: "No. Tror acts as the Orchestrator. When you set up a Product Profile (DNA), Sarah scans your website and coordinates the copywriting, graphic designs, and calendar schedules automatically without you having to enter prompt parameters." },
-            { q: "How does Victor's WhatsApp integration work?", a: "Under the Agency plan, you link your business phone number to our bot. Victor sends campaign drafts directly to your mobile chat. You can reply with textual edits or schedule them live onto social queues directly from your WhatsApp app." },
-            { q: "What is the cost of running campaign generations?", a: "Each week-long multi-platform campaign costs approximately ₹96 in backend GPU rendering and API queries. We have priced our subscription tiers (Solo, Growth, Agency) to comfortably absorb these operational costs while giving you full profit margins." }
+            { q: "Do I approve what gets posted before it goes live?", a: "Yes. 100% control. Every Monday you receive a 1-click review deck. You can edit any sentence, swap graphic cards, or approve all in under 2 minutes. Nothing posts without your green light unless you explicitly turn on full autopilot." },
+            { q: "What happens in the first 10 minutes after I sign up?", a: "Min 0-3: Paste your site URL to extract Brand DNA and ICP objections. Min 3-8: Review your first 30-day campaign queue. Min 8-10: Connect your LinkedIn/X accounts and launch native autopilot publishing." },
+            { q: "Will this sound like robotic, generic AI slop?", a: "No. Arthur clones your exact founder personality, vocabulary constraints, and objection handlers from your Brand DNA sheet. Copy reads like a human founder wrote it, not a generic prompt box." },
+            { q: "How does Victor's WhatsApp integration work?", a: "Under the Agency plan, Victor sends campaign review decks directly to your WhatsApp app. Reply with text edits or click approve right from your phone without logging into any web browser." }
           ].map((item, index) => {
             const isFaqActive = activeFaq === index;
             const stepNum = String(index + 1).padStart(2, '0');
@@ -1229,7 +1306,7 @@ export function LandingPage() {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <img 
-                  src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png" 
+                  src="/B2P AVATAR.png" 
                   alt="Tror" 
                   className="w-10 h-10 rounded-full border border-white/15 object-cover" 
                 />
@@ -1398,7 +1475,7 @@ export function LandingPage() {
             
             {/* Clear, High-Fidelity Brand Logo Icon (Original Vibrant Colors) */}
             <image
-              href="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+              href="/B2PLOGO.png"
               x="170"
               y="30"
               width="140"

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { ProductDNA } from "../types";
+import { loggerService } from "../services/loggerService";
 
 interface DnaModelProps {
   progress: number; // 0 to 100
@@ -39,23 +40,40 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
   useEffect(() => {
     if (!containerRef.current || !canvasRef.current || !svgRef.current) return;
 
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
+    let width = containerRef.current.clientWidth;
+    let height = containerRef.current.clientHeight;
 
     // --- 1. Three.js Scene Setup ---
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2("#FAF9F6", 0.05); // Light theme fog matching the warm off-white
+    let scene: THREE.Scene | null = null;
+    let camera: THREE.PerspectiveCamera | null = null;
+    let renderer: THREE.WebGLRenderer | null = null;
+    let isWebGLSupported = true;
+    let ctx2d: CanvasRenderingContext2D | null = null;
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 50);
-    camera.position.set(0, 0, 9);
+    try {
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2("#FAF9F6", 0.05); // Light theme fog matching the warm off-white
 
-    const renderer = new THREE.WebGLRenderer({
-      canvas: canvasRef.current,
-      antialias: true,
-      alpha: true,
-    });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 50);
+      camera.position.set(0, 0, 9);
+
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvasRef.current,
+        antialias: true,
+        alpha: true,
+      });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    } catch (e) {
+      isWebGLSupported = false;
+      loggerService.addLog(
+        "system",
+        "warn",
+        "WebGL context creation failed. Falling back to animated 2D canvas DNA model.",
+        e instanceof Error ? e.message : String(e)
+      );
+      ctx2d = canvasRef.current.getContext("2d");
+    }
 
     // --- 2. Geometry & Materials ---
     const N = 32; // Number of rungs / node pairs
@@ -63,137 +81,160 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
     const radius = 1.6;
     const turns = 2.2;
 
-    const nodeGeometry = new THREE.IcosahedronGeometry(0.1, 1);
-    
+    let nodeGeometry: THREE.IcosahedronGeometry | null = null;
+    let activeNodeMat: THREE.MeshBasicMaterial | null = null;
+    let inactiveNodeMat: THREE.MeshBasicMaterial | null = null;
+    let activeRungMat: THREE.LineBasicMaterial | null = null;
+    let inactiveRungMat: THREE.LineBasicMaterial | null = null;
+    let activeBackboneMat: THREE.LineBasicMaterial | null = null;
+    let inactiveBackboneMat: THREE.LineBasicMaterial | null = null;
+    let hoveredNodeMat: THREE.MeshBasicMaterial | null = null;
+    let hoveredRungMat: THREE.LineBasicMaterial | null = null;
 
+    let particleGeom: THREE.BufferGeometry | null = null;
+    let particleMat: THREE.PointsMaterial | null = null;
+    let particles: THREE.Points | null = null;
 
-    // Aesthetic Material Definitions (Sleek, Outline-based) - Light Theme Optimized
-    const activeNodeMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(primaryColorHex),
-      wireframe: true,
-    });
-
-    const inactiveNodeMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color("#94A3B8"), // Slate-400 for light theme contrast
-      wireframe: true,
-      transparent: true,
-      opacity: 0.35,
-    });
-
-    const activeRungMat = new THREE.LineBasicMaterial({
-      color: new THREE.Color(secondaryColorHex),
-      transparent: true,
-      opacity: 0.65,
-    });
-
-    const inactiveRungMat = new THREE.LineBasicMaterial({
-      color: new THREE.Color("#CBD5E1"), // Slate-300
-      transparent: true,
-      opacity: 0.25,
-    });
-
-    const activeBackboneMat = new THREE.LineBasicMaterial({
-      color: new THREE.Color(primaryColorHex),
-      transparent: true,
-      opacity: 0.75,
-    });
-
-    const inactiveBackboneMat = new THREE.LineBasicMaterial({
-      color: new THREE.Color("#CBD5E1"), // Slate-300
-      transparent: true,
-      opacity: 0.25,
-    });
-
-    // Special Hovered Materials (Solid, Coral Highlight)
-    const hoveredNodeMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color("#FF7778"), // Vibrant Coral
-      wireframe: false,
-    });
-
-    const hoveredRungMat = new THREE.LineBasicMaterial({
-      color: new THREE.Color("#FF7778"),
-      transparent: true,
-      opacity: 1.0,
-    });
-
-    // --- 2.5 Particle Field Setup ---
-    const particleGeom = new THREE.BufferGeometry();
-    const particleCount = 60;
-    const posArray = new Float32Array(particleCount * 3);
-    for (let i = 0; i < particleCount * 3; i++) {
-      posArray[i] = (Math.random() - 0.5) * 12;
-    }
-    particleGeom.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-    const particleMat = new THREE.PointsMaterial({
-      size: 0.045,
-      color: new THREE.Color(primaryColorHex),
-      transparent: true,
-      opacity: 0.35
-    });
-    const particles = new THREE.Points(particleGeom, particleMat);
-    scene.add(particles);
-
-    // --- 3. Construct DNA Elements ---
     const dnaGroup = new THREE.Group();
-    scene.add(dnaGroup);
-
     const nodesA: THREE.Mesh[] = [];
     const nodesB: THREE.Mesh[] = [];
     const rungs: THREE.Line[] = [];
     const backboneA: THREE.Line[] = [];
     const backboneB: THREE.Line[] = [];
 
-    // Local coordinates cache
-    const pointsA: THREE.Vector3[] = [];
-    const pointsB: THREE.Vector3[] = [];
+    if (isWebGLSupported && scene && camera && renderer) {
+      nodeGeometry = new THREE.IcosahedronGeometry(0.1, 1);
 
-    for (let i = 0; i < N; i++) {
-      const t = i / (N - 1);
-      const angle = t * turns * Math.PI * 2;
-      const y = (t - 0.5) * helixHeight;
+      // Aesthetic Material Definitions (Sleek, Outline-based) - Light Theme Optimized
+      activeNodeMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(primaryColorHex),
+        wireframe: true,
+      });
 
-      const xA = Math.sin(angle) * radius;
-      const zA = Math.cos(angle) * radius;
+      inactiveNodeMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color("#94A3B8"), // Slate-400 for light theme contrast
+        wireframe: true,
+        transparent: true,
+        opacity: 0.35,
+      });
 
-      const xB = Math.sin(angle + Math.PI) * radius;
-      const zB = Math.cos(angle + Math.PI) * radius;
+      activeRungMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color(secondaryColorHex),
+        transparent: true,
+        opacity: 0.65,
+      });
 
-      const pA = new THREE.Vector3(xA, y, zA);
-      const pB = new THREE.Vector3(xB, y, zB);
+      inactiveRungMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color("#CBD5E1"), // Slate-300
+        transparent: true,
+        opacity: 0.25,
+      });
 
-      pointsA.push(pA);
-      pointsB.push(pB);
+      activeBackboneMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color(primaryColorHex),
+        transparent: true,
+        opacity: 0.75,
+      });
 
-      // Create Nodes
-      const meshA = new THREE.Mesh(nodeGeometry, inactiveNodeMat);
-      meshA.position.copy(pA);
-      dnaGroup.add(meshA);
-      nodesA.push(meshA);
+      inactiveBackboneMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color("#CBD5E1"), // Slate-300
+        transparent: true,
+        opacity: 0.25,
+      });
 
-      const meshB = new THREE.Mesh(nodeGeometry, inactiveNodeMat);
-      meshB.position.copy(pB);
-      dnaGroup.add(meshB);
-      nodesB.push(meshB);
+      // Special Hovered Materials (Solid, Coral Highlight)
+      hoveredNodeMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color("#FF7778"), // Vibrant Coral
+        wireframe: false,
+      });
 
-      // Create Rungs (Base pairs connecting A and B)
-      const rungGeom = new THREE.BufferGeometry().setFromPoints([pA, pB]);
-      const rungLine = new THREE.Line(rungGeom, inactiveRungMat);
-      dnaGroup.add(rungLine);
-      rungs.push(rungLine);
+      hoveredRungMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color("#FF7778"),
+        transparent: true,
+        opacity: 1.0,
+      });
+
+      // --- 2.5 Particle Field Setup ---
+      particleGeom = new THREE.BufferGeometry();
+      const particleCount = 60;
+      const posArray = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount * 3; i++) {
+        posArray[i] = (Math.random() - 0.5) * 12;
+      }
+      particleGeom.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+      particleMat = new THREE.PointsMaterial({
+        size: 0.045,
+        color: new THREE.Color(primaryColorHex),
+        transparent: true,
+        opacity: 0.35
+      });
+      particles = new THREE.Points(particleGeom, particleMat);
+      scene.add(particles);
+
+      // --- 3. Construct DNA Elements ---
+      scene.add(dnaGroup);
+
+      // Local coordinates cache
+      const pointsA: THREE.Vector3[] = [];
+      const pointsB: THREE.Vector3[] = [];
+
+      for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);
+        const angle = t * turns * Math.PI * 2;
+        const y = (t - 0.5) * helixHeight;
+
+        const xA = Math.sin(angle) * radius;
+        const zA = Math.cos(angle) * radius;
+
+        const xB = Math.sin(angle + Math.PI) * radius;
+        const zB = Math.cos(angle + Math.PI) * radius;
+
+        const pA = new THREE.Vector3(xA, y, zA);
+        const pB = new THREE.Vector3(xB, y, zB);
+
+        pointsA.push(pA);
+        pointsB.push(pB);
+
+        // Create Nodes
+        const meshA = new THREE.Mesh(nodeGeometry, inactiveNodeMat);
+        meshA.position.copy(pA);
+        dnaGroup.add(meshA);
+        nodesA.push(meshA);
+
+        const meshB = new THREE.Mesh(nodeGeometry, inactiveNodeMat);
+        meshB.position.copy(pB);
+        dnaGroup.add(meshB);
+        nodesB.push(meshB);
+
+        // Create Rungs (Base pairs connecting A and B)
+        const rungGeom = new THREE.BufferGeometry().setFromPoints([pA, pB]);
+        const rungLine = new THREE.Line(rungGeom, inactiveRungMat);
+        dnaGroup.add(rungLine);
+        rungs.push(rungLine);
+      }
+
+      // Create Backbone segments for local coloring
+      for (let i = 0; i < N - 1; i++) {
+        const segAGeom = new THREE.BufferGeometry().setFromPoints([pointsA[i], pointsA[i + 1]]);
+        const segALine = new THREE.Line(segAGeom, inactiveBackboneMat);
+        dnaGroup.add(segALine);
+        backboneA.push(segALine);
+
+        const segBGeom = new THREE.BufferGeometry().setFromPoints([pointsB[i], pointsB[i + 1]]);
+        const segBLine = new THREE.Line(segBGeom, inactiveBackboneMat);
+        dnaGroup.add(segBLine);
+        backboneB.push(segBLine);
+      }
     }
 
-    // Create Backbone segments for local coloring
-    for (let i = 0; i < N - 1; i++) {
-      const segAGeom = new THREE.BufferGeometry().setFromPoints([pointsA[i], pointsA[i + 1]]);
-      const segALine = new THREE.Line(segAGeom, inactiveBackboneMat);
-      dnaGroup.add(segALine);
-      backboneA.push(segALine);
-
-      const segBGeom = new THREE.BufferGeometry().setFromPoints([pointsB[i], pointsB[i + 1]]);
-      const segBLine = new THREE.Line(segBGeom, inactiveBackboneMat);
-      dnaGroup.add(segBLine);
-      backboneB.push(segBLine);
-    }
+    // 2D Particles Setup (Fallback)
+    const particleCount2d = 40;
+    const particles2d = Array.from({ length: particleCount2d }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: Math.random() * 1.5 + 0.8,
+      speed: Math.random() * 0.2 + 0.05,
+    }));
 
     // Anchor indices mapping to the 4 HUD labels (proportions along N)
     const labelAnchors = [
@@ -211,6 +252,7 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
     let previousMousePosition = { x: 0, y: 0 };
     let rotationVelocity = { x: 0, y: 0 };
     const targetTilt = { x: 0, y: 0 };
+    let fallbackRotationY = 0; // Rotational state for 2D fallback
 
     // Pointer Event Handlers - Unified Mouse & Touch inputs
     const handlePointerDown = (e: PointerEvent) => {
@@ -230,8 +272,12 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
         const deltaX = e.clientX - previousMousePosition.x;
         const deltaY = e.clientY - previousMousePosition.y;
 
-        dnaGroup.rotation.y += deltaX * 0.007;
-        dnaGroup.rotation.x += deltaY * 0.007;
+        if (isWebGLSupported && dnaGroup) {
+          dnaGroup.rotation.y += deltaX * 0.007;
+          dnaGroup.rotation.x += deltaY * 0.007;
+        } else {
+          fallbackRotationY += deltaX * 0.007;
+        }
 
         rotationVelocity = { x: deltaX * 0.007, y: deltaY * 0.007 };
         previousMousePosition = { x: e.clientX, y: e.clientY };
@@ -284,71 +330,211 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
-      // Rotate background stardust particles slowly
-      if (particles) {
-        particles.rotation.y += 0.001;
-        particles.rotation.x += 0.0005;
-      }
-
-      if (isDragging) {
-        // Soft damp rotation z during drag
-        dnaGroup.rotation.z *= 0.95;
-      } else {
-        // Apply inertia velocity
-        dnaGroup.rotation.y += rotationVelocity.x;
-        dnaGroup.rotation.x += rotationVelocity.y;
-
-        // Decelerate velocity
-        rotationVelocity.x *= 0.95;
-        rotationVelocity.y *= 0.95;
-
-        // Base auto-rotation
-        dnaGroup.rotation.y += 0.006;
-        
-        // Return X rotation slowly back to tilt parallax target
-        dnaGroup.rotation.x += (targetTilt.x - dnaGroup.rotation.x) * 0.05;
-        
-        // Soft breathing motion
-        dnaGroup.rotation.z = Math.sin(Date.now() * 0.001) * 0.05;
-      }
-
-      // Calculate how many nodes to light up
-      const activeLimit = Math.floor((progress / 100) * N);
-
-      // Find the node index associated with the hovered card via ref
-      const hoveredAnchor = labelAnchors.find((a) => a.cardIdx === hoveredCardRef.current);
-      const hoveredNodeIdx = hoveredAnchor ? hoveredAnchor.nodeIdx : null;
-
-      // Update Node and Rung Materials dynamically based on progress and hover
-      for (let i = 0; i < N; i++) {
-        const isActive = i < activeLimit;
-        const isHoveredNode = hoveredNodeIdx !== null && i === hoveredNodeIdx;
-
-        // Scale interpolation - Only nodesA[i] is connected to the HUD line, so only nodesA[i] pulses
-        const targetScaleA = isHoveredNode ? 2.0 : 1.0;
-        const targetScaleB = 1.0;
-        nodesA[i].scale.setScalar(THREE.MathUtils.lerp(nodesA[i].scale.x, targetScaleA, 0.15));
-        nodesB[i].scale.setScalar(THREE.MathUtils.lerp(nodesB[i].scale.x, targetScaleB, 0.15));
-
-        if (isHoveredNode) {
-          nodesA[i].material = hoveredNodeMat;
-          nodesB[i].material = isActive ? activeNodeMat : inactiveNodeMat;
-          rungs[i].material = hoveredRungMat;
-        } else {
-          nodesA[i].material = isActive ? activeNodeMat : inactiveNodeMat;
-          nodesB[i].material = isActive ? activeNodeMat : inactiveNodeMat;
-          rungs[i].material = isActive ? activeRungMat : inactiveRungMat;
+      if (isWebGLSupported && renderer && scene && camera && particles) {
+        // Rotate background stardust particles slowly
+        if (particles) {
+          particles.rotation.y += 0.001;
+          particles.rotation.x += 0.0005;
         }
+
+        if (isDragging) {
+          // Soft damp rotation z during drag
+          dnaGroup.rotation.z *= 0.95;
+        } else {
+          // Apply inertia velocity
+          dnaGroup.rotation.y += rotationVelocity.x;
+          dnaGroup.rotation.x += rotationVelocity.y;
+
+          // Decelerate velocity
+          rotationVelocity.x *= 0.95;
+          rotationVelocity.y *= 0.95;
+
+          // Base auto-rotation
+          dnaGroup.rotation.y += 0.006;
+          
+          // Return X rotation slowly back to tilt parallax target
+          dnaGroup.rotation.x += (targetTilt.x - dnaGroup.rotation.x) * 0.05;
+          
+          // Soft breathing motion
+          dnaGroup.rotation.z = Math.sin(Date.now() * 0.001) * 0.05;
+        }
+
+        // Calculate how many nodes to light up
+        const activeLimit = Math.floor((progress / 100) * N);
+
+        // Find the node index associated with the hovered card via ref
+        const hoveredAnchor = labelAnchors.find((a) => a.cardIdx === hoveredCardRef.current);
+        const hoveredNodeIdx = hoveredAnchor ? hoveredAnchor.nodeIdx : null;
+
+        // Update Node and Rung Materials dynamically based on progress and hover
+        for (let i = 0; i < N; i++) {
+          const isActive = i < activeLimit;
+          const isHoveredNode = hoveredNodeIdx !== null && i === hoveredNodeIdx;
+
+          // Scale interpolation - Only nodesA[i] is connected to the HUD line, so only nodesA[i] pulses
+          const targetScaleA = isHoveredNode ? 2.0 : 1.0;
+          const targetScaleB = 1.0;
+          nodesA[i].scale.setScalar(THREE.MathUtils.lerp(nodesA[i].scale.x, targetScaleA, 0.15));
+          nodesB[i].scale.setScalar(THREE.MathUtils.lerp(nodesB[i].scale.x, targetScaleB, 0.15));
+
+          if (isHoveredNode) {
+            nodesA[i].material = hoveredNodeMat!;
+            nodesB[i].material = isActive ? activeNodeMat! : inactiveNodeMat!;
+            rungs[i].material = hoveredRungMat!;
+          } else {
+            nodesA[i].material = isActive ? activeNodeMat! : inactiveNodeMat!;
+            nodesB[i].material = isActive ? activeNodeMat! : inactiveNodeMat!;
+            rungs[i].material = isActive ? activeRungMat! : inactiveRungMat!;
+          }
+        }
+
+        // Update Backbone Materials
+        for (let i = 0; i < N - 1; i++) {
+          const isActive = i < activeLimit - 1;
+          backboneA[i].material = isActive ? activeBackboneMat! : inactiveBackboneMat!;
+          backboneB[i].material = isActive ? activeBackboneMat! : inactiveBackboneMat!;
+        }
+
+        renderer.render(scene, camera);
+      } else if (ctx2d) {
+        // --- 2D Fallback Rendering ---
+        ctx2d.clearRect(0, 0, width, height);
+
+        // Update 2D particles
+        ctx2d.fillStyle = primaryColorHex;
+        particles2d.forEach((p) => {
+          p.y -= p.speed;
+          if (p.y < 0) p.y = height;
+          ctx2d.globalAlpha = 0.25;
+          ctx2d.beginPath();
+          ctx2d.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx2d.fill();
+        });
+        ctx2d.globalAlpha = 1.0;
+
+        // Update rotation
+        if (!isDragging) {
+          fallbackRotationY += rotationVelocity.x;
+          rotationVelocity.x *= 0.95;
+          fallbackRotationY += 0.006;
+        }
+
+        const activeLimit = Math.floor((progress / 100) * N);
+        const hoveredAnchor = labelAnchors.find((a) => a.cardIdx === hoveredCardRef.current);
+        const hoveredNodeIdx = hoveredAnchor ? hoveredAnchor.nodeIdx : null;
+
+        // Draw Backbone B (Back strand)
+        ctx2d.lineWidth = 1.5;
+        for (let i = 0; i < N - 1; i++) {
+          const t1 = i / (N - 1);
+          const t2 = (i + 1) / (N - 1);
+          const angle1 = t1 * turns * Math.PI * 2 + fallbackRotationY;
+          const angle2 = t2 * turns * Math.PI * 2 + fallbackRotationY;
+          const y1 = (t1 - 0.5) * (height * 0.7) + (height / 2);
+          const y2 = (t2 - 0.5) * (height * 0.7) + (height / 2);
+          const xB1 = (width / 2) - Math.sin(angle1) * (width * 0.18);
+          const xB2 = (width / 2) - Math.sin(angle2) * (width * 0.18);
+          const zBAvg = (-Math.cos(angle1) - Math.cos(angle2)) / 2;
+
+          const isActive = i < activeLimit - 1;
+          ctx2d.strokeStyle = isActive ? primaryColorHex : "#CBD5E1";
+          ctx2d.globalAlpha = isActive ? 0.45 + zBAvg * 0.2 : 0.12 + zBAvg * 0.08;
+          ctx2d.beginPath();
+          ctx2d.moveTo(xB1, y1);
+          ctx2d.lineTo(xB2, y2);
+          ctx2d.stroke();
+        }
+
+        // Draw Backbone A (Front strand)
+        for (let i = 0; i < N - 1; i++) {
+          const t1 = i / (N - 1);
+          const t2 = (i + 1) / (N - 1);
+          const angle1 = t1 * turns * Math.PI * 2 + fallbackRotationY;
+          const angle2 = t2 * turns * Math.PI * 2 + fallbackRotationY;
+          const y1 = (t1 - 0.5) * (height * 0.7) + (height / 2);
+          const y2 = (t2 - 0.5) * (height * 0.7) + (height / 2);
+          const xA1 = (width / 2) + Math.sin(angle1) * (width * 0.18);
+          const xA2 = (width / 2) + Math.sin(angle2) * (width * 0.18);
+          const zAAvg = (Math.cos(angle1) + Math.cos(angle2)) / 2;
+
+          const isActive = i < activeLimit - 1;
+          ctx2d.strokeStyle = isActive ? primaryColorHex : "#CBD5E1";
+          ctx2d.globalAlpha = isActive ? 0.45 + zAAvg * 0.2 : 0.12 + zAAvg * 0.08;
+          ctx2d.beginPath();
+          ctx2d.moveTo(xA1, y1);
+          ctx2d.lineTo(xA2, y2);
+          ctx2d.stroke();
+        }
+
+        // Draw Rungs
+        for (let i = 0; i < N; i++) {
+          const t = i / (N - 1);
+          const angle = t * turns * Math.PI * 2 + fallbackRotationY;
+          const y = (t - 0.5) * (height * 0.7) + (height / 2);
+          const xOffset = Math.sin(angle) * (width * 0.18);
+          const xA = (width / 2) + xOffset;
+          const xB = (width / 2) - xOffset;
+
+          const isActive = i < activeLimit;
+          const isHoveredNode = hoveredNodeIdx !== null && i === hoveredNodeIdx;
+
+          if (isHoveredNode) {
+            ctx2d.strokeStyle = "#FF7778";
+            ctx2d.lineWidth = 2.0;
+            ctx2d.globalAlpha = 0.9;
+          } else {
+            ctx2d.strokeStyle = isActive ? secondaryColorHex : "#CBD5E1";
+            ctx2d.lineWidth = 1.0;
+            ctx2d.globalAlpha = isActive ? 0.35 : 0.12;
+          }
+
+          ctx2d.beginPath();
+          ctx2d.moveTo(xA, y);
+          ctx2d.lineTo(xB, y);
+          ctx2d.stroke();
+        }
+
+        // Draw Nodes
+        for (let i = 0; i < N; i++) {
+          const t = i / (N - 1);
+          const angle = t * turns * Math.PI * 2 + fallbackRotationY;
+          const y = (t - 0.5) * (height * 0.7) + (height / 2);
+          const xOffset = Math.sin(angle) * (width * 0.18);
+          const xA = (width / 2) + xOffset;
+          const xB = (width / 2) - xOffset;
+
+          const zA = Math.cos(angle);
+          const zB = -zA;
+
+          const isActive = i < activeLimit;
+          const isHoveredNode = hoveredNodeIdx !== null && i === hoveredNodeIdx;
+
+          // Node A
+          let nodeASize = isHoveredNode ? 5 : 3;
+          nodeASize *= (zA + 1.5) / 1.5;
+          ctx2d.beginPath();
+          ctx2d.arc(xA, y, nodeASize, 0, Math.PI * 2);
+          if (isHoveredNode) {
+            ctx2d.fillStyle = "#FF7778";
+            ctx2d.globalAlpha = 1.0;
+          } else {
+            ctx2d.fillStyle = isActive ? primaryColorHex : "#94A3B8";
+            ctx2d.globalAlpha = isActive ? 0.55 + zA * 0.25 : 0.18 + zA * 0.08;
+          }
+          ctx2d.fill();
+
+          // Node B
+          let nodeBSize = 3 * (zB + 1.5) / 1.5;
+          ctx2d.beginPath();
+          ctx2d.arc(xB, y, nodeBSize, 0, Math.PI * 2);
+          ctx2d.fillStyle = isActive ? primaryColorHex : "#94A3B8";
+          ctx2d.globalAlpha = isActive ? 0.55 + zB * 0.25 : 0.18 + zB * 0.08;
+          ctx2d.fill();
+        }
+        ctx2d.globalAlpha = 1.0;
       }
 
-      // Update Backbone Materials
-      for (let i = 0; i < N - 1; i++) {
-        const isActive = i < activeLimit - 1;
-        backboneA[i].material = isActive ? activeBackboneMat : inactiveBackboneMat;
-        backboneB[i].material = isActive ? activeBackboneMat : inactiveBackboneMat;
-      }
-
-      // --- 5. Project 3D Anchors to 2D HUD overlays ---
+      // --- 5. Project 3D/2D Anchors to 2D HUD overlays ---
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
         const w = rect.width;
@@ -360,14 +546,23 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
 
           if (!cardEl || !lineEl) return;
 
-          // Target node position in 3D world space
-          const targetNode = nodesA[nodeIdx];
-          targetNode.getWorldPosition(tempV);
-          tempV.project(camera);
+          let nodeX = 0;
+          let nodeY = 0;
+          let zDepth = 0.5;
 
-          // Projected 2D coordinates on canvas
-          const nodeX = (tempV.x * 0.5 + 0.5) * w;
-          const nodeY = (-tempV.y * 0.5 + 0.5) * h;
+          if (isWebGLSupported && renderer && nodesA[nodeIdx]) {
+            const targetNode = nodesA[nodeIdx];
+            targetNode.getWorldPosition(tempV);
+            tempV.project(camera!);
+            nodeX = (tempV.x * 0.5 + 0.5) * w;
+            nodeY = (-tempV.y * 0.5 + 0.5) * h;
+            zDepth = tempV.z;
+          } else {
+            const t = nodeIdx / (N - 1);
+            const angle = t * turns * Math.PI * 2 + fallbackRotationY;
+            nodeY = (t - 0.5) * (h * 0.7) + (h / 2);
+            nodeX = (w / 2) + Math.sin(angle) * (w * 0.18);
+          }
 
           // Determine target Y for the card to follow smoothly (Y boundary restricted to container)
           const targetY = Math.max(40, Math.min(h - 90, nodeY - 35));
@@ -383,7 +578,7 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
           const anchorThreshold = (nodeIdx / N) * 100;
           const isNodeActive = progress >= anchorThreshold - 5; // trigger slightly early
 
-          if (isNodeActive && tempV.z <= 1) {
+          if (isNodeActive && zDepth <= 1) {
             cardEl.style.opacity = "1";
             cardEl.style.transform = `translate3d(0px, ${cardY}px, 0) scale(1)`;
             
@@ -420,12 +615,24 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
 
         // Draw line for Brand Logo Badge (top-left) to top-most DNA Node
         const brandBadgeEl = brandBadgeRef.current;
-        const brandNode = nodesA[1];
-        if (brandBadgeEl && brandNode && brandLineRef.current) {
-          brandNode.getWorldPosition(tempV);
-          tempV.project(camera);
-          const nodeX = (tempV.x * 0.5 + 0.5) * w;
-          const nodeY = (-tempV.y * 0.5 + 0.5) * h;
+        if (brandBadgeEl && brandLineRef.current) {
+          let nodeX = 0;
+          let nodeY = 0;
+          let zDepth = 0.5;
+
+          if (isWebGLSupported && renderer && nodesA[1]) {
+            const brandNode = nodesA[1];
+            brandNode.getWorldPosition(tempV);
+            tempV.project(camera!);
+            nodeX = (tempV.x * 0.5 + 0.5) * w;
+            nodeY = (-tempV.y * 0.5 + 0.5) * h;
+            zDepth = tempV.z;
+          } else {
+            const t = 1 / (N - 1);
+            const angle = t * turns * Math.PI * 2 + fallbackRotationY;
+            nodeY = (t - 0.5) * (h * 0.7) + (h / 2);
+            nodeX = (w / 2) + Math.sin(angle) * (w * 0.18);
+          }
           
           const badgeWidth = brandBadgeEl.offsetWidth || 180;
           const badgeHeight = brandBadgeEl.offsetHeight || 40;
@@ -437,27 +644,27 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
             `M ${badgeX} ${badgeCenterY} Q ${(badgeX + nodeX) / 2} ${badgeCenterY}, ${nodeX} ${nodeY}`
           );
           
-          if (progress >= 5 && tempV.z <= 1) {
+          if (progress >= 5 && zDepth <= 1) {
             brandLineRef.current.style.opacity = "0.35";
           } else {
             brandLineRef.current.style.opacity = "0";
           }
         }
       }
-
-      renderer.render(scene, camera);
     };
 
     animate();
 
     // --- 6. Resize Handler ---
     const handleResize = () => {
-      if (!containerRef.current || !camera || !renderer) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      if (!containerRef.current) return;
+      width = containerRef.current.clientWidth;
+      height = containerRef.current.clientHeight;
+      if (isWebGLSupported && camera && renderer) {
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+      }
     };
     window.addEventListener("resize", handleResize);
 
@@ -475,24 +682,26 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
         container.removeEventListener("pointerleave", handlePointerCancel as any);
       }
 
-      // Dispose Three geometries, materials, renderer
-      particleGeom.dispose();
-      particleMat.dispose();
-      nodeGeometry.dispose();
-      activeNodeMat.dispose();
-      inactiveNodeMat.dispose();
-      hoveredNodeMat.dispose();
-      hoveredRungMat.dispose();
-      activeRungMat.dispose();
-      inactiveRungMat.dispose();
-      activeBackboneMat.dispose();
-      inactiveBackboneMat.dispose();
+      // Dispose Three geometries, materials, renderer if supported
+      if (isWebGLSupported) {
+        if (particleGeom) particleGeom.dispose();
+        if (particleMat) particleMat.dispose();
+        if (nodeGeometry) nodeGeometry.dispose();
+        if (activeNodeMat) activeNodeMat.dispose();
+        if (inactiveNodeMat) inactiveNodeMat.dispose();
+        if (hoveredNodeMat) hoveredNodeMat.dispose();
+        if (hoveredRungMat) hoveredRungMat.dispose();
+        if (activeRungMat) activeRungMat.dispose();
+        if (inactiveRungMat) inactiveRungMat.dispose();
+        if (activeBackboneMat) activeBackboneMat.dispose();
+        if (inactiveBackboneMat) inactiveBackboneMat.dispose();
 
-      rungs.forEach((r) => r.geometry.dispose());
-      backboneA.forEach((b) => b.geometry.dispose());
-      backboneB.forEach((b) => b.geometry.dispose());
+        rungs.forEach((r) => r.geometry.dispose());
+        backboneA.forEach((b) => b.geometry.dispose());
+        backboneB.forEach((b) => b.geometry.dispose());
 
-      renderer.dispose();
+        if (renderer) renderer.dispose();
+      }
     };
   }, [progress, primaryColorHex, secondaryColorHex]);
 

@@ -495,9 +495,25 @@ export function Onboarding() {
 
       // Set fallback logo if found
       if (microlinkMetadata?.logo?.url) {
-        if (!parsedDna.logoUrl) parsedDna.logoUrl = microlinkMetadata.logo.url;
-        if (!parsedDna.logoLightUrl) parsedDna.logoLightUrl = microlinkMetadata.logo.url;
-        if (!parsedDna.logoDarkUrl) parsedDna.logoDarkUrl = microlinkMetadata.logo.url;
+        let logoBase64 = microlinkMetadata.logo.url;
+        try {
+          const proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(microlinkMetadata.logo.url)}`;
+          const response = await fetch(proxiedUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            logoBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch (e) {
+          console.error("Failed to convert crawled onboarding logo to base64:", e);
+        }
+        if (!parsedDna.logoUrl) parsedDna.logoUrl = logoBase64;
+        if (!parsedDna.logoLightUrl) parsedDna.logoLightUrl = logoBase64;
+        if (!parsedDna.logoDarkUrl) parsedDna.logoDarkUrl = logoBase64;
       }
 
       // Add media images to creatives if found
@@ -506,13 +522,18 @@ export function Onboarding() {
           const mediaImages = scanResult.extractedMediaImages as string[];
           for (let i = 0; i < mediaImages.length; i++) {
             await addDoc(collection(db, "creatives"), {
-              productId: activeProduct.id, userId: user.uid, url: mediaImages[i],
-              name: `Website Image ${i + 1}`, createdAt: new Date().toISOString(),
+              productId: activeProduct.id, 
+              userId: user.uid, 
+              url: mediaImages[i],
+              name: `Website Showcase Asset ${i + 1}`, 
+              assetType: 'website_showcase',
+              source: 'scraped_website',
+              createdAt: new Date().toISOString(),
             });
           }
           setUploadedCreatives((prev) => [
             ...prev,
-            ...mediaImages.map((url, i) => ({ name: `Website Image ${i + 1}`, url }))
+            ...mediaImages.map((url, i) => ({ name: `Website Showcase Asset ${i + 1}`, url }))
           ]);
         } catch (err) {
           logSilentError(err as Error, { context: "addExtractedMediaImagesToCreativesOnboarding" });
@@ -902,7 +923,7 @@ export function Onboarding() {
         <div className="flex items-center justify-between w-full mb-6 sm:mb-8">
           <div className="flex items-center gap-2.5">
             <img
-              src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2PLOGO.png"
+              src="/B2PLOGO.png"
               alt="Logo"
               className="h-9 object-contain drop-shadow-md select-none pointer-events-none"
             />

@@ -71,7 +71,7 @@ export function Dashboard() {
 
           <div className="relative shrink-0 z-10 w-32 h-32 md:w-40 md:h-40 rounded-full border border-[#7C3AED]/15 bg-white flex items-center justify-center p-2 shadow-[0_0_30px_rgba(124,58,237,0.15)]">
             <img
-              src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+              src="/B2P AVATAR.png"
               alt="Tror"
               className="w-full h-full object-contain drop-shadow-xl"
             />
@@ -250,7 +250,7 @@ export function Dashboard() {
           ) : weeklyCampaigns.length === 0 ? (
             <div className="px-8 py-20 text-center flex flex-col items-center">
               <img
-                src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+                src="/B2P AVATAR.png"
                 alt="Tror"
                 className="h-44 w-auto mb-6 drop-shadow-[0_0_20px_rgba(124,58,237,0.4)]"
               />
@@ -309,7 +309,7 @@ export function Dashboard() {
               <div className="w-28 h-28 rounded-full bg-[#7C3AED] p-1 shadow-lg shadow-[#7C3AED]/20 relative">
                 <div className="w-full h-full rounded-full bg-[#0A0A0F] flex items-center justify-center overflow-hidden">
                   <img
-                    src="https://darkgray-finch-838850.hostingersite.com/wp-content/uploads/2026/04/B2P-AVATAR.png"
+                    src="/B2P AVATAR.png"
                     alt="Tror"
                     className="w-24 h-24 object-contain drop-shadow-lg"
                   />

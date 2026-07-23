@@ -151,8 +151,10 @@ export interface DailyPost {
     baseImageId?: string;
     layout?: any;
     editorState?: any;
+    layoutId?: string;
     fonts?: { primary: string; secondary?: string };
   };
+  layoutId?: string;
   /** When true, imageUrl/imageId points to a fully composited JPEG with all overlays baked in */
   isFlattened?: boolean;
 }
