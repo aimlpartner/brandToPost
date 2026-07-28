@@ -546,12 +546,16 @@ export function VisualEditorModal({
       <div className="bg-white w-full max-w-7xl h-[95vh] flex flex-col rounded-[22px] shadow-[0_25px_60px_rgba(0,0,0,0.15)] border border-slate-200">
         
         {/* Header */}
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-amber-500/5">
+          <div className="flex items-center gap-3">
             <Layout className="w-5 h-5 text-[#7C3AED]" />
             <h2 className="text-xl font-bold font-display text-slate-800 tracking-tight">
               Visual Editor (Canvas v3)
             </h2>
+            <span className="text-xs font-sans font-semibold text-amber-700 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              🚧 Under Engineering Calibration
+            </span>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
@@ -560,8 +564,40 @@ export function VisualEditorModal({
 
         <div className="flex-1 overflow-hidden flex flex-col md:flex-row relative">
           
+          {/* Full-Coverage Frosted Blur Backdrop Overlay Banner */}
+          <div className="absolute inset-0 z-[100] backdrop-blur-xl bg-slate-950/65 flex flex-col items-center justify-start pt-12 md:pt-16 pb-16 px-8 text-center space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-3xl shadow-xl shadow-amber-500/10">
+              🚧
+            </div>
+
+            <div className="space-y-3 max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-sans font-semibold tracking-wider uppercase backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span>🚧 Active Engineering & Construction Zone</span>
+              </div>
+
+              <h2 className="text-3xl sm:text-4xl font-light font-display text-white tracking-tight leading-tight" style={{ color: '#FFFFFF' }}>
+                Visual Canvas Editor Is Locked For <br />
+                <span className="font-normal italic text-amber-400">Headless Renderer Calibration.</span>
+              </h2>
+
+              <p className="text-sm font-light text-slate-200 leading-relaxed max-w-md mx-auto">
+                Chloe & Julian (Creative Directors) headless graphic layer engine is undergoing renderer calibration and asset lockdown. Full public release coming in Q3.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4 pt-2">
+              <button 
+                onClick={onClose}
+                className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                <span>Close Editor</span>
+              </button>
+            </div>
+          </div>
+
           {/* Stage Area */}
-          <div ref={containerRef} className="flex-1 bg-slate-100 overflow-hidden relative flex flex-col items-center justify-center pattern-dots pattern-slate-300 pattern-bg-slate-50 pattern-opacity-30 pattern-size-4">
+          <div ref={containerRef} className="flex-1 bg-slate-100 overflow-hidden relative flex flex-col items-center justify-center pattern-dots pattern-slate-300 pattern-bg-slate-50 pattern-opacity-30 pattern-size-4 filter blur-[8px] opacity-60 pointer-events-none select-none">
              {isGenerating && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <div className="text-center">

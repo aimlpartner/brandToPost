@@ -6,7 +6,7 @@ import { logSilentError } from '../lib/firestore-error';
 import { motion } from 'motion/react';
 
 export function WhatsAppLogin() {
-  const { user, loading, signInWithGoogle, signInWithFacebook, signInWithApple, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
+  const { user, userProfile, loading, logout, signInWithGoogle, signInWithFacebook, signInWithApple, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
@@ -18,9 +18,13 @@ export function WhatsAppLogin() {
 
   useEffect(() => {
     if (user && !loading) {
+      if (userProfile?.isLocked) {
+        logout();
+        return;
+      }
       navigate('/whatsapp/dashboard');
     }
-  }, [user, loading, navigate]);
+  }, [user, userProfile, loading, navigate, logout]);
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);

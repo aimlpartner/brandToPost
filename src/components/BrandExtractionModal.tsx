@@ -137,7 +137,7 @@ export function BrandExtractionModal({ isOpen, inputType, isComplete, screenshot
                </div>
                <div>
                   <h2 className="text-xl font-bold font-display text-slate-800 tracking-tight">System Active</h2>
-                  <p className="text-xs text-[#7C3AED] font-semibold font-mono uppercase tracking-wider">Running DNA Extraction</p>
+                  <p className="text-xs text-[#7C3AED] font-semibold font-sans uppercase tracking-wider">Running DNA Extraction</p>
                </div>
              </div>
 

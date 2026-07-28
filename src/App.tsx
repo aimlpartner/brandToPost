@@ -33,6 +33,12 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CookieConsent } from "./components/CookieConsent";
 import { BlogList } from "./pages/BlogList";
 import { BlogPost } from "./pages/BlogPost";
+import { GroundingResearchUtility } from "./pages/GroundingResearchUtility";
+import { ResearchedBlueprintPlayground } from "./pages/ResearchedBlueprintPlayground";
+import { LinkedInTemplateCollector } from "./pages/LinkedInTemplateCollector";
+import { InstagramTemplateCollector } from "./pages/InstagramTemplateCollector";
+import { XTemplateCollector } from "./pages/XTemplateCollector";
+import { CampaignTemplateTest } from "./pages/CampaignTemplateTest";
 
 export default function App() {
   return (
@@ -44,6 +50,20 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/landing" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/research-blueprints" element={<GroundingResearchUtility />} />
+            <Route path="/research-linkedin" element={<LinkedInTemplateCollector />} />
+            <Route path="/research-instagram" element={<InstagramTemplateCollector />} />
+            <Route path="/research-x" element={<XTemplateCollector />} />
+            <Route
+              path="/campaigns-test"
+              element={
+                <ProductProvider>
+                  <CampaignTemplateTest />
+                </ProductProvider>
+              }
+            />
+            <Route path="/blueprint-playground" element={<ResearchedBlueprintPlayground />} />
+            <Route path="/templates/playground" element={<ResearchedBlueprintPlayground />} />
             <Route
               path="/templates"
               element={

@@ -895,18 +895,18 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
                 {idx === 0 && (
                   <>
                     <div>
-                      <span className="text-[8px] text-slate-400 font-bold block mb-1 font-mono">EXTRACTED COLORS</span>
+                      <span className="text-[8px] text-slate-400 font-bold block mb-1 font-sans">EXTRACTED COLORS</span>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {dna?.visualData?.colors?.map((color, cIdx) => (
                           <div key={cIdx} className="flex items-center gap-1 bg-slate-50 border border-slate-200/50 py-0.5 px-1 rounded">
                             <div className="w-2.5 h-2.5 rounded-sm border border-slate-300" style={{ backgroundColor: color }} />
-                            <span className="text-[8px] text-slate-500 font-mono font-bold uppercase">{color.slice(1)}</span>
+                            <span className="text-[8px] text-slate-500 font-sans font-bold uppercase">{color.slice(1)}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                     <div>
-                      <span className="text-[8px] text-slate-400 font-bold block mb-0.5 font-mono">BRAND TYPOGRAPHY</span>
+                      <span className="text-[8px] text-slate-400 font-bold block mb-0.5 font-sans">BRAND TYPOGRAPHY</span>
                       <div className="text-[9px] text-slate-500 leading-tight">
                         Heading: <strong>{dna?.visualData?.fonts?.primary || "Outfit"}</strong> <br/>
                         Body: <strong>{dna?.visualData?.fonts?.secondary || "Inter"}</strong>
@@ -918,15 +918,15 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
                 {idx === 1 && (
                   <div className="space-y-2 text-[9.5px] text-slate-600 leading-relaxed">
                     <div>
-                      <span className="text-[8px] font-bold text-red-500 uppercase tracking-wide block mb-0.5 font-mono">THE ENEMY WE FIGHT</span>
+                      <span className="text-[8px] font-bold text-red-500 uppercase tracking-wide block mb-0.5 font-sans">THE ENEMY WE FIGHT</span>
                       {dna?.enemy || "Manual campaign loops & generic templates."}
                     </div>
                     <div>
-                      <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wide block mb-0.5 font-mono">THE UNIQUE MECHANISM</span>
+                      <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wide block mb-0.5 font-sans">THE UNIQUE MECHANISM</span>
                       {dna?.uniqueMechanism || "Multi-agent scrapers extracting brand identities."}
                     </div>
                     <div>
-                      <span className="text-[8px] font-bold text-amber-500 uppercase tracking-wide block mb-0.5 font-mono">THE EARNED SECRET</span>
+                      <span className="text-[8px] font-bold text-amber-500 uppercase tracking-wide block mb-0.5 font-sans">THE EARNED SECRET</span>
                       {dna?.earnedSecret || "Showing specific visual reference details leads to massive CTR spike."}
                     </div>
                   </div>
@@ -935,11 +935,11 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
                 {idx === 2 && (
                   <div className="space-y-2 text-[9.5px] text-slate-600 leading-relaxed">
                     <div>
-                      <span className="text-[8px] font-bold text-[#FF7778] uppercase tracking-wide block mb-0.5 font-mono font-bold">CUSTOMER HELL STATE</span>
+                      <span className="text-[8px] font-bold text-[#FF7778] uppercase tracking-wide block mb-0.5 font-sans font-bold">CUSTOMER HELL STATE</span>
                       {dna?.hellState || "Spending hours writing generic copy that gets ignored."}
                     </div>
                     <div>
-                      <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-wide block mb-0.5 font-mono">CUSTOMER HEAVEN STATE</span>
+                      <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-wide block mb-0.5 font-sans">CUSTOMER HEAVEN STATE</span>
                       {dna?.heavenState || "Launching campaign queues that read hand-crafted in 2 mins."}
                     </div>
                   </div>
@@ -947,7 +947,7 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
 
                 {idx === 3 && (
                   <div className="space-y-1.5 text-[9.5px] text-slate-600 leading-relaxed">
-                    <span className="text-[8px] font-bold text-purple-500 uppercase tracking-wide block mb-0.5 font-mono">STRATEGIC PILLARS</span>
+                    <span className="text-[8px] font-bold text-purple-500 uppercase tracking-wide block mb-0.5 font-sans">STRATEGIC PILLARS</span>
                     <ul className="list-disc pl-3.5 space-y-0.5 font-medium">
                       {(dna?.contentPillars || [
                         "Automating Campaigns without losing your Soul",

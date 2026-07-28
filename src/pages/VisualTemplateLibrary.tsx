@@ -2,6 +2,13 @@ import { useState, useEffect } from "react";
 import { ArrowLeft, Layout, Sparkles, Image as ImageIcon, Type, Palette, Check, RefreshCw, Lock, Terminal, Loader2, AlertCircle, TrendingUp, Flame, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LAYOUT_BLUEPRINTS } from "../lib/layoutBlueprints";
+import {
+  sanitizeTemplateHtml,
+  escapeHtmlText,
+  escapeHtmlAttr,
+  safeUrlOrEmpty,
+  TEMPLATE_CSP_META,
+} from "../lib/sanitizeTemplateHtml";
 import { researchVisualTrends, VisualTrendReport, RawDiscoveredTemplate } from "../services/geminiService";
 import { useProducts } from "../contexts/ProductContext";
 
@@ -53,25 +60,33 @@ function renderDiscoveredHtml(rawHtml: string, data: {
   fontFamily: string;
 }): string {
   if (!rawHtml) return "";
-  let html = rawHtml;
-  
-  const logoSrc = data.logoUrl || "/icon.png";
+
+  // rawHtml is model-generated and lands in an iframe srcDoc. Sanitize the
+  // template BEFORE substitution — that is where the untrusted content is.
+  const { html: safeTemplate, violations } = sanitizeTemplateHtml(rawHtml);
+  if (violations.length > 0) {
+    console.warn("[template sanitizer] stripped unsafe markup:", violations);
+  }
+  let html = safeTemplate;
+
+  const logoSrc = safeUrlOrEmpty(data.logoUrl || "");
+  const logoMarkup = logoSrc
+    ? `<img src="${escapeHtmlAttr(logoSrc)}" style="max-height: 45px; max-width: 150px; object-fit: contain;" alt="Brand Logo" />`
+    : "";
 
   // Cleanly replace any <img ... src="{{LOGO_URL}}"> or src="{{LOGO_URL}}" attributes
-  html = html.replace(/src=["']\{\{LOGO_URL\}\}["']/g, `src="${logoSrc}"`);
-  
+  html = html.replace(/<img[^>]*src=["']\{\{LOGO_URL\}\}["'][^>]*>/g, logoMarkup);
+  html = html.replace(/src=["']\{\{LOGO_URL\}\}["']/g, logoSrc ? `src="${escapeHtmlAttr(logoSrc)}"` : `src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display:none;"`);
+
   // Replace standalone {{LOGO_URL}} tokens
-  const logoMarkup = data.logoUrl !== null 
-    ? `<img src="${logoSrc}" style="max-height: 45px; max-width: 150px; object-fit: contain;" alt="Brand Logo" />`
-    : "";
   html = html.replace(/\{\{LOGO_URL\}\}/g, logoMarkup);
 
-  html = html.replace(/\{\{HEADLINE\}\}/g, data.headline || "");
-  html = html.replace(/\{\{SUBTEXT\}\}/g, data.subtext || "");
-  html = html.replace(/\{\{IMAGE_URL\}\}/g, data.imageUrl || "");
-  html = html.replace(/\{\{PRIMARY_COLOR\}\}/g, data.primaryColor || "#6366F1");
-  html = html.replace(/\{\{SECONDARY_COLOR\}\}/g, data.secondaryColor || "#0F172A");
-  html = html.replace(/\{\{FONT_FAMILY\}\}/g, data.fontFamily || "Inter");
+  html = html.replace(/\{\{HEADLINE\}\}/g, escapeHtmlText(data.headline));
+  html = html.replace(/\{\{SUBTEXT\}\}/g, escapeHtmlText(data.subtext));
+  html = html.replace(/\{\{IMAGE_URL\}\}/g, escapeHtmlAttr(safeUrlOrEmpty(data.imageUrl)));
+  html = html.replace(/\{\{PRIMARY_COLOR\}\}/g, escapeHtmlAttr(data.primaryColor || "#6366F1"));
+  html = html.replace(/\{\{SECONDARY_COLOR\}\}/g, escapeHtmlAttr(data.secondaryColor || "#0F172A"));
+  html = html.replace(/\{\{FONT_FAMILY\}\}/g, escapeHtmlAttr(data.fontFamily || "Inter"));
   return html;
 }
 
@@ -104,15 +119,13 @@ export function VisualTemplateLibrary() {
   const logoUrl = logoOption === "white" ? defaultLogo : null;
 
   // Find active discovered template if selected
-  const activeDiscovered = trendReport?.discoveredTemplates?.find(t => t.id === selectedTemplateId);
-  const standardBlueprint = LAYOUT_BLUEPRINTS[selectedTemplateId] || LAYOUT_BLUEPRINTS["editorial-left"];
+  const activeDiscovered = trendReport?.discoveredTemplates?.find(t => t.id === selectedTemplateId) || trendReport?.discoveredTemplates?.[0];
+  const currentFamilyLabel = "RAW MARKET DISCOVERED";
 
-  // Render HTML based on whether a discovered template or standard blueprint is active
+  // Render PURELY from the AI-researched rawHtml template!
+  // Fallback to an editorial template if rawHtml is missing/empty
   let previewHtml = "";
-  let currentFamilyLabel = standardBlueprint?.family || "STANDARD";
-
-  if (activeDiscovered) {
-    currentFamilyLabel = "RAW MARKET DISCOVERED";
+  if (activeDiscovered?.rawHtml && activeDiscovered.rawHtml.trim().length > 30) {
     previewHtml = renderDiscoveredHtml(activeDiscovered.rawHtml, {
       headline,
       subtext,
@@ -122,16 +135,24 @@ export function VisualTemplateLibrary() {
       secondaryColor,
       fontFamily
     });
-  } else {
-    previewHtml = standardBlueprint.buildHtml({
-      headline,
-      subtext,
-      imageUrl: selectedImage,
-      logoUrl,
-      primaryColor,
-      secondaryColor,
-      fontFamily
-    });
+  } else if (hasResearched) {
+    console.warn(`[TEMPLATE LIBRARY CANVAS] rawHtml empty for template "${activeDiscovered?.id || 'none'}". Rendering client fallback.`);
+    const logoMarkup = logoUrl
+      ? `<img src="${logoUrl}" style="max-height:45px;max-width:150px;object-fit:contain;" alt="Brand Logo" />`
+      : "";
+    previewHtml = `<div style="width:1080px;height:1080px;display:flex;background:${secondaryColor};overflow:hidden;font-family:'${fontFamily}',system-ui,sans-serif;box-sizing:border-box;">
+      <div style="width:45%;padding:60px 40px;display:flex;flex-direction:column;justify-content:space-between;border-right:2px solid ${primaryColor};box-sizing:border-box;background:${secondaryColor};position:relative;z-index:10;">
+        <div style="display:flex;flex-direction:column;gap:24px;margin-top:60px;">
+          <div style="width:50px;height:6px;background:${primaryColor};border-radius:3px;"></div>
+          <h2 style="color:#ffffff;font-weight:800;font-size:48px;line-height:1.2;margin:0;word-break:break-word;">${headline || "Your Headline"}</h2>
+          <p style="color:#cbd5e1;font-weight:400;font-size:20px;line-height:1.5;margin:0;word-break:break-word;">${subtext || ""}</p>
+        </div>
+        <div>${logoMarkup}</div>
+      </div>
+      <div style="width:55%;position:relative;overflow:hidden;height:100%;">
+        <img src="${selectedImage}" style="width:100%;height:100%;object-fit:cover;" />
+      </div>
+    </div>`;
   }
 
   // HTML Page wrapper to ensure correct font loading inside the iframe sandbox
@@ -140,6 +161,7 @@ export function VisualTemplateLibrary() {
     <html>
       <head>
         <meta charset="utf-8">
+        ${TEMPLATE_CSP_META}
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;800;900&family=Outfit:wght@300;400;500;700;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;500;700;800&family=Clash+Display:wght@400;600;700&display=swap" rel="stylesheet">
@@ -180,20 +202,30 @@ export function VisualTemplateLibrary() {
   }, [isScraping]);
 
   const startTrendResearch = async () => {
+    console.log(`\n======================================================`);
+    console.log(`[TEMPLATE LIBRARY STEP 1/3] startTrendResearch triggered -> PASSED`);
     setIsScraping(true);
     setError(null);
     try {
+      console.log(`[TEMPLATE LIBRARY STEP 2/3] Calling researchVisualTrends()...`);
       const reportData = await researchVisualTrends();
       setTrendReport(reportData);
       setHasResearched(true);
       
-      // Auto-select the #1 discovered raw template if returned by Gemini 2.5 Pro
-      if (reportData.discoveredTemplates?.[0]?.id) {
-        setSelectedTemplateId(reportData.discoveredTemplates[0].id);
+      const topId = reportData.discoveredTemplates?.[0]?.id;
+      const isStaticFallback = ["editorial-left", "contrarian-card", "framed-mockup", "brutalist-hero", "quote-spotlight", "stat-billboard"].includes(topId || '');
+      
+      console.log(`[TEMPLATE LIBRARY STEP 2/3] Market trend research -> PASSED (${reportData.discoveredTemplates?.length || 0} templates returned).`);
+      console.log(`[TEMPLATE LIBRARY TYPE CHECK] Active template is: ${isStaticFallback ? '⚠️ STATIC PREBUILT FALLBACK TEMPLATE' : '✨ DYNAMIC AI-GENERATED TEMPLATE'} -> ${isStaticFallback ? 'WARNING: FALLBACK ACTIVE' : 'PASSED: DYNAMIC AI ACTIVE'}`);
+
+      if (topId) {
+        setSelectedTemplateId(topId);
+        console.log(`[TEMPLATE LIBRARY STEP 3/3] Selected template ID set to: "${topId}" -> PASSED`);
       }
+      console.log(`======================================================\n`);
     } catch (err: any) {
-      console.error("Market trend research failed:", err);
-      setError(err.message || "Failed to query the live Gemini 2.5 Pro research engine.");
+      console.error("[TEMPLATE LIBRARY STEP 2/3] Market trend research -> FAILED:", err);
+      setError(err.message || "Failed to query the live Gemini research engine.");
     } finally {
       setIsScraping(false);
     }
@@ -408,6 +440,10 @@ export function VisualTemplateLibrary() {
               <iframe
                 title="Visual Template Preview Renderer"
                 srcDoc={fullHtml}
+                // allow-same-origin (so the parent can read contentDocument for
+                // export) WITHOUT allow-scripts — model-generated template markup
+                // must never execute against this origin.
+                sandbox="allow-same-origin"
                 className="absolute origin-top-left border-none pointer-events-none"
                 style={{
                   width: "1080px",

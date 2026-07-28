@@ -10,8 +10,8 @@ const navigation = [
  { name: "Brand Position", href: "/dashboard/dna", icon: FileText },
  { name: "Brand Assets", href: "/dashboard/creatives", icon: ImageIcon },
  { name: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },
- { name: "Script Studio", href: "/dashboard/scripts", icon: Clapperboard },
- { name: "Schedule", href: "/dashboard/schedule", icon: CalendarClock },
+ { name: "Script Studio", href: "/dashboard/scripts", icon: Clapperboard, isLocked: true },
+ { name: "Schedule", href: "/dashboard/schedule", icon: CalendarClock, isLocked: true },
  { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -135,7 +135,15 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       )}
       strokeWidth={1.8}
       />
-       <span>{item.name}</span>
+       <span className="flex-1 text-left">{item.name}</span>
+       {item.isLocked && (
+         <span className={cn(
+           "text-[9px] px-1.5 py-0.5 rounded font-sans font-semibold border flex items-center gap-0.5 ml-auto shrink-0",
+           isActive ? "bg-amber-400/20 text-amber-200 border-amber-300/30" : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+         )}>
+           🚧 Soon
+         </span>
+       )}
       </>
     )}
     </NavLink>

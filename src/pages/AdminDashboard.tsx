@@ -13,7 +13,7 @@ import {
  Loader2, ShieldAlert, Activity, Database, DollarSign, Bug, AlertCircle, Trash2,
  MessageSquare, Plus, Search, Sparkles, RefreshCw, Clock, ShieldCheck, 
  CheckCircle, CheckCircle2, Smartphone, Send, Languages, Zap, Heart, Filter, Laptop,
- Users, FileText
+ Users, FileText, Lock, Unlock
 } from 'lucide-react';
 import { logSilentError } from '../lib/firestore-error';
 
@@ -347,6 +347,114 @@ export default function AdminDashboard() {
  
   fetchData();
   }, [isAdmin]);
+
+  // Account Lock / Eviction Handlers (Server Proxy + Client Fallback)
+  const handleToggleUserLock = async (targetUserId: string, currentIsLocked: boolean, userEmail?: string) => {
+    const newLockState = !currentIsLocked;
+    const actionName = newLockState ? "LOCK & EVICT" : "UNLOCK";
+    const defaultReason = "The testing phase is over. Access to your account has been suspended by administration.";
+
+    let lockReason = defaultReason;
+    if (newLockState) {
+      const customReason = prompt(`Reason for locking account (${userEmail || targetUserId}):`, defaultReason);
+      if (customReason === null) return; // User cancelled
+      if (customReason.trim()) {
+        lockReason = customReason.trim();
+      }
+    }
+
+    try {
+      let serverSuccess = false;
+      try {
+        const res = await fetch('/api/admin/users/lock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adminEmail: user?.email,
+            targetUserId,
+            isLocked: newLockState,
+            lockReason: newLockState ? lockReason : ""
+          })
+        });
+
+        if (res.ok) {
+          serverSuccess = true;
+        }
+      } catch (e) {
+        // Server endpoint fallback to direct Firestore SDK update
+      }
+
+      if (!serverSuccess) {
+        const userRef = doc(db, 'users', targetUserId);
+        const updates: any = { isLocked: newLockState };
+        if (newLockState) {
+          updates.lockReason = lockReason;
+          updates.lockedAt = new Date().toISOString();
+        } else {
+          updates.lockReason = "";
+        }
+        await updateDoc(userRef, updates);
+      }
+
+      setUsers(prev => prev.map(u => u.id === targetUserId ? { ...u, isLocked: newLockState, lockReason: newLockState ? lockReason : undefined } : u));
+      alert(`Successfully ${actionName}ED account for ${userEmail || targetUserId}.`);
+    } catch (err: any) {
+      console.error("Failed to update user lock state:", err);
+      logSilentError(err as Error, { context: "toggleUserLock", targetUserId });
+      alert(`Failed to update lock status: ${err.message}`);
+    }
+  };
+
+  const handleLockAllUsers = async () => {
+    const confirmLock = confirm("⚠️ EMERGENCY ACTION: Are you sure you want to LOCK ALL NON-ADMIN USERS?\n\nThis will immediately log out all active users and display: 'The testing phase is over.'");
+    if (!confirmLock) return;
+
+    const defaultReason = "The testing phase is over. Access to your account has been suspended by administration.";
+    const lockReason = prompt("Enter lock message to display to all locked users:", defaultReason);
+    if (lockReason === null) return; // Cancelled
+    const finalReason = lockReason.trim() || defaultReason;
+
+    try {
+      let serverSuccess = false;
+      try {
+        const res = await fetch('/api/admin/users/lock-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adminEmail: user?.email,
+            lockReason: finalReason
+          })
+        });
+
+        if (res.ok) {
+          serverSuccess = true;
+        }
+      } catch (e) {}
+
+      if (!serverSuccess) {
+        const nonAdminUsers = users.filter(u => u.email !== 'garvitbansal2303@gmail.com' && u.role !== 'Admin' && !u.isLocked);
+        for (const u of nonAdminUsers) {
+          try {
+            const userRef = doc(db, 'users', u.id);
+            await updateDoc(userRef, {
+              isLocked: true,
+              lockReason: finalReason,
+              lockedAt: new Date().toISOString()
+            });
+          } catch (e) {
+            console.error(`Failed client update for user ${u.id}:`, e);
+          }
+        }
+      }
+
+      setUsers(prev => prev.map(u => (u.email !== 'garvitbansal2303@gmail.com' && u.role !== 'Admin') ? { ...u, isLocked: true, lockReason: finalReason } : u));
+      alert(`Successfully locked non-admin user accounts. All active sessions have been evicted.`);
+    } catch (err: any) {
+      console.error("Failed to lock all users:", err);
+      logSilentError(err as Error, { context: "lockAllUsers" });
+      alert(`Failed to lock all users: ${err.message}`);
+    }
+  };
 
   // WhatsApp System Hooks and actions
   useEffect(() => {
@@ -900,6 +1008,14 @@ export default function AdminDashboard() {
                         <option value="pending">Pending</option>
                       </select>
                     </div>
+
+                    <button
+                      onClick={handleLockAllUsers}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-sm flex items-center gap-1.5"
+                      title="Lock all non-admin users and force sign out"
+                    >
+                      <Lock className="w-3.5 h-3.5" /> Emergency Lock All Users
+                    </button>
                   </div>
                 </div>
 
@@ -913,7 +1029,9 @@ export default function AdminDashboard() {
                           <th className="py-3 px-2">Contact & Role</th>
                           <th className="py-3 px-2">Onboarded</th>
                           <th className="py-3 px-2">Real-time status</th>
+                          <th className="py-3 px-2">Lock Status</th>
                           <th className="py-3 px-2 text-right">Rupees Exhausted</th>
+                          <th className="py-3 px-2 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-slate-650">
@@ -981,15 +1099,48 @@ export default function AdminDashboard() {
                                   )}
                                 </div>
                               </td>
+                              <td className="py-3 px-2">
+                                {u.isLocked ? (
+                                  <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                                    <Lock className="w-3 h-3 text-rose-600" /> Locked
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                                    <Unlock className="w-3 h-3 text-emerald-600" /> Active
+                                  </span>
+                                )}
+                              </td>
                               <td className="py-3 px-2 text-right font-semibold font-mono text-emerald-750 text-sm">
                                 ₹{u.costINR.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-3 px-2 text-right">
+                                {u.email !== 'garvitbansal2303@gmail.com' && u.role !== 'Admin' && (
+                                  <button
+                                    onClick={() => handleToggleUserLock(u.id, !!u.isLocked, u.email)}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm inline-flex items-center gap-1 ${
+                                      u.isLocked
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                        : 'bg-rose-600 hover:bg-rose-700 text-white'
+                                    }`}
+                                  >
+                                    {u.isLocked ? (
+                                      <>
+                                        <Unlock className="w-3.5 h-3.5" /> Unlock
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Lock className="w-3.5 h-3.5" /> Lock & Log Out
+                                      </>
+                                    )}
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           );
                         })}
                         {filteredUsers.length === 0 && (
                           <tr>
-                            <td colSpan={5} className="py-12 text-center text-slate-455 font-light">
+                            <td colSpan={7} className="py-12 text-center text-slate-455 font-light">
                               No users match the search and filter criteria.
                             </td>
                           </tr>

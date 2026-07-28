@@ -2,18 +2,91 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Brain, Cpu, Upload, Loader2, Sparkles, Save, Target, MessageSquare, 
   Zap, Clock, Globe, FileText, CheckCircle2, ChevronRight, Play, Check,
-  Palette, Type, Download, Copy, RefreshCw, FileSignature, Linkedin, Image as ImageIcon
+  Palette, Type, Download, Copy, RefreshCw, FileSignature, Linkedin, Image as ImageIcon, X,
+  LayoutGrid, ListFilter, ChevronLeft, ShieldCheck, Eye
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
 import { db, auth } from "../firebase";
 import { doc, updateDoc, collection, query, orderBy, getDocs, deleteDoc, setDoc } from "firebase/firestore";
 import { logSilentError } from "../lib/firestore-error";
-import { synthesizeFounderAgent, generateGeneralFounderPost, generateFounderTopicSuggestions, generateBrandedFounderPost } from "../services/geminiService";
+import {
+  sanitizeTemplateHtml,
+  escapeHtmlText,
+  escapeHtmlAttr,
+  safeUrlOrEmpty,
+  TEMPLATE_CSP_META,
+} from "../lib/sanitizeTemplateHtml";
+import { synthesizeFounderAgent, generateGeneralFounderPost, generateFounderTopicSuggestions, generateBrandedFounderPost, researchVisualTrends } from "../services/geminiService";
 import { CustomTimePicker } from "../components/CustomTimePicker";
+import { PostPreviewModal } from "../components/PostPreviewModal";
 import { utcToLocal, localToUtc } from "../lib/utils";
 import { VisualEngine } from "../components/VisualEngine";
+import { LAYOUT_BLUEPRINTS } from "../lib/layoutBlueprints";
+import { toJpeg, toPng } from "html-to-image";
 import { GOOGLE_FONTS, ADOBE_FONTS } from "../lib/fonts";
+
+const STOCK_IMAGES = [
+  {
+    id: "chess",
+    name: "Strategy & Office",
+    url: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    id: "tech",
+    name: "Tech & Code",
+    url: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    id: "architecture",
+    name: "Architecture",
+    url: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    id: "creative",
+    name: "Creative Flatlay",
+    url: "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=600&q=80"
+  }
+];
+
+function renderDiscoveredHtml(rawHtml: string, data: {
+  headline: string;
+  subtext: string;
+  imageUrl: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  secondaryColor: string;
+  fontFamily: string;
+}): string {
+  if (!rawHtml) return "";
+
+  // rawHtml is model-generated and lands in an iframe srcDoc. Sanitize the
+  // template BEFORE substitution — that is where the untrusted content is.
+  const { html: safeTemplate, violations } = sanitizeTemplateHtml(rawHtml);
+  if (violations.length > 0) {
+    console.warn("[template sanitizer] stripped unsafe markup:", violations);
+  }
+  let html = safeTemplate;
+
+  const logoSrc = safeUrlOrEmpty(data.logoUrl || "");
+  const logoMarkup = logoSrc
+    ? `<img src="${escapeHtmlAttr(logoSrc)}" style="max-height: 45px; max-width: 150px; object-fit: contain;" alt="Brand Logo" />`
+    : "";
+
+  // Cleanly replace any <img ... src="{{LOGO_URL}}"> or src="{{LOGO_URL}}" attributes
+  html = html.replace(/<img[^>]*src=["']\{\{LOGO_URL\}\}["'][^>]*>/g, logoMarkup);
+  html = html.replace(/src=["']\{\{LOGO_URL\}\}["']/g, logoSrc ? `src="${escapeHtmlAttr(logoSrc)}"` : `src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="display:none;"`);
+
+  html = html.replace(/\{\{LOGO_URL\}\}/g, logoMarkup);
+
+  html = html.replace(/\{\{HEADLINE\}\}/g, escapeHtmlText(data.headline));
+  html = html.replace(/\{\{SUBTEXT\}\}/g, escapeHtmlText(data.subtext));
+  html = html.replace(/\{\{IMAGE_URL\}\}/g, escapeHtmlAttr(safeUrlOrEmpty(data.imageUrl)));
+  html = html.replace(/\{\{PRIMARY_COLOR\}\}/g, escapeHtmlAttr(data.primaryColor || "#6366F1"));
+  html = html.replace(/\{\{SECONDARY_COLOR\}\}/g, escapeHtmlAttr(data.secondaryColor || "#0F172A"));
+  html = html.replace(/\{\{FONT_FAMILY\}\}/g, escapeHtmlAttr(data.fontFamily || "Inter"));
+  return html;
+}
 
 const ALL_FONTS = [...GOOGLE_FONTS, ...ADOBE_FONTS];
 const POPULAR_FONTS = Array.from(new Set(ALL_FONTS)).sort();
@@ -184,7 +257,7 @@ function BulletEditor({ label, items, icon: Icon, color, dotColor, onChange, cla
 export function MasterFounder() {
   const { user, userProfile } = useAuth();
   const { products, updateProduct } = useProducts();
-  const [activeTab, setActiveTab] = useState<"brain" | "brands" | "generator">("brain");
+  const [activeTab, setActiveTab] = useState<"brain" | "brands" | "generator" | "history">("brain");
 
   const renderMiniLayoutPreview = (id: string) => {
     switch (id) {
@@ -384,6 +457,13 @@ export function MasterFounder() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // Modal state for popup form
+  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
+
+  // History tab pagination & layout view mode
+  const [historyLayout, setHistoryLayout] = useState<"list" | "grid">("list");
+  const [historyPage, setHistoryPage] = useState(1);
+
   // Founder LinkedIn integration state
   const [isLinkedinConnected, setIsLinkedinConnected] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
@@ -504,21 +584,11 @@ export function MasterFounder() {
 
   // General Post Generator State
   const [postTopic, setPostTopic] = useState("");
-  const [postReference, setPostReference] = useState("");
-  const [nbAttachmentStyle, setNbAttachmentStyle] = useState<"text-only" | "image-only" | "image-overlay">("text-only");
-  const [nbSelectedLayout, setNbSelectedLayout] = useState<string>("auto");
-  const [nbCustomImagePrompt, setNbCustomImagePrompt] = useState("");
+  const [postScope, setPostScope] = useState<"general" | "branded">("general");
+  const [selectedManualBrands, setSelectedManualBrands] = useState<string[]>([]);
   const [isGeneratingPost, setIsGeneratingPost] = useState(false);
   const [generatorLogs, setGeneratorLogs] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
-  const [generatedPost, setGeneratedPost] = useState<{
-    postCopy: string;
-    imagePrompt?: string;
-    headline?: string;
-    subtext?: string;
-    imageUrl?: string;
-    layoutId?: string;
-  } | null>(null);
 
   // Suggestions states
   const [suggestions, setSuggestions] = useState<{ title: string; description: string; prompt: string }[]>([]);
@@ -526,11 +596,309 @@ export function MasterFounder() {
 
   // Automated posts history states
   const [automatedPosts, setAutomatedPosts] = useState<any[]>([]);
-  const [loadingAutoposts, setLoadingAutoposts] = useState(false);
+  const [loadingAutoposts, setLoadingAutoposts] = useState(true);
 
-  // Post scope state
-  const [postScope, setPostScope] = useState<"general" | "branded">("general");
-  const [selectedManualBrands, setSelectedManualBrands] = useState<string[]>([]);
+  // Automated Visual Studio Studio State (Client-Side Interactive Canvas)
+  const [generatedPostCopy, setGeneratedPostCopy] = useState("Create a post that challenges the generic 'AI will change everything' narrative. Instead, focus on specific, measurable applications of AI in B2B marketing and operations that deliver concrete ROI and pipeline...");
+  const [generatedHeadline, setGeneratedHeadline] = useState("The AI ROI Illusion");
+  const [generatedSubtext, setGeneratedSubtext] = useState("Why abstract AI hype is destroying your marketing budget (and how to mandate pipeline ROI).");
+  const [generatedImageUrl, setGeneratedImageUrl] = useState(STOCK_IMAGES[0].url);
+  const [trendReport, setTrendReport] = useState<any | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("editorial-left");
+  const [hasGeneratedOutput, setHasGeneratedOutput] = useState(true);
+
+  // Template Approval Flow State
+  const [approvedTemplateId, setApprovedTemplateId] = useState<string | null>(null);
+  const [isApprovingTemplate, setIsApprovingTemplate] = useState(false);
+  const [approvedTemplateImageUrl, setApprovedTemplateImageUrl] = useState<string | null>(null);
+
+  const fetchTopicSuggestions = async () => {
+    if (!userProfile?.founderAgentSynthesized) return;
+    setIsFetchingSuggestions(true);
+    try {
+      const list = await generateFounderTopicSuggestions(userProfile.founderAgentSynthesized, user?.uid);
+      setSuggestions(list || []);
+    } catch (err) {
+      console.error("Failed to fetch topic suggestions:", err);
+    } finally {
+      setIsFetchingSuggestions(false);
+    }
+  };
+
+  const handleGeneratePost = async () => {
+    if (!userProfile?.founderAgentSynthesized) {
+      setError("You must first synthesize your Founder Brain before generating founder posts.");
+      return;
+    }
+    if (!postTopic.trim()) {
+      setError("Please input a topic or core thought for your post.");
+      return;
+    }
+    if (postScope === "branded" && selectedManualBrands.length === 0) {
+      setError("Please select at least one brand/product to focus on.");
+      return;
+    }
+
+    setError(null);
+    setIsTopicModalOpen(false);
+    console.log(`\n======================================================`);
+    console.log(`[STUDIO STEP 1/5] handleGeneratePostStudio triggered. Topic: "${postTopic}", Scope: "${postScope}" -> PASSED`);
+    setIsGeneratingPost(true);
+    setGeneratorLogs(["Spawning virtual Founder Brain...", `Topic: "${postTopic}"`]);
+
+    try {
+      let result: any = null;
+      let targetProduct: any = null;
+
+      if (postScope === "general") {
+        console.log(`[STUDIO STEP 2/5] Calling generateGeneralFounderPost...`);
+        setGeneratorLogs(p => [...p, "Drafting organic social copy & visual hook..."]);
+        result = await generateGeneralFounderPost({
+          topic: postTopic,
+          attachmentStyle: "image-overlay",
+          founderAgent: userProfile.founderAgentSynthesized,
+          userId: user?.uid
+        });
+      } else {
+        targetProduct = products.find(p => p.id === selectedManualBrands[0]) || products[0];
+        console.log(`[STUDIO STEP 2/5] Calling generateBrandedFounderPost for brand: "${targetProduct?.name}"...`);
+        setGeneratorLogs(p => [...p, `Drafting branded copy for: ${targetProduct?.name || 'Selected Product'}...`]);
+        result = await generateBrandedFounderPost({
+          topic: postTopic,
+          attachmentStyle: "image-overlay",
+          founderAgent: userProfile.founderAgentSynthesized,
+          product: targetProduct,
+          userId: user?.uid
+        });
+      }
+
+      if (result) {
+        console.log(`[STUDIO STEP 2/5] Copy & backdrop image generation -> PASSED (Headline: "${result.headline}")`);
+        setGeneratorLogs(p => [...p, "✓ Copy and backdrop image generated successfully."]);
+        setGeneratedPostCopy(result.postCopy || "");
+        setGeneratedHeadline(result.headline || "Key Founder Insight");
+        setGeneratedSubtext(result.subtext || "Value-driven lesson");
+        if (result.imageUrl) {
+          setGeneratedImageUrl(result.imageUrl);
+        }
+
+        // Live Trend Research (exact same call as VisualTemplateLibrary)
+        console.log(`[STUDIO STEP 3/5] Querying researchVisualTrends()...`);
+        setGeneratorLogs(p => [...p, "🔍 Querying live market trend research engine via Gemini 3.1 Pro..."]);
+        let resolvedLayoutId: string = selectedTemplateId || "editorial-left";
+        try {
+          const reportData = await researchVisualTrends();
+          if (reportData?.discoveredTemplates?.length > 0) {
+            // Normalize template IDs — ensure every template has a valid string ID
+            reportData.discoveredTemplates = reportData.discoveredTemplates.map((dt: any, idx: number) => ({
+              ...dt,
+              id: dt.id && typeof dt.id === 'string' ? dt.id : `dynamic-fallback-${Date.now()}-${idx}`
+            }));
+            setTrendReport(reportData);
+            const topId = reportData.discoveredTemplates[0].id;
+            resolvedLayoutId = topId; // Capture locally BEFORE async state update
+            setSelectedTemplateId(topId);
+
+            const isStaticFallback = ["editorial-left", "contrarian-card", "framed-mockup", "brutalist-hero", "quote-spotlight", "stat-billboard"].includes(topId);
+            console.log(`[STUDIO STEP 3/5] Visual Trend Research -> PASSED. Received ${reportData.discoveredTemplates.length} templates. Top template ID: "${topId}"`);
+            console.log(`[STUDIO TEMPLATE TYPE CHECK] Top choice is: ${isStaticFallback ? '⚠️ STATIC PREBUILT FALLBACK TEMPLATE' : '✨ DYNAMIC AI-GENERATED TEMPLATE'} -> ${isStaticFallback ? 'WARNING: FALLBACK ACTIVE' : 'PASSED: DYNAMIC AI ACTIVE'}`);
+
+            setGeneratorLogs(p => [...p, `✓ Synthesized ${reportData.discoveredTemplates.length} visual trends (${isStaticFallback ? 'Static Fallback' : 'Dynamic AI'}). Top choice: [${reportData.discoveredTemplates[0].name}]`]);
+          } else {
+            console.error(`[STUDIO STEP 3/5] Visual Trend Research -> FAILED (No templates in reportData)`);
+          }
+        } catch (resErr: any) {
+          console.error("[STUDIO STEP 3/5] Visual Trend Research -> FAILED with exception:", resErr);
+        }
+
+        setHasGeneratedOutput(true);
+
+        // Reset approval state for the new draft
+        setApprovedTemplateId(null);
+        setApprovedTemplateImageUrl(null);
+
+        // Save post to Firestore history
+        // Use resolvedLayoutId (local variable) instead of selectedTemplateId state (which may not have updated yet)
+        console.log(`[STUDIO STEP 4/5] Saving generated post to Firestore with layoutId: "${resolvedLayoutId}"...`);
+        const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
+        const newPost = {
+          id: newPostId,
+          userId: user?.uid || null,
+          postCopy: result.postCopy || "",
+          imageUrl: result.imageUrl || STOCK_IMAGES[0].url,
+          headline: result.headline || null,
+          subtext: result.subtext || null,
+          imagePrompt: result.imagePrompt || null,
+          layoutId: resolvedLayoutId || "editorial-left", // Use local var, never undefined
+          approvedTemplateImage: null, // Will be populated upon template approval
+          createdAt: new Date().toISOString(),
+          status: "scheduled",
+          topic: result.headline || postTopic || null,
+          isBranded: postScope === "branded",
+          productId: targetProduct?.id || null
+        };
+        await setDoc(doc(db, "users", user!.uid, "founder_posts", newPostId), newPost);
+        await fetchAutomatedPosts();
+        console.log(`[STUDIO STEP 4/5] Save to Firestore -> PASSED (Post ID: ${newPostId})`);
+        console.log(`======================================================\n`);
+      } else {
+        console.error(`[STUDIO STEP 2/5] Copy generation returned null result -> FAILED`);
+      }
+    } catch (err: any) {
+      console.error(`[STUDIO handleGeneratePostStudio EXCEPTION] -> FAILED:`, err);
+      logSilentError(err, { context: "handleGeneratePostStudio" });
+      setError("Failed to generate post. Please check your AI connection.");
+    } finally {
+      setIsGeneratingPost(false);
+    }
+  };
+
+  // Helper to downscale and compress base64 image strings safely under Firestore 1MB document limit
+  const compressDataUrl = async (dataUrl: string, maxBytes: number = 500000): Promise<string> => {
+    if (dataUrl.length <= maxBytes) return dataUrl;
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > 900 || height > 900) {
+          const ratio = Math.min(900 / width, 900 / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(dataUrl);
+        ctx.drawImage(img, 0, 0, width, height);
+        let quality = 0.70;
+        let compressed = canvas.toDataURL('image/jpeg', quality);
+        while (compressed.length > maxBytes && quality > 0.25) {
+          quality -= 0.10;
+          compressed = canvas.toDataURL('image/jpeg', quality);
+        }
+        resolve(compressed);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  };
+
+  // ─── Template Approval Handler ───
+  const handleApproveTemplate = async () => {
+    if (!user || automatedPosts.length === 0) return;
+    setIsApprovingTemplate(true);
+    try {
+      // Wait a tick to ensure the canvas has re-rendered with the selected template
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const iframe = document.querySelector('iframe[title="Visual Template Preview Renderer"]') as HTMLIFrameElement;
+      if (!iframe || !iframe.contentDocument) throw new Error("Canvas iframe not found");
+
+      const rawDataUrl = await toJpeg(iframe.contentDocument.body, {
+        cacheBust: true,
+        width: 1080,
+        height: 1080,
+        style: { margin: '0' },
+        quality: 0.70,
+        pixelRatio: 1
+      });
+
+      const dataUrl = await compressDataUrl(rawDataUrl, 500000);
+
+      // Update the latest post in Firestore with the approved template composite
+      const latestPost = automatedPosts[0];
+      const postRef = doc(db, "users", user.uid, "founder_posts", latestPost.id);
+      await updateDoc(postRef, {
+        approvedTemplateImage: dataUrl,
+        layoutId: selectedTemplateId
+      });
+
+      setApprovedTemplateId(selectedTemplateId);
+      setApprovedTemplateImageUrl(dataUrl);
+
+      // Refresh the posts list to pick up the change
+      await fetchAutomatedPosts();
+      console.log(`[TEMPLATE APPROVAL] Template "${selectedTemplateId}" approved and composite saved cleanly (${Math.round(dataUrl.length / 1024)} KB).`);
+    } catch (err: any) {
+      console.error("[TEMPLATE APPROVAL] Failed to approve template:", err);
+      setError("Failed to capture template visual. Try again.");
+    } finally {
+      setIsApprovingTemplate(false);
+    }
+  };
+
+  // Active product for branded posts
+  const activeProduct = postScope === "branded" ? (products.find(p => p.id === selectedManualBrands[0]) || products[0]) : null;
+  const activeDiscovered = trendReport?.discoveredTemplates?.find((t: any) => t.id === selectedTemplateId) || trendReport?.discoveredTemplates?.[0];
+
+  const primaryColor = activeProduct?.visualData?.colors?.[0] || (activeProduct as any)?.colors?.[0] || activeDiscovered?.primaryColor || "#7C3AED";
+  const secondaryColor = activeProduct?.visualData?.colors?.[1] || (activeProduct as any)?.colors?.[1] || activeDiscovered?.secondaryColor || "#08080C";
+  const fontFamily = activeProduct?.visualData?.fonts?.primary || activeDiscovered?.fontFamily || "Inter";
+  const logoUrl = postScope === "branded" ? (activeProduct?.logoDarkUrl || activeProduct?.logoUrl || "/icon.png") : null;
+  const currentImageUrl = generatedImageUrl || STOCK_IMAGES[0].url;
+
+  // Render PURELY from the AI-researched rawHtml template!
+  // If rawHtml is missing/empty (Gemini occasionally omits it), fall back to an editorial template
+  let previewHtml = "";
+  if (activeDiscovered?.rawHtml && activeDiscovered.rawHtml.trim().length > 30) {
+    previewHtml = renderDiscoveredHtml(activeDiscovered.rawHtml, {
+      headline: generatedHeadline,
+      subtext: generatedSubtext,
+      imageUrl: currentImageUrl,
+      logoUrl,
+      primaryColor,
+      secondaryColor,
+      fontFamily
+    });
+  } else if (hasGeneratedOutput) {
+    // Emergency client-side fallback: generate a quality editorial template so the canvas is never blank
+    console.warn(`[STUDIO CANVAS] rawHtml empty for template "${activeDiscovered?.id || 'none'}". Rendering client fallback.`);
+    const logoMarkup = logoUrl
+      ? `<img src="${logoUrl}" style="max-height:45px;max-width:150px;object-fit:contain;" alt="Brand Logo" />`
+      : "";
+    previewHtml = `<div style="width:1080px;height:1080px;display:flex;background:${secondaryColor};overflow:hidden;font-family:'${fontFamily}',system-ui,sans-serif;box-sizing:border-box;">
+      <div style="width:45%;padding:60px 40px;display:flex;flex-direction:column;justify-content:space-between;border-right:2px solid ${primaryColor};box-sizing:border-box;background:${secondaryColor};position:relative;z-index:10;">
+        <div style="display:flex;flex-direction:column;gap:24px;margin-top:60px;">
+          <div style="width:50px;height:6px;background:${primaryColor};border-radius:3px;"></div>
+          <h2 style="color:#ffffff;font-weight:800;font-size:48px;line-height:1.2;margin:0;word-break:break-word;">${generatedHeadline || "Your Founder Insight"}</h2>
+          <p style="color:#cbd5e1;font-weight:400;font-size:20px;line-height:1.5;margin:0;word-break:break-word;">${generatedSubtext || ""}</p>
+        </div>
+        <div>${logoMarkup}</div>
+      </div>
+      <div style="width:55%;position:relative;overflow:hidden;height:100%;">
+        <img src="${currentImageUrl}" style="width:100%;height:100%;object-fit:cover;" />
+      </div>
+    </div>`;
+  }
+
+  const fullHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        ${TEMPLATE_CSP_META}
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;800;900&family=Outfit:wght@300;400;500;700;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;500;700;800&family=Clash+Display:wght@400;600;700&display=swap" rel="stylesheet" crossorigin="anonymous">
+        <style>
+          body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 1080px;
+            height: 1080px;
+            background: #000;
+          }
+        </style>
+      </head>
+      <body>
+        ${previewHtml}
+      </body>
+    </html>
+  `;
 
   const fetchAutomatedPosts = async () => {
     if (!user) return;
@@ -560,10 +928,10 @@ export function MasterFounder() {
   };
 
   useEffect(() => {
-    if (activeTab === "generator" && user) {
+    if (user) {
       fetchAutomatedPosts();
     }
-  }, [activeTab, user]);
+  }, [user, activeTab]);
 
   // Optional Strategy Overrides during synthesis
   const [showOptionalInputs, setShowOptionalInputs] = useState(false);
@@ -573,19 +941,6 @@ export function MasterFounder() {
   const [optMission, setOptMission] = useState("");
   const [optGoal, setOptGoal] = useState("");
   const [optPillars, setOptPillars] = useState("");
-
-  const fetchTopicSuggestions = async () => {
-    if (!userProfile?.founderAgentSynthesized) return;
-    setIsFetchingSuggestions(true);
-    try {
-      const list = await generateFounderTopicSuggestions(userProfile.founderAgentSynthesized, user?.uid);
-      setSuggestions(list);
-    } catch (err) {
-      console.error("Failed to load topic suggestions:", err);
-    } finally {
-      setIsFetchingSuggestions(false);
-    }
-  };
 
   useEffect(() => {
     if (
@@ -643,13 +998,36 @@ export function MasterFounder() {
   const saveProfileData = async (updatedFields: Partial<typeof userProfile>) => {
     if (!user) return;
     try {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, updatedFields);
+      setError(null);
+      const idToken = await auth.currentUser?.getIdToken();
+      const payload = { ...updatedFields, userId: user.uid };
+      const res = await fetch('/api/user/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        // Fallback to client setDoc with merge: true
+        const userRef = doc(db, "users", user.uid);
+        await setDoc(userRef, updatedFields, { merge: true });
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err: any) {
-      logSilentError(err, { context: "saveUserProfileFields" });
-      setError("Failed to update profile fields in database.");
+      try {
+        const userRef = doc(db, "users", user.uid);
+        await setDoc(userRef, updatedFields, { merge: true });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      } catch (clientErr: any) {
+        logSilentError(clientErr, { context: "saveUserProfileFields" });
+        setError("Failed to update profile fields in database.");
+      }
     }
   };
 
@@ -790,138 +1168,12 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
     }
   };
 
-  // Handle General & Branded Founder Post Generation
-  const handleGeneratePost = async () => {
-    if (!userProfile?.founderAgentSynthesized) {
-      setError("You must first synthesize your Founder Brain before generating founder posts.");
-      return;
-    }
-    if (!postTopic.trim()) {
-      setError("Please input a topic or core thought for your post.");
-      return;
-    }
-    if (postScope === "branded" && selectedManualBrands.length === 0) {
-      setError("Please select at least one brand/product to focus on.");
-      return;
-    }
-    setError(null);
-    setGeneratedPost(null);
-    setIsGeneratingPost(true);
-    setGeneratorLogs(["Spawning virtual Founder Brain...", `Topic: "${postTopic}"`]);
-
-    const recentLayoutHistory = automatedPosts
-      .map((p: any) => p.layoutId)
-      .filter(Boolean)
-      .slice(0, 10);
-
-    const layoutIdParam = nbSelectedLayout === "auto" ? undefined : nbSelectedLayout;
-
-    try {
-      if (postScope === "general") {
-        const t1 = setTimeout(() => setGeneratorLogs(p => [...p, "Analyzing behavioral heuristics for tone match..."]), 850);
-        const t2 = setTimeout(() => setGeneratorLogs(p => [...p, "Drafting organic social copy (strictly non-branded)..."]), 1700);
-
-        const result = await generateGeneralFounderPost({
-          topic: postTopic,
-          referencePosts: postReference,
-          attachmentStyle: nbAttachmentStyle,
-          customImagePrompt: nbCustomImagePrompt,
-          founderAgent: userProfile.founderAgentSynthesized,
-          userId: user?.uid,
-          layoutId: layoutIdParam,
-          recentLayoutHistory
-        });
-
-        clearTimeout(t1); clearTimeout(t2);
-
-        if (nbAttachmentStyle !== "text-only" && result.imageUrl) {
-          setGeneratorLogs(p => [...p, "✓ Image backdrop generated successfully via Imagen AI."]);
-        }
-        setGeneratorLogs(p => [...p, "✓ Central post copy drafted successfully."]);
-
-        // Save to Firestore
-        const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
-        const newPost = {
-          id: newPostId,
-          userId: user?.uid,
-          postCopy: result.postCopy,
-          imageUrl: result.imageUrl || null,
-          headline: result.headline || null,
-          subtext: result.subtext || null,
-          imagePrompt: result.imagePrompt || null,
-          layoutId: result.layoutId || null,
-          createdAt: new Date().toISOString(),
-          status: "scheduled",
-          topic: result.headline || "Manual Insight",
-          isBranded: false,
-          productId: null
-        };
-        await setDoc(doc(db, "users", user!.uid, "founder_posts", newPostId), newPost);
-
-        setGeneratedPost(result);
-        await fetchAutomatedPosts();
-      } else {
-        // Branded founder post loop
-        const targets = selectedManualBrands;
-        setGeneratorLogs(p => [...p, `Drafting branded copy for ${targets.length} product(s)...`]);
-
-        let lastResult = null;
-        for (const pId of targets) {
-          const pData = products.find(p => p.id === pId);
-          if (!pData) continue;
-          setGeneratorLogs(p => [...p, `Generating branded post for: ${pData.name}...`]);
-
-          const result = await generateBrandedFounderPost({
-            topic: postTopic,
-            referencePosts: postReference,
-            attachmentStyle: nbAttachmentStyle,
-            customImagePrompt: nbCustomImagePrompt,
-            founderAgent: userProfile.founderAgentSynthesized,
-            product: pData,
-            userId: user?.uid,
-            layoutId: layoutIdParam,
-            recentLayoutHistory
-          });
-
-          const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
-          const newPost = {
-            id: newPostId,
-            userId: user?.uid,
-            postCopy: result.postCopy,
-            imageUrl: result.imageUrl || null,
-            headline: result.headline || null,
-            subtext: result.subtext || null,
-            imagePrompt: result.imagePrompt || null,
-            layoutId: result.layoutId || null,
-            createdAt: new Date().toISOString(),
-            status: "scheduled",
-            topic: `Focus: ${pData.name}`,
-            isBranded: true,
-            productId: pData.id
-          };
-          await setDoc(doc(db, "users", user!.uid, "founder_posts", newPostId), newPost);
-          
-          lastResult = result;
-        }
-
-        if (lastResult) {
-          setGeneratedPost(lastResult);
-        }
-        setGeneratorLogs(p => [...p, "✓ All branded posts generated successfully."]);
-        await fetchAutomatedPosts();
-      }
-      setIsGeneratingPost(false);
-    } catch (err: any) {
-      logSilentError(err, { context: "handleGeneratePost" });
-      setError("Failed to generate post. Please check your Gemini connection.");
-      setIsGeneratingPost(false);
-    }
-  };
+  // Post generation functionality removed as requested. Ready for new specification.
 
   // Clipboard copy helper
   const handleCopy = () => {
-    if (!generatedPost?.postCopy) return;
-    navigator.clipboard.writeText(generatedPost.postCopy);
+    if (!generatedPostCopy) return;
+    navigator.clipboard.writeText(generatedPostCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -996,7 +1248,8 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
           {[
             { key: "brain", label: "Founder Brain" },
             { key: "brands", label: "Brand Control Board" },
-            { key: "generator", label: "Founder Post Generator" }
+            { key: "generator", label: "Founder Post Generator" },
+            { key: "history", label: "Founder Post History" }
           ].map((tab) => {
             const isActive = activeTab === tab.key;
             return (
@@ -1021,7 +1274,8 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
           {[
             { key: "brain", label: "Founder Brain" },
             { key: "brands", label: "Brand Control Board" },
-            { key: "generator", label: "Founder Post Generator" }
+            { key: "generator", label: "Founder Post Generator" },
+            { key: "history", label: "Founder Post History" }
           ].map((tab) => {
             const isActive = activeTab === tab.key;
             return (
@@ -1738,7 +1992,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
               )}
             </BentoCard>
           </div>
-        ) : (
+        ) : activeTab === "generator" ? (
           /* General Post Generator View */
           <div className="space-y-6">
             
@@ -1814,24 +2068,6 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                           <option value="both">Both (General & Branded)</option>
                         </select>
                       </div>
-
-                      {/* Graphic Style Selector */}
-                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
-                        <span className="text-[10px] font-bold text-slate-555 uppercase tracking-wider">
-                          Style
-                        </span>
-                        <select
-                          value={userProfile?.founderPostAttachmentStyle || "text-only"}
-                          onChange={async (e) => {
-                            await saveProfileData({ founderPostAttachmentStyle: e.target.value as any });
-                          }}
-                          className="bg-transparent border-0 outline-none text-xs font-semibold text-slate-700 focus:ring-0 cursor-pointer"
-                        >
-                          <option value="text-only">Text Only</option>
-                          <option value="image-only">Clean Graphic</option>
-                          <option value="image-overlay">Text Overlaid</option>
-                        </select>
-                      </div>
                     </>
                   )}
                 </div>
@@ -1877,6 +2113,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                   <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
                     Personal Social Connection (LinkedIn Profile)
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 font-sans font-bold text-[9px] border border-emerald-500/20">✨ UNLOCKED FOR FOUNDER</span>
                   </h4>
                   <p className="text-[10px] text-slate-400 font-light mt-0.5">
                     Connect your personal LinkedIn account so your virtual founder doppelganger can publish posts directly to your profile.
@@ -1912,497 +2149,925 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
               </div>
             </BentoCard>
 
-            {/* 2. Main manual tool container */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              
-              {/* Input Config Card */}
-              <BentoCard span={1}>
-                <SectionTitle icon={FileSignature} title="Configure Post Topic & Visuals" iconColor="text-violet-650" />
+            {/* 2. Main Automated Visual Studio Console */}
+            <div className="space-y-6">
+              {/* Header Bar with Popup Modal Trigger Button */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-violet-50 text-violet-650 border border-violet-100">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 tracking-tight">Founder Visual Studio</h3>
+                    <p className="text-xs text-slate-500 font-light mt-0.5">
+                      Configure topics via popup modal, preview real-time visual canvases, and tweak live copy.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsTopicModalOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-violet-600 hover:bg-violet-750 transition shadow-sm cursor-pointer shrink-0"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>Configure Post Topic & Scope</span>
+                </button>
+              </div>
+
+              {/* Main 2-Column Workspace Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 
-                <div className="space-y-5">
-                  {/* Manual Scope Selection */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      Post Persona Branding Scope
-                    </label>
-                    <div className="flex gap-2">
-                      {[
-                        { value: "general", label: "General Post (Non-Branded)" },
-                        { value: "branded", label: "Branded Post (Product Focus)" }
-                      ].map((opt) => (
+                {/* LEFT COLUMN: Visual Studio Canvas Preview (Top) & Discovered Visual Trends (Bottom) */}
+                <div className="space-y-6">
+                  {/* Visual Engine Live Interactive Render Canvas (iframe Sandbox) */}
+                  <BentoCard span={1}>
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <Palette className="h-4 w-4 text-violet-650" />
+                        <h3 className="text-sm font-bold text-slate-800 tracking-tight">Visual Studio Canvas Preview</h3>
+                      </div>
+                      {hasGeneratedOutput && (
+                        <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-100 text-amber-800 uppercase">
+                          Layout: {selectedTemplateId}
+                        </span>
+                      )}
+                    </div>
+
+                    {isGeneratingPost && (
+                      <div className="aspect-square bg-slate-955 border border-slate-850 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-3">
+                        <Loader2 className="h-8 w-8 text-violet-400 animate-spin mb-2" />
+                        <span className="text-xs font-bold text-slate-200 font-mono">Synthesizing Visual Draft & Researching Trends...</span>
+                        <div className="space-y-1 font-mono text-[10px] text-slate-400 max-w-xs">
+                          {generatorLogs.map((log, idx) => (
+                            <p key={idx} className={log.startsWith("✓") ? "text-emerald-400 font-semibold" : ""}>{log}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!hasGeneratedOutput && !isGeneratingPost && (
+                      <div className="aspect-square bg-slate-50 border border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-8 text-center space-y-3">
+                        <Sparkles className="h-8 w-8 text-slate-300 animate-pulse" />
+                        <span className="text-xs font-bold text-slate-700">Visual Graphic Canvas</span>
+                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs font-light">
+                          Draft a post to trigger live trend research. The auto-selected layout, backdrop image, and text overlay will render here.
+                        </p>
                         <button
-                          key={opt.value}
                           type="button"
-                          onClick={() => setPostScope(opt.value as any)}
-                          className={`flex-1 py-2 px-3 border rounded-xl text-xs font-bold transition-all ${
-                            postScope === opt.value
-                              ? "bg-violet-600 border-violet-500 text-white shadow-sm"
-                              : "bg-white border-slate-200 hover:bg-slate-50 text-slate-655"
-                          }`}
+                          onClick={() => setIsTopicModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
                         >
-                          {opt.label}
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Configure Post Topic & Scope</span>
                         </button>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    )}
 
-                  {/* Channels Selector (Read-Only LinkedIn for now) */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      Target Social Channel
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled
-                        className="flex items-center gap-1.5 py-2 px-3 border border-[#0A66C2]/20 bg-[#0A66C2]/5 text-[#0A66C2] rounded-xl text-xs font-bold shadow-sm cursor-default"
-                      >
-                        <Linkedin className="h-3.5 w-3.5" />
-                        LinkedIn (Selected & Configured)
-                      </button>
-                    </div>
-                  </div>
+                    {hasGeneratedOutput && !isGeneratingPost && (
+                      <div className="space-y-4">
+                        {/* Live Canvas Preview via Iframe Renderer */}
+                        <div className="relative w-[360px] h-[360px] rounded-xl border border-slate-200 shadow overflow-hidden bg-slate-950 shrink-0 mx-auto">
+                          <iframe
+                            title="Visual Template Preview Renderer"
+                            srcDoc={fullHtml}
+                            // allow-same-origin (so the parent can read
+                            // contentDocument for toJpeg export) WITHOUT
+                            // allow-scripts — model-generated template markup must
+                            // never execute against this origin.
+                            sandbox="allow-same-origin"
+                            className="absolute origin-top-left border-none pointer-events-none"
+                            style={{
+                              width: "1080px",
+                              height: "1080px",
+                              transform: "scale(0.333333)"
+                            }}
+                          />
+                        </div>
 
-                  {/* Manual Brands Selection */}
-                  {postScope === "branded" && (
-                    <div className="animate-in fade-in duration-200 space-y-2">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        Select Target Brands / Products
-                      </label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {products.map((p) => {
-                          const isChecked = selectedManualBrands.includes(p.id);
+                        {/* Brand DNA & Color Harmony Swatches */}
+                        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                              Brand Harmony:
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="h-4 w-4 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: primaryColor }} title="Primary Accent Color" />
+                              <span className="h-4 w-4 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: secondaryColor }} title="Secondary Backdrop Color" />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[10px] text-slate-600 font-semibold">
+                            <Type className="h-3 w-3 text-slate-400" />
+                            <span>{fontFamily}</span>
+                          </div>
+                        </div>
+
+                        {/* Post Action Buttons */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(generatedPostCopy);
+                              setCopied(true);
+                              setTimeout(() => setCopied(false), 2000);
+                            }}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-sm cursor-pointer"
+                          >
+                            {copied ? (
+                              <>
+                                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                <span className="text-emerald-600">Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5 text-slate-500" />
+                                <span>Copy Post Copy</span>
+                              </>
+                            )}
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const iframe = document.querySelector('iframe[title="Visual Template Preview Renderer"]') as HTMLIFrameElement;
+                                if (!iframe || !iframe.contentDocument) throw new Error("Iframe not found");
+                                
+                                const dataUrl = await toJpeg(iframe.contentDocument.body, { 
+                                  cacheBust: true,
+                                  width: 1080,
+                                  height: 1080,
+                                  style: { margin: '0' },
+                                  quality: 0.85,
+                                  pixelRatio: 1
+                                });
+                                const link = document.createElement('a');
+                                link.download = `founder-visual-${Date.now()}.jpg`;
+                                link.href = dataUrl;
+                                link.click();
+                              } catch (err) {
+                                console.error("Failed to download image:", err);
+                                alert("Failed to download visual. If it uses external images, CORS might be blocking it.");
+                              }
+                            }}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-sm cursor-pointer"
+                          >
+                            <Download className="h-3.5 w-3.5 text-slate-500" />
+                            <span>Download Image</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </BentoCard>
+
+                  {/* 6 Discovered Visual Templates Grid (Grounded Web Trends) */}
+                  {trendReport && trendReport.discoveredTemplates?.length > 0 && (
+                    <div className="border border-amber-200/80 bg-gradient-to-b from-amber-50/40 via-white to-amber-50/10 rounded-2xl p-5 shadow-xs text-left space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-amber-200/60">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-amber-600 animate-pulse" />
+                          <span className="text-xs font-bold text-slate-900">🔥 Grounded Visual Trends (Gemini 2.5 Pro)</span>
+                        </div>
+                        <span className="text-[9px] font-mono font-bold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">
+                          {trendReport.discoveredTemplates.length} Templates Synthesized
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                        {trendReport.discoveredTemplates.map((dt: any, dtIdx: number) => {
+                          const safeId = dt.id && typeof dt.id === 'string' ? dt.id : `dt-fallback-${dtIdx}`;
+                          const isSelected = selectedTemplateId === safeId;
+                          const isApproved = approvedTemplateId === safeId;
                           return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedManualBrands(prev => 
-                                  isChecked 
-                                    ? prev.filter(id => id !== p.id) 
-                                    : [...prev, p.id]
-                                );
-                              }}
-                              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all ${
-                                isChecked
-                                  ? "bg-violet-600 border-violet-500 text-white shadow-sm"
-                                  : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600"
+                            <div 
+                              key={safeId} 
+                              className={`p-3 rounded-xl space-y-2 flex flex-col justify-between transition border ${
+                                isApproved
+                                  ? "bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-400/30 shadow-sm"
+                                  : isSelected 
+                                    ? "bg-amber-50/80 border-amber-400 ring-2 ring-amber-400/20 shadow-sm" 
+                                    : "bg-white border-slate-200 hover:border-slate-300"
                               }`}
                             >
-                              {p.name}
-                            </button>
+                              <div>
+                                <div className="flex justify-between items-start gap-1">
+                                  <span className="text-[10px] font-extrabold text-slate-900 block leading-tight">{dt.name}</span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {isApproved && (
+                                      <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono flex items-center gap-0.5">
+                                        <ShieldCheck className="w-2.5 h-2.5" />
+                                        Approved
+                                      </span>
+                                    )}
+                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-mono">
+                                      {dt.viralityScore || "98/100"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="text-[8px] font-bold text-amber-700 font-mono uppercase block mt-1">
+                                  {dt.sourceTrend}
+                                </span>
+                                <p className="text-slate-500 text-[9px] leading-relaxed mt-1 font-light line-clamp-2">{dt.whyViral}</p>
+                              </div>
+                              
+                              <div className="pt-1.5 border-t border-slate-100 space-y-1.5">
+                                {/* Preview Layout Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedTemplateId(dt.id)}
+                                  className={`w-full text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
+                                    isSelected 
+                                      ? "bg-amber-600 text-white shadow-xs" 
+                                      : "bg-slate-900 hover:bg-amber-600 text-white"
+                                  }`}
+                                >
+                                  <Eye className="w-2.5 h-2.5" />
+                                  <span>{isSelected ? "Previewing" : "Preview Layout"}</span>
+                                </button>
+
+                                {/* Approve & Finalize Button — only on the currently selected template */}
+                                {isSelected && !isApproved && (
+                                  <button
+                                    type="button"
+                                    onClick={handleApproveTemplate}
+                                    disabled={isApprovingTemplate}
+                                    className="w-full text-[9px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center justify-center gap-1 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs disabled:opacity-60"
+                                  >
+                                    {isApprovingTemplate ? (
+                                      <>
+                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                        <span>Rendering...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ShieldCheck className="w-2.5 h-2.5" />
+                                        <span>Approve & Finalize</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+
+                                {isApproved && (
+                                  <div className="text-[9px] font-bold text-emerald-700 text-center py-1">
+                                    ✓ Template finalized for this post
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
-                      <p className="text-[9px] text-slate-400 italic">
-                        Select one or more products. We will draft a dedicated founder post for each selected brand using its Brand DNA.
-                      </p>
                     </div>
                   )}
+                </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        Active Post Concept / Topic
-                      </label>
+                {/* RIGHT COLUMN: Edit Live Copy Section (Top) & Founder Posts History Feed (Bottom) */}
+                <div className="space-y-6">
+                  {/* Edit Live Copy Section (Auto-Populated & Live Editable) */}
+                  {hasGeneratedOutput ? (
+                    <BentoCard span={1} className="animate-in fade-in duration-300">
+                      <SectionTitle icon={FileText} title="Edit Live Copy (Auto-Populated)" iconColor="text-violet-650" />
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Visual Headline / Hook (Overlay Text)
+                          </label>
+                          <input
+                            type="text"
+                            value={generatedHeadline}
+                            onChange={(e) => setGeneratedHeadline(e.target.value)}
+                            placeholder="Headline visual hook..."
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Visual Subtext (Supporting Lesson)
+                          </label>
+                          <input
+                            type="text"
+                            value={generatedSubtext}
+                            onChange={(e) => setGeneratedSubtext(e.target.value)}
+                            placeholder="Supporting subtext detail..."
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs text-slate-700 outline-none transition-colors"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Full Post Text Copy
+                          </label>
+                          <textarea
+                            rows={6}
+                            value={generatedPostCopy}
+                            onChange={(e) => setGeneratedPostCopy(e.target.value)}
+                            placeholder="Full post copywriting..."
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl p-3 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors font-light"
+                          />
+                        </div>
+
+                        {/* AI-Generated Visual Backdrop Section */}
+                        <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                              Generated Visual Backdrop Image (Auto-Populated)
+                            </label>
+                            <span className="text-[9px] font-mono font-semibold text-violet-600 bg-violet-50 px-2 py-0.5 rounded border border-violet-150">
+                              Imagen AI
+                            </span>
+                          </div>
+
+                          {generatedImageUrl ? (
+                            <div className="relative rounded-xl overflow-hidden border border-slate-200 aspect-video shadow-sm bg-slate-900 group">
+                              <img src={generatedImageUrl} alt="AI Generated Backdrop" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center p-3 text-center">
+                                <span className="text-[10px] text-white font-medium">Auto-applied as backdrop for the visual template overlay.</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center bg-slate-50 text-slate-400 text-xs font-light">
+                              Backdrop image generated by Imagen AI will appear here upon post drafting.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </BentoCard>
+                  ) : (
+                    <BentoCard span={1}>
+                      <SectionTitle icon={FileText} title="Edit Live Copy (Auto-Populated)" iconColor="text-violet-650" />
+                      <div className="py-12 px-4 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-3">
+                        <FileText className="h-8 w-8 text-slate-300 mx-auto" />
+                        <span className="text-xs font-bold text-slate-700 block">No Post Drafted Yet</span>
+                        <p className="text-[11px] text-slate-400 max-w-xs mx-auto font-light leading-relaxed">
+                          Click "Configure Post Topic & Scope" to choose a topic and draft a post. Live headline, subtext, and body copy will appear here for editing.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setIsTopicModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Configure Post Topic & Scope</span>
+                        </button>
+                      </div>
+                    </BentoCard>
+                  )}
+
+                  {/* Singular Latest Generated Founder Post in Creation View */}
+                  {automatedPosts.length > 0 && (
+                    <BentoCard span={1}>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-3">
+                        <SectionTitle icon={Clock} title="Latest Generated Founder Post" iconColor="text-violet-650" />
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("history")}
+                          className="text-[10px] font-bold text-violet-650 hover:text-violet-800 transition flex items-center gap-1 cursor-pointer shrink-0"
+                        >
+                          <span>View Previous Posts ({Math.max(0, automatedPosts.length - 1)})</span>
+                          <ChevronRight className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      {(() => {
+                        const latestPost = automatedPosts[0];
+                        return (
+                          <div
+                            key={latestPost.id}
+                            className="p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-xl flex flex-col gap-2.5 hover:bg-white hover:border-slate-300 transition-all text-left"
+                          >
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                latestPost.isBranded 
+                                  ? "bg-violet-100 text-violet-700 border border-violet-200" 
+                                  : "bg-slate-200 text-slate-700 border border-slate-300"
+                              }`}>
+                                {latestPost.isBranded ? "Branded Product" : "Organic General"}
+                              </span>
+
+                              <div className="flex items-center gap-2">
+                                {true && (
+                                  <button
+                                    disabled={!isLinkedinConnected || publishingPostId !== null}
+                                    onClick={() => handleManualPublish(latestPost.id)}
+                                    className={`inline-flex items-center gap-1 text-[9px] font-bold rounded-lg px-2 py-1 transition shadow-sm border ${
+                                      !isLinkedinConnected
+                                        ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                                        : "bg-white text-[#0A66C2] border-[#0A66C2]/30 hover:border-[#0A66C2]/60 cursor-pointer"
+                                    }`}
+                                  >
+                                    {publishingPostId === latestPost.id ? <Loader2 className="h-2.5 w-2.5 animate-spin text-[#0A66C2]" /> : <Linkedin className="h-2.5 w-2.5 text-[#0A66C2]" />}
+                                    <span>Publish</span>
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(latestPost.postCopy);
+                                    alert("Copied to clipboard!");
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-600 border border-slate-200 rounded-lg px-2 py-1 bg-white transition shadow-sm cursor-pointer"
+                                >
+                                  <Copy className="h-2.5 w-2.5" />
+                                  <span>Copy</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePost(latestPost.id)}
+                                  className="text-[9px] font-bold text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 transition cursor-pointer"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="mt-2 -mx-1 pointer-events-auto">
+                              <PostPreviewModal
+                                inline
+                                platform="linkedin"
+                                copy={latestPost.postCopy}
+                                imageUrl={approvedTemplateImageUrl || latestPost.approvedTemplateImage || latestPost.imageUrl || undefined}
+                                isFlattened={true}
+                                productName={latestPost.isBranded ? (products.find(p => p.id === latestPost.productId)?.name || "Branded Product") : "Founder Insight"}
+                                productLogo={latestPost.isBranded ? (products.find(p => p.id === latestPost.productId)?.logoUrl || "") : ""}
+                              />
+                              {(approvedTemplateImageUrl || latestPost.approvedTemplateImage) && (
+                                <div className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                                  <ShieldCheck className="h-3 w-3 text-emerald-600" />
+                                  <span>Approved template visual applied</span>
+                                </div>
+                              )}
+                              {!approvedTemplateImageUrl && !latestPost.approvedTemplateImage && trendReport?.discoveredTemplates?.length > 0 && (
+                                <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200">
+                                  <Zap className="h-3 w-3 text-amber-500" />
+                                  <span>No template approved yet — select and approve a template from the visual trends grid</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </BentoCard>
+                  )}
+                </div>
+              </div>
+
+              {/* Popup Modal: Configure Post Topic & Visual Scope Form */}
+              {isTopicModalOpen && (
+                <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                  <div className="bg-white border border-slate-900/10 rounded-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200 shadow-2xl relative my-auto">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <SectionTitle icon={FileSignature} title="Configure Post Topic & Visual Scope" iconColor="text-violet-650" />
                       <button
                         type="button"
-                        disabled={isFetchingSuggestions || !userProfile?.founderAgentSynthesized}
-                        onClick={fetchTopicSuggestions}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-655 hover:text-[#6D28D9] disabled:opacity-40"
+                        onClick={() => setIsTopicModalOpen(false)}
+                        className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
                       >
-                        <RefreshCw className={`h-3 w-3 ${isFetchingSuggestions ? 'animate-spin' : ''}`} />
-                        <span>Refresh AI Recommendations</span>
+                        <X className="h-4.5 w-4.5" />
                       </button>
                     </div>
 
-                    {/* AI Recommendation Click-to-Fill Chips */}
-                    {suggestions.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                        {suggestions.map((sug, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => setPostTopic(sug.prompt)}
-                            title={sug.description}
-                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border text-left flex items-center justify-between gap-1 max-w-full ${
-                              postTopic === sug.prompt
-                                ? "bg-violet-600 border-violet-500 text-white shadow-sm"
-                                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
-                            }`}
-                          >
-                            <span className="truncate">{sug.title}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    
-                    <textarea
-                      rows={4}
-                      value={postTopic}
-                      onChange={(e) => setPostTopic(e.target.value)}
-                      placeholder="Click a recommendation chip above to auto-fill, or type custom concept topics here..."
-                      className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      Writing References (Optional style transfer)
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={postReference}
-                      onChange={(e) => setPostReference(e.target.value)}
-                      placeholder="Paste sample texts/posts to guide copy structure and tone..."
-                      className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-555 uppercase tracking-wider mb-2.5">
-                      Graphic Layout Style
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { value: "text-only", label: "Text Only" },
-                        { value: "image-only", label: "Clean Graphic" },
-                        { value: "image-overlay", label: "Text Overlaid" }
-                      ].map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setNbAttachmentStyle(opt.value as any)}
-                          className={`py-2 px-3 border rounded-xl text-xs font-semibold transition-all ${
-                            nbAttachmentStyle === opt.value
-                              ? "bg-violet-650 border-violet-500 text-white shadow-sm"
-                              : "bg-white border-slate-200 hover:bg-slate-55 text-slate-600"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {nbAttachmentStyle !== "text-only" && (
-                    <div className="space-y-4">
+                    <div className="space-y-5">
+                      {/* Post Scope Selection */}
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-555 uppercase tracking-wider mb-2">
-                          Custom Image Backdrop Prompt (Optional)
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                          Post Persona Branding Scope
                         </label>
-                        <input
-                          type="text"
-                          value={nbCustomImagePrompt}
-                          onChange={(e) => setNbCustomImagePrompt(e.target.value)}
-                          placeholder="e.g. modern laptop desk with coffee mug, dramatic warm lighting"
-                          className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs text-slate-800 outline-none transition-colors"
-                        />
+                        <div className="flex gap-2">
+                          {[
+                            { value: "general", label: "General Post (Non-Branded)" },
+                            { value: "branded", label: "Branded Post (Product Focus)" }
+                          ].map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setPostScope(opt.value as any)}
+                              className={`flex-1 py-2 px-3 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                postScope === opt.value
+                                  ? "bg-violet-600 border-violet-500 text-white shadow-sm"
+                                  : "bg-white border-slate-200 hover:bg-slate-50 text-slate-655"
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
-                      {nbAttachmentStyle === "image-overlay" && (
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-555 uppercase tracking-wider mb-2">
-                            Post Visual Layout Template
+                      {/* Target Brand Selector for Branded Posts */}
+                      {postScope === "branded" && (
+                        <div className="animate-in fade-in duration-200 space-y-2">
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            Select Target Product / Brand
                           </label>
-                          <div className="grid grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-1">
-                            {[
-                              { id: "auto", name: "Auto-Rotate (Variety)", desc: "Cycles all compositions" },
-                              { id: "editorial-left", name: "Editorial Left Panel", desc: "Left sidebar column layout" },
-                              { id: "editorial-right", name: "Editorial Right Panel", desc: "Right sidebar column layout" },
-                              { id: "cinema-bottom", name: "Cinematic Bottom Bar", desc: "Wide widescreen base bar" },
-                              { id: "knockout-type", name: "Heavy Typography", desc: "Bold statement text overlay" },
-                              { id: "ticker-strip", name: "Ticker Strip", desc: "Center horizontal strip block" },
-                              { id: "stacked-blocks", name: "Bauhaus Block Stack", desc: "Offset geometric stickered look" },
-                              { id: "frame-border", name: "Classic Polaroid Frame", desc: "Border frame photo layout" },
-                              { id: "diagonal-split", name: "Diagonal Split Slice", desc: "Modern angled split canvas" },
-                              { id: "neon-minimal", name: "Highlight Accent", desc: "Highlighted brand word accents" },
-                              { id: "editorial-grid", name: "Clean Asymmetric Grid", desc: "Asymmetric sidebar block" }
-                            ].map((lt) => (
+                          <div className="flex flex-wrap gap-1.5">
+                            {products.map((p) => {
+                              const isChecked = selectedManualBrands.includes(p.id);
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedManualBrands([p.id]);
+                                  }}
+                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all cursor-pointer ${
+                                    isChecked
+                                      ? "bg-violet-600 border-violet-500 text-white shadow-sm"
+                                      : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600"
+                                  }`}
+                                >
+                                  {p.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[9px] text-slate-400 italic">
+                            Selected brand colors & logo will auto-apply to the visual template.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Post Concept / Topic Field */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            Active Post Concept / Topic
+                          </label>
+                          <button
+                            type="button"
+                            disabled={isFetchingSuggestions || !userProfile?.founderAgentSynthesized}
+                            onClick={fetchTopicSuggestions}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-655 hover:text-[#6D28D9] disabled:opacity-40 cursor-pointer"
+                          >
+                            <RefreshCw className={`h-3 w-3 ${isFetchingSuggestions ? 'animate-spin' : ''}`} />
+                            <span>AI Recommendations</span>
+                          </button>
+                        </div>
+
+                        {/* AI Recommendation Chips */}
+                        {suggestions.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                            {suggestions.map((sug, idx) => (
                               <button
-                                key={lt.id}
+                                key={idx}
                                 type="button"
-                                onClick={() => setNbSelectedLayout(lt.id)}
-                                className={`p-2 rounded-xl transition-all border text-left flex flex-col gap-2 relative group ${
-                                  nbSelectedLayout === lt.id
-                                    ? "bg-violet-50/70 border-violet-500 ring-2 ring-violet-500/20 shadow-sm"
-                                    : "bg-white border-slate-200 hover:border-slate-350 hover:shadow-xs text-slate-705"
+                                onClick={() => setPostTopic(sug.prompt)}
+                                title={sug.description}
+                                className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border text-left flex items-center justify-between gap-1 max-w-full cursor-pointer ${
+                                  postTopic === sug.prompt
+                                    ? "bg-violet-600 border-violet-500 text-white shadow-sm"
+                                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
                                 }`}
                               >
-                                {renderMiniLayoutPreview(lt.id)}
-                                <div className="px-0.5">
-                                  <span className="text-[11px] font-bold text-slate-800 leading-tight block truncate group-hover:text-violet-700 transition-colors">
-                                    {lt.name}
-                                  </span>
-                                  <span className="text-[9px] text-slate-400 leading-normal font-light block truncate mt-0.5">
-                                    {lt.desc}
-                                  </span>
-                                </div>
+                                <span className="truncate">{sug.title}</span>
                               </button>
                             ))}
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleGeneratePost}
-                    disabled={isGeneratingPost || !postTopic.trim() || !userProfile?.founderAgentSynthesized}
-                    className="w-full bg-violet-600 hover:bg-violet-750 text-white rounded-xl py-3 text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors uppercase"
-                  >
-                    {isGeneratingPost ? (
-                      <>
-                        <Loader2 className="animate-spin h-4 w-4" />
-                        <span>Generating Draft...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4" />
-                        <span>Draft Founder Post</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </BentoCard>
-
-              {/* Output Display Card */}
-              <div className="space-y-6">
-                {isGeneratingPost && (
-                  <BentoCard span={1} className="!bg-slate-955 !border-slate-850">
-                    <div className="font-mono text-[11px] text-slate-300 space-y-2.5">
-                      <div className="flex justify-between text-[10px] text-violet-400 uppercase font-semibold tracking-wider">
-                        <span>Generator Worker active</span>
-                        <Loader2 className="animate-spin h-3.5 w-3.5" />
-                      </div>
-                      <div className="space-y-1.5 pt-2 select-none h-40 overflow-y-auto">
-                        {generatorLogs.map((log, idx) => (
-                          <p key={idx} className={log.startsWith("✓") ? "text-emerald-400 font-semibold" : "text-slate-450"}>
-                            {log}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  </BentoCard>
-                )}
-
-                {!generatedPost && !isGeneratingPost && (
-                  <div className="border border-slate-200 rounded-2xl bg-white p-5 shadow-sm text-left space-y-4">
-                    {/* Mock Post Header */}
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center font-bold text-violet-755 border border-violet-250 uppercase shrink-0">
-                        {userProfile?.founderAgentSynthesized?.personaName?.charAt(0) || "F"}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-slate-800 truncate block">
-                            {userProfile?.founderAgentSynthesized?.personaName || "Founder Persona"}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-normal shrink-0">• 1st</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 block leading-tight font-light truncate">
-                          Founder & Executive • {userProfile?.founderAgentSynthesized?.targetIndustry || "Technology"}
-                        </span>
-                        <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-light">
-                          Just now • Edited • 🌐
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Mock Post Body Copy Placeholder */}
-                    <div className="space-y-2 py-2">
-                      <div className="h-2.5 w-11/12 bg-slate-100 rounded" />
-                      <div className="h-2.5 w-full bg-slate-100 rounded" />
-                      <div className="h-2.5 w-4/5 bg-slate-100 rounded" />
-                      <p className="text-[10px] text-slate-450 leading-relaxed font-light pt-2 italic">
-                        Select one of the AI suggestions or type your custom thought in the field, configure visual outputs, and click draft.
-                      </p>
-                    </div>
-
-                    {/* Mock Visual Backdrop Area */}
-                    <div className="aspect-square bg-slate-50 border border-slate-150 rounded-xl flex flex-col items-center justify-center text-center p-6 border-dashed">
-                      <Sparkles className="h-7 w-7 text-slate-300 animate-pulse mb-2" />
-                      <span className="text-xs font-bold text-slate-700">Visual Graphic Canvas</span>
-                      <span className="text-[10px] text-slate-400 max-w-[200px] mt-1 font-light leading-relaxed">
-                        Backdrop graphic generated by Imagen AI with custom headline overlays will render here.
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {generatedPost && !isGeneratingPost && (
-                  <div className="border border-slate-200 rounded-2xl bg-white p-5 shadow-sm text-left space-y-4">
-                    {/* Mock Post Header */}
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center font-bold text-violet-755 border border-violet-250 uppercase shrink-0">
-                          {userProfile?.founderAgentSynthesized?.personaName?.charAt(0) || "F"}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-slate-800 truncate block">
-                              {userProfile?.founderAgentSynthesized?.personaName || "Founder Persona"}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-normal shrink-0">• 1st</span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 block leading-tight font-light truncate">
-                            Founder & Executive • {userProfile?.founderAgentSynthesized?.targetIndustry || "Technology"}
-                          </span>
-                          <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-light">
-                            Just now • Edited • 🌐
-                          </span>
-                        </div>
+                        )}
+                        
+                        <textarea
+                          rows={3}
+                          value={postTopic}
+                          onChange={(e) => setPostTopic(e.target.value)}
+                          placeholder="Click an AI recommendation chip above, or type custom topics here..."
+                          className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors"
+                        />
                       </div>
 
-                      {/* Copy Action button */}
                       <button
-                        onClick={handleCopy}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-[#7C3AED] hover:text-[#6D28D9] border border-slate-200/85 rounded-lg px-2.5 py-1.5 bg-white hover:bg-slate-50 transition shadow-sm shrink-0"
+                        type="button"
+                        onClick={handleGeneratePost}
+                        disabled={isGeneratingPost || !postTopic.trim() || !userProfile?.founderAgentSynthesized}
+                        className="w-full bg-violet-600 hover:bg-violet-750 text-white rounded-xl py-3 text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors uppercase cursor-pointer"
                       >
-                        {copied ? (
+                        {isGeneratingPost ? (
                           <>
-                            <Check className="h-3 w-3 text-emerald-500" />
-                            <span className="text-emerald-600">Copied!</span>
+                            <Loader2 className="animate-spin h-4 w-4" />
+                            <span>Generating & Researching Trends...</span>
                           </>
                         ) : (
                           <>
-                            <Copy className="h-3 w-3" />
-                            <span>Copy Text</span>
+                            <Sparkles className="h-4 w-4" />
+                            <span>Draft Founder Post</span>
                           </>
                         )}
                       </button>
                     </div>
-
-                    {/* Post Copy Edit Area */}
-                    <div className="space-y-2">
-                      <textarea
-                        value={generatedPost.postCopy}
-                        onChange={(e) => setGeneratedPost({ ...generatedPost, postCopy: e.target.value })}
-                        rows={10}
-                        className="w-full bg-slate-50/50 border border-slate-200 rounded-xl p-4 text-xs text-slate-805 leading-relaxed focus:outline-none focus:border-violet-500 resize-none font-light"
-                        placeholder="Edit copywriting draft here..."
-                      />
-                    </div>
-
-                    {/* Visual Graphic preview inline */}
-                    {generatedPost.imageUrl && (
-                      <div className="border border-slate-150 rounded-xl overflow-hidden bg-slate-50 p-4 flex justify-center">
-                        <div className="w-[min(100%,360px)] aspect-square rounded-lg overflow-hidden shadow bg-white">
-                          <img
-                            src={generatedPost.imageUrl}
-                            alt="Visual graphic attachment"
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                      </div>
-                    )}
                   </div>
-                )}
-              </div>
-
+                </div>
+              )}
             </div>
+          </div>
 
-            {/* 3. Recent Automated & Generated Posts Section */}
-            {automatedPosts.length > 0 && (
-              <BentoCard span={3} className="mt-6">
-                <SectionTitle icon={FileText} title="Recent Automated & Generated Insights" iconColor="text-violet-650" />
-                <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
-                  {automatedPosts.map((post) => (
-                    <div key={post.id} className="bg-slate-50/50 hover:bg-slate-50 border border-slate-200/80 rounded-2xl p-5 flex flex-col md:flex-row items-start gap-5 transition-all duration-200 text-left">
-                      
-                      {/* Left: Text copy */}
-                      <div className="flex-1 text-left min-w-0">
-                        <div className="flex items-center justify-between mb-3.5 pb-2 border-b border-slate-100">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono bg-violet-100 text-violet-755 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                              {post.topic || "Daily Insight"}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              Generated: {new Date(post.createdAt).toLocaleDateString()}
-                            </span>
-                            {/* Status Badges */}
-                            {post.status === "published" ? (
-                              <span className="text-[9px] font-mono bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                                Published
-                              </span>
-                            ) : post.status === "failed" ? (
-                              <span 
-                                title={post.publishError || "Unknown publishing error"} 
-                                className="text-[9px] font-mono bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider cursor-help"
-                              >
-                                Failed
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-mono bg-slate-100 text-slate-655 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                                Draft
-                              </span>
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                            {post.status !== "published" && (
-                              <button
-                                disabled={!isLinkedinConnected || publishingPostId !== null}
-                                onClick={() => handleManualPublish(post.id)}
-                                title={!isLinkedinConnected ? "Please connect your personal LinkedIn account first" : "Publish to your personal LinkedIn profile"}
-                                className={`inline-flex items-center gap-1.5 text-[10px] font-bold rounded-lg px-2.5 py-1.5 transition shadow-sm border ${
-                                  !isLinkedinConnected
-                                    ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
-                                    : "bg-white text-[#0A66C2] hover:text-[#00509d] border-[#0A66C2]/30 hover:border-[#0A66C2]/60"
-                                }`}
-                              >
-                                {publishingPostId === post.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin text-[#0A66C2]" />
-                                ) : (
-                                  <Linkedin className="h-3 w-3 text-[#0A66C2]" />
-                                )}
-                                <span>Publish to LinkedIn</span>
-                              </button>
-                            )}
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(post.postCopy);
-                                alert("Copied to clipboard!");
-                              }}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-slate-800 border border-slate-200/85 rounded-lg px-2.5 py-1.5 bg-white transition shadow-sm"
-                            >
-                              <Copy className="h-3 w-3" />
-                              <span>Copy Text</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeletePost(post.id)}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-lg px-2.5 py-1.5 transition"
-                            >
-                              <span>Delete</span>
-                            </button>
-                          </div>
-                        </div>
-                        <p className="text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap font-light">
-                          {post.postCopy}
-                        </p>
+        ) : activeTab === "history" ? (
+          /* 4. Dedicated Founder Post History Tab View (Previous Posts Only with Pagination & Layouts) */
+          <div className="space-y-6">
+            <BentoCard span={3}>
+              {(() => {
+                const previousPosts = automatedPosts.slice(1);
+                const itemsPerPage = historyLayout === "grid" ? 6 : 4;
+                const totalPages = Math.ceil(previousPosts.length / itemsPerPage);
+                const currentPage = Math.min(historyPage, Math.max(1, totalPages));
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const paginatedPosts = previousPosts.slice(startIndex, startIndex + itemsPerPage);
+
+                return (
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <SectionTitle icon={Clock} title="Previous Founder Posts History" iconColor="text-violet-650" />
+                        <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full -mt-5">
+                          {previousPosts.length} Previous Post{previousPosts.length === 1 ? "" : "s"}
+                        </span>
                       </div>
 
-                      {/* Right: Graphic attachment (if any) */}
-                      {post.imageUrl && (
-                        <div className="w-full md:w-48 aspect-square shrink-0 rounded-xl overflow-hidden shadow-sm border border-slate-150 bg-white">
-                          <img
-                            src={post.imageUrl}
-                            alt="Visual graphic attachment"
-                            className="w-full h-full object-contain"
-                          />
+                      {/* Layout View Mode Selectors */}
+                      {previousPosts.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => { setHistoryLayout("list"); setHistoryPage(1); }}
+                              title="List / Feed View"
+                              className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                historyLayout === "list"
+                                  ? "bg-white text-violet-650 shadow-xs"
+                                  : "text-slate-500 hover:text-slate-700"
+                              }`}
+                            >
+                              <ListFilter className="h-4 w-4" />
+                              <span className="hidden sm:inline text-[11px]">List</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setHistoryLayout("grid"); setHistoryPage(1); }}
+                              title="Grid Cards View"
+                              className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                historyLayout === "grid"
+                                  ? "bg-white text-violet-650 shadow-xs"
+                                  : "text-slate-500 hover:text-slate-700"
+                              }`}
+                            >
+                              <LayoutGrid className="h-4 w-4" />
+                              <span className="hidden sm:inline text-[11px]">Grid</span>
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              </BentoCard>
-            )}
+
+                    {loadingAutoposts ? (
+                      <div className="space-y-4 pt-4 animate-pulse">
+                        {[1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="p-5 bg-slate-50/70 border border-slate-200/80 rounded-2xl space-y-4"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="h-5 w-28 bg-slate-200 rounded-md" />
+                                <div className="h-4 w-20 bg-slate-100 rounded-md" />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="h-7 w-24 bg-slate-200 rounded-xl" />
+                                <div className="h-7 w-20 bg-slate-100 rounded-xl" />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="h-4 w-3/4 bg-slate-200 rounded-md" />
+                              <div className="h-4 w-full bg-slate-100 rounded-md" />
+                              <div className="h-4 w-5/6 bg-slate-100 rounded-md" />
+                            </div>
+                            <div className="h-32 w-full bg-slate-100 rounded-xl border border-slate-200/60" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : previousPosts.length > 0 ? (
+                      <div className="space-y-6 pt-4">
+                        {/* LIST VIEW */}
+                        {historyLayout === "list" && (
+                          <div className="space-y-4">
+                            {paginatedPosts.map((post: any) => (
+                              <div
+                                key={post.id}
+                                className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-2xl flex flex-col gap-3 hover:bg-white hover:border-slate-300 transition-all text-left"
+                              >
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                                      post.isBranded 
+                                        ? "bg-violet-100 text-violet-700 border border-violet-200" 
+                                        : "bg-slate-200 text-slate-700 border border-slate-300"
+                                    }`}>
+                                      {post.isBranded ? "Branded Product" : "Organic General"}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-mono">
+                                      {post.createdAt ? new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    {post.status !== "published" && (
+                                      <button
+                                        disabled={!isLinkedinConnected || publishingPostId !== null}
+                                        onClick={() => handleManualPublish(post.id)}
+                                        className={`inline-flex items-center gap-1.5 text-xs font-bold rounded-xl px-3 py-1.5 transition shadow-sm border ${
+                                          !isLinkedinConnected
+                                            ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                                            : "bg-white text-[#0A66C2] border-[#0A66C2]/30 hover:border-[#0A66C2]/60 cursor-pointer"
+                                        }`}
+                                      >
+                                        {publishingPostId === post.id ? <Loader2 className="h-3 w-3 animate-spin text-[#0A66C2]" /> : <Linkedin className="h-3 w-3 text-[#0A66C2]" />}
+                                        <span>Publish to Profile</span>
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(post.postCopy);
+                                        alert("Copied to clipboard!");
+                                      }}
+                                      className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl px-3 py-1.5 bg-white transition shadow-sm cursor-pointer"
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                      <span>Copy Copywriting</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeletePost(post.id)}
+                                      className="text-xs font-bold text-red-500 hover:bg-red-50 rounded-xl px-3 py-1.5 transition cursor-pointer"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="mt-2 -mx-1 pointer-events-auto">
+                                  <PostPreviewModal
+                                    inline
+                                    platform="linkedin"
+                                    copy={post.postCopy}
+                                    imageUrl={post.approvedTemplateImage || post.imageUrl || undefined}
+                                    isFlattened={true}
+                                    productName={post.isBranded ? (products.find(p => p.id === post.productId)?.name || "Branded Product") : "Founder Insight"}
+                                    productLogo={post.isBranded ? (products.find(p => p.id === post.productId)?.logoUrl || "") : ""}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* GRID VIEW */}
+                        {historyLayout === "grid" && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {paginatedPosts.map((post: any) => {
+                              const brandObj = post.isBranded ? products.find(p => p.id === post.productId) : null;
+                              return (
+                                <div
+                                  key={post.id}
+                                  className="p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-2xl flex flex-col justify-between hover:bg-white hover:border-slate-300 transition-all text-left gap-3 shadow-xs"
+                                >
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                        post.isBranded 
+                                          ? "bg-violet-100 text-violet-700 border border-violet-200" 
+                                          : "bg-slate-200 text-slate-700 border border-slate-300"
+                                      }`}>
+                                        {post.isBranded ? (brandObj?.name || "Branded") : "Organic General"}
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 font-mono">
+                                        {post.createdAt ? new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
+                                      </span>
+                                    </div>
+
+                                    {/* Embedded Full LinkedIn Post Preview Card */}
+                                    <div className="pointer-events-auto overflow-hidden rounded-xl border border-slate-200/80 bg-white">
+                                      <PostPreviewModal
+                                        inline
+                                        platform="linkedin"
+                                        copy={post.postCopy}
+                                        imageUrl={post.approvedTemplateImage || post.imageUrl || undefined}
+                                        isFlattened={true}
+                                        productName={post.isBranded ? (brandObj?.name || "Branded Product") : "Founder Insight"}
+                                        productLogo={post.isBranded ? (brandObj?.logoUrl || "") : ""}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
+                                    <div className="flex items-center gap-1.5">
+                                      {true && (
+                                        <button
+                                          disabled={!isLinkedinConnected || publishingPostId !== null}
+                                          onClick={() => handleManualPublish(post.id)}
+                                          title="Publish to LinkedIn"
+                                          className={`inline-flex items-center gap-1 text-[10px] font-bold rounded-lg px-2 py-1 transition border ${
+                                            !isLinkedinConnected
+                                              ? "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed"
+                                              : "bg-white text-[#0A66C2] border-[#0A66C2]/30 hover:border-[#0A66C2]/60 cursor-pointer"
+                                          }`}
+                                        >
+                                          {publishingPostId === post.id ? <Loader2 className="h-3 w-3 animate-spin text-[#0A66C2]" /> : <Linkedin className="h-3 w-3 text-[#0A66C2]" />}
+                                          <span>Publish</span>
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(post.postCopy);
+                                          alert("Copied to clipboard!");
+                                        }}
+                                        title="Copy Copywriting"
+                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-lg px-2 py-1 bg-white hover:bg-slate-50 transition cursor-pointer"
+                                      >
+                                        <Copy className="h-3 w-3" />
+                                        <span>Copy</span>
+                                      </button>
+                                    </div>
+                                    <button
+                                      onClick={() => handleDeletePost(post.id)}
+                                      className="text-[10px] font-bold text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 transition cursor-pointer"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* PAGINATION CONTROLS */}
+                        {totalPages > 1 && (
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100 text-xs font-semibold text-slate-500">
+                            <span>
+                              Showing <strong className="text-slate-800">{startIndex + 1}–{Math.min(startIndex + itemsPerPage, previousPosts.length)}</strong> of <strong className="text-slate-800">{previousPosts.length}</strong> previous posts
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={currentPage === 1}
+                                onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer font-bold"
+                              >
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                                <span>Previous</span>
+                              </button>
+
+                              <div className="flex items-center gap-1">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => (
+                                  <button
+                                    key={pg}
+                                    type="button"
+                                    onClick={() => setHistoryPage(pg)}
+                                    className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                      currentPage === pg
+                                        ? "bg-violet-600 text-white shadow-xs"
+                                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                    }`}
+                                  >
+                                    {pg}
+                                  </button>
+                                ))}
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={currentPage === totalPages}
+                                onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer font-bold"
+                              >
+                                <span>Next</span>
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="py-16 text-center space-y-3">
+                        <Clock className="h-10 w-10 text-slate-300 mx-auto" />
+                        <h4 className="text-sm font-bold text-slate-700">No Previous Founder Posts Yet</h4>
+                        <p className="text-xs text-slate-400 max-w-sm mx-auto font-light leading-relaxed">
+                          Your active draft post is displayed on the "Founder Post Generator" tab. When you draft a new post, older posts will move into this archive.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("generator")}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-violet-600 hover:bg-violet-750 transition cursor-pointer"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Open Post Generator</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </BentoCard>
           </div>
-        )}
-        </div>
+        ) : null}
       </div>
-      </div>
+    </div>
+  </div>
 
       {showSuccessModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Clock, Play, Pause, Trash2, CalendarClock, CheckCircle2, Brain, Cpu, Zap, Sparkles, Loader2 } from "lucide-react";
 import { cn, formatCopy, localToUtc, utcToLocal } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
@@ -32,6 +33,8 @@ export function Schedule() {
     automateWeeklyCampaigns: false,
     automationTimeUtc: "14:00",
     automationWeeklyDay: "Monday",
+    requireEmailApproval: true,
+    autoUploadDelayHours: 12,
     logs: [] as any[]
   });
   const [autoLocalTime, setAutoLocalTime] = useState("09:00");
@@ -73,6 +76,8 @@ export function Schedule() {
               automateWeeklyCampaigns: autoData.automateWeeklyCampaigns || false,
               automationTimeUtc: autoData.automationTimeUtc || "14:00",
               automationWeeklyDay: autoData.automationWeeklyDay || "Monday",
+              requireEmailApproval: autoData.requireEmailApproval !== false,
+              autoUploadDelayHours: autoData.autoUploadDelayHours || 12,
               logs: autoData.logs || []
             });
 
@@ -158,7 +163,9 @@ export function Schedule() {
           automateDailyBlogs: newConfig.automateDailyBlogs,
           automateWeeklyCampaigns: newConfig.automateWeeklyCampaigns,
           automationTimeUtc: newConfig.automationTimeUtc,
-          automationWeeklyDay: newConfig.automationWeeklyDay
+          automationWeeklyDay: newConfig.automationWeeklyDay,
+          requireEmailApproval: newConfig.requireEmailApproval,
+          autoUploadDelayHours: newConfig.autoUploadDelayHours
         })
       });
       if (!res.ok) {
@@ -242,14 +249,74 @@ export function Schedule() {
  return <div className="p-8">Please select or create a product first.</div>;
  }
 
- return (
- <div className="space-y-8 w-full max-w-screen-2xl animate-in fade-in duration-500">
- <div className="tour-schedule-header">
- <h1 className="text-4xl font-bold tracking-tight text-slate-800 font-display">Schedule</h1>
- <p className="mt-2 text-sm text-slate-500 font-light">
- Automate your Traction. Posts will be published automatically at your selected time.
- </p>
- </div>
+  return (
+    <div className="flex flex-col min-h-screen bg-transparent text-slate-800 p-4 md:p-8" id="schedule-container">
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6 border-b border-slate-200 pb-6 w-full max-w-7xl mx-auto">
+        <div className="tour-schedule-header">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-sans font-semibold text-amber-600 uppercase tracking-wider bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-md flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              🚧 Under Construction Zone
+            </span>
+          </div>
+          <h1 className="text-4xl font-display font-light text-slate-900 tracking-tight">
+            Schedule & Autopilot Manager
+          </h1>
+          <p className="text-sm text-slate-500 mt-2 max-w-2xl leading-relaxed">
+            Managed by <span className="font-medium text-slate-800">Maya (Autopilot Manager)</span>. Automated background publishing, UTC post queues, and email approval channels.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3 bg-white border border-slate-200 py-2.5 px-4 rounded-lg shadow-sm shrink-0">
+          <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+          <div className="flex flex-col">
+            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Module Status</span>
+            <span className="text-xs font-bold text-slate-800">Under Construction</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Full Blur Overlay Banner Container */}
+      <div className="relative w-full max-w-7xl mx-auto rounded-3xl overflow-hidden border border-slate-200 shadow-2xl bg-white min-h-[600px]">
+        
+        {/* Full-Coverage Frosted Glass Blur Overlay */}
+        <div className="absolute inset-0 z-50 backdrop-blur-xl bg-slate-950/65 flex flex-col items-center justify-start pt-16 md:pt-24 pb-16 px-8 text-center space-y-5">
+          {/* Subtle Caution Bar Top */}
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
+
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-3xl shadow-xl shadow-amber-500/10">
+            🚧
+          </div>
+
+          <div className="space-y-3 max-w-xl">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-sans font-semibold tracking-wider uppercase backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>🚧 Active Engineering & Construction Zone</span>
+            </div>
+
+            <h2 className="text-3xl sm:text-5xl font-light font-display text-white tracking-tight leading-tight" style={{ color: '#FFFFFF' }}>
+              Autopilot Schedule Is Locked For <br />
+              <span className="font-normal italic text-amber-400">System Calibration.</span>
+            </h2>
+
+            <p className="text-sm font-light text-slate-200 leading-relaxed max-w-md mx-auto">
+              Maya (Autopilot Manager) and the automated posting queue are sealed under maintenance and system upgrades. Direct publishing features are currently paused.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 pt-2">
+            <Link 
+              to="/dashboard" 
+              className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+            >
+              <span>Return to Dashboard</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Blurred Content Behind */}
+        <div className="p-8 opacity-30 pointer-events-none filter blur-md">
 
  <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
  {/* Settings Panel */}
@@ -368,6 +435,8 @@ export function Schedule() {
       </div>
     </div>
   </div>
+</div>
+</div>
 </div>
 </div>
 );

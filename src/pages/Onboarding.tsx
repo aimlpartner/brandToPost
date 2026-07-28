@@ -276,7 +276,6 @@ export function Onboarding() {
   const [focusTopic, setFocusTopic] = useState("");
   const [selectedTheme, setSelectedTheme] = useState("");
   const [selectedChannels, setSelectedChannels] = useState<string[]>(["LinkedIn", "X"]);
-  const [aspectRatio, setAspectRatio] = useState("1:1");
 
   // --- Step 5 State: Campaign Load & Wait Screen ---
   const [isGenerating, setIsGenerating] = useState(false);
@@ -781,13 +780,10 @@ export function Onboarding() {
         focusTopic,
         insightsResult,
         false, // generateImages: false (uses overlays - much faster & cleaner)
-        undefined,
-        undefined,
         selectedChannels,
         selectedTheme || focusTopic,
         subcategory,
         user.uid,
-        aspectRatio,
         (currentStep, total, msg) => {
           setGenProgress(Math.min(60 + Math.floor((currentStep / total) * 30), 95));
           setGenLogs((prev) => [...prev, msg]);
@@ -1559,53 +1555,42 @@ export function Onboarding() {
                         Target Social Platforms
                       </label>
                       <div className="flex items-center gap-3">
-                        {["LinkedIn", "X", "Instagram", "Facebook", "Reddit"].map((ch) => {
-                          const isSel = selectedChannels.includes(ch);
+                        {[
+                          { name: "Instagram", isLocked: true, lockedReason: "🔒 Soon" },
+                          { name: "Facebook", isLocked: true, lockedReason: "🔒 Soon" },
+                          { name: "LinkedIn", isLocked: true, lockedReason: "🔒 Founder Only" },
+                          { name: "X", isLocked: true, lockedReason: "🔒 Soon" },
+                          { name: "Reddit", isLocked: true, lockedReason: "🔒 Soon" }
+                        ].map((ch) => {
+                          const isSel = selectedChannels.includes(ch.name);
                           return (
                             <button
-                              key={ch}
+                              key={ch.name}
                               type="button"
+                              disabled={ch.isLocked}
                               onClick={() => {
+                                if (ch.isLocked) return;
                                 if (isSel) {
-                                  setSelectedChannels(selectedChannels.filter((c) => c !== ch));
+                                  setSelectedChannels(selectedChannels.filter((c) => c !== ch.name));
                                 } else {
-                                  setSelectedChannels([...selectedChannels, ch]);
+                                  setSelectedChannels([...selectedChannels, ch.name]);
                                 }
                               }}
-                              className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                                isSel
-                                  ? "bg-[#7C3AED]/10 border-[#7C3AED] text-[#7C3AED]"
-                                  : "bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                                ch.isLocked
+                                  ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-75"
+                                  : isSel
+                                  ? "bg-[#7C3AED]/10 border-[#7C3AED] text-[#7C3AED] cursor-pointer"
+                                  : "bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100/60 cursor-pointer"
                               }`}
                             >
-                              {ch}
+                              {ch.name} {ch.isLocked && <span className="text-[10px] text-amber-600 font-bold ml-1">{ch.lockedReason}</span>}
                             </button>
                           );
                         })}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                        Post Aspect Ratio
-                      </label>
-                      <div className="flex items-center gap-3">
-                        {["1:1", "16:9", "9:16"].map((ratio) => (
-                          <button
-                            key={ratio}
-                            type="button"
-                            onClick={() => setAspectRatio(ratio)}
-                            className={`px-3.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                              aspectRatio === ratio
-                                ? "bg-[#7C3AED]/10 border-[#7C3AED] text-[#7C3AED]"
-                                : "bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100/60"
-                            }`}
-                          >
-                            {ratio}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
                   </div>
 
                   <div className="mt-8 flex items-center justify-between border-t border-slate-200/60 pt-5">

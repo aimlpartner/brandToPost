@@ -14,6 +14,14 @@ export interface LayoutBlueprint {
   }) => string;
 }
 
+const calcFontSize = (text: string, base: number = 48, min: number = 22): number => {
+  const len = (text || "").length;
+  if (len > 90) return Math.max(min, Math.floor(base * 0.48));
+  if (len > 60) return Math.max(min, Math.floor(base * 0.62));
+  if (len > 35) return Math.max(min, Math.floor(base * 0.78));
+  return base;
+};
+
 export const LAYOUT_BLUEPRINTS: Record<string, LayoutBlueprint> = {
   "editorial-left": {
     id: "editorial-left",
@@ -22,14 +30,16 @@ export const LAYOUT_BLUEPRINTS: Record<string, LayoutBlueprint> = {
     isLightBg: false,
     buildHtml: ({ headline, subtext, imageUrl, logoUrl, primaryColor, secondaryColor, fontFamily }) => {
       const textShadow = "0 2px 4px rgba(0,0,0,0.1)";
+      const fontSize = calcFontSize(headline, 50);
+      const subFontSize = Math.max(15, Math.floor(fontSize * 0.42));
       return `
         <div style="width: 1080px; height: 1080px; display: flex; background: ${secondaryColor}; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; box-sizing: border-box;">
           <!-- Left Text Column (45%) -->
-          <div style="width: 45%; padding: 80px 50px; display: flex; flex-direction: column; justify-content: space-between; border-right: 2px solid ${primaryColor}; box-sizing: border-box; background: ${secondaryColor}; position: relative; z-10;">
-            <div style="display: flex; flex-direction: column; gap: 36px; margin-top: 100px;">
+          <div style="width: 45%; padding: 60px 40px; display: flex; flex-direction: column; justify-content: space-between; border-right: 2px solid ${primaryColor}; box-sizing: border-box; background: ${secondaryColor}; position: relative; z-index: 10;">
+            <div style="display: flex; flex-direction: column; gap: 24px; margin-top: 60px;">
               <div style="width: 50px; height: 6px; background: ${primaryColor}; border-radius: 3px;"></div>
-              <h2 style="color: #ffffff; font-weight: 800; font-size: 52px; line-height: 1.2; margin: 0; text-shadow: ${textShadow}; word-break: break-word;">${headline}</h2>
-              <p style="color: #cbd5e1; font-weight: 400; font-size: 20px; line-height: 1.6; margin: 0; text-shadow: ${textShadow};">${subtext}</p>
+              <h2 style="color: #ffffff; font-weight: 800; font-size: ${fontSize}px; line-height: 1.2; margin: 0; text-shadow: ${textShadow}; word-break: break-word; overflow-wrap: break-word;">${headline}</h2>
+              <p style="color: #cbd5e1; font-weight: 400; font-size: ${subFontSize}px; line-height: 1.5; margin: 0; text-shadow: ${textShadow}; word-break: break-word;">${subtext}</p>
             </div>
             ${logoUrl ? `<div><img src="${logoUrl}" style="max-height: 50px; max-width: 160px; object-fit: contain;" /></div>` : ""}
           </div>
@@ -49,6 +59,8 @@ export const LAYOUT_BLUEPRINTS: Record<string, LayoutBlueprint> = {
     isLightBg: false,
     buildHtml: ({ headline, subtext, imageUrl, logoUrl, primaryColor, secondaryColor, fontFamily }) => {
       const textShadow = "0 2px 4px rgba(0,0,0,0.1)";
+      const fontSize = calcFontSize(headline, 50);
+      const subFontSize = Math.max(15, Math.floor(fontSize * 0.42));
       return `
         <div style="width: 1080px; height: 1080px; display: flex; background: ${secondaryColor}; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; box-sizing: border-box;">
           <!-- Left Image Column (55%) -->
@@ -56,11 +68,11 @@ export const LAYOUT_BLUEPRINTS: Record<string, LayoutBlueprint> = {
             <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
           </div>
           <!-- Right Text Column (45%) -->
-          <div style="width: 45%; padding: 80px 50px; display: flex; flex-direction: column; justify-content: space-between; border-left: 2px solid ${primaryColor}; box-sizing: border-box; background: ${secondaryColor}; position: relative; z-10;">
-            <div style="display: flex; flex-direction: column; gap: 36px; margin-top: 100px;">
+          <div style="width: 45%; padding: 60px 40px; display: flex; flex-direction: column; justify-content: space-between; border-left: 2px solid ${primaryColor}; box-sizing: border-box; background: ${secondaryColor}; position: relative; z-index: 10;">
+            <div style="display: flex; flex-direction: column; gap: 24px; margin-top: 60px;">
               <div style="width: 50px; height: 6px; background: ${primaryColor}; border-radius: 3px;"></div>
-              <h2 style="color: #ffffff; font-weight: 800; font-size: 52px; line-height: 1.2; margin: 0; text-shadow: ${textShadow}; word-break: break-word;">${headline}</h2>
-              <p style="color: #cbd5e1; font-weight: 400; font-size: 20px; line-height: 1.6; margin: 0; text-shadow: ${textShadow};">${subtext}</p>
+              <h2 style="color: #ffffff; font-weight: 800; font-size: ${fontSize}px; line-height: 1.2; margin: 0; text-shadow: ${textShadow}; word-break: break-word; overflow-wrap: break-word;">${headline}</h2>
+              <p style="color: #cbd5e1; font-weight: 400; font-size: ${subFontSize}px; line-height: 1.5; margin: 0; text-shadow: ${textShadow}; word-break: break-word;">${subtext}</p>
             </div>
             ${logoUrl ? `<div><img src="${logoUrl}" style="max-height: 50px; max-width: 160px; object-fit: contain;" /></div>` : ""}
           </div>
@@ -115,6 +127,156 @@ export const LAYOUT_BLUEPRINTS: Record<string, LayoutBlueprint> = {
               <p style="color: #64748b; font-weight: 500; font-size: 18px; line-height: 1.4; margin: 0;">${subtext}</p>
             </div>
             ${logoUrl ? `<img src="${logoUrl}" style="max-height: 50px; max-width: 150px; object-fit: contain;" />` : ""}
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  "contrarian-card": {
+    id: "contrarian-card",
+    name: "Contrarian Callout Card",
+    family: "minimalist",
+    isLightBg: false,
+    buildHtml: ({ headline, subtext, imageUrl, logoUrl, primaryColor, secondaryColor, fontFamily }) => {
+      return `
+        <div style="width: 1080px; height: 1080px; position: relative; background: #08080c; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; box-sizing: border-box; display: flex; align-items: center; justify-content: center;">
+          <img src="${imageUrl}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.4) contrast(1.1); z-index: 1;" />
+          <div style="position: relative; z-index: 10; width: 860px; background: ${secondaryColor || '#08080C'}; border: 2px solid rgba(255,255,255,0.15); border-left: 8px solid ${primaryColor || '#F59E0B'}; border-radius: 24px; padding: 60px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); box-sizing: border-box;">
+            <div style="display: inline-block; background: ${primaryColor || '#F59E0B'}22; color: ${primaryColor || '#F59E0B'}; font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; padding: 6px 16px; border-radius: 100px; margin-bottom: 24px; border: 1px solid ${primaryColor || '#F59E0B'}44;">
+              CONTRARIAN THESIS
+            </div>
+            <h2 style="color: #ffffff; font-weight: 850; font-size: 48px; line-height: 1.2; margin: 0 0 20px 0; word-break: break-word;">${headline}</h2>
+            <p style="color: #94a3b8; font-weight: 500; font-size: 22px; line-height: 1.5; margin: 0;">${subtext}</p>
+            ${logoUrl ? `<div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);"><img src="${logoUrl}" style="max-height: 40px; max-width: 140px; object-fit: contain;" /></div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  "framed-mockup": {
+    id: "framed-mockup",
+    name: "Framed Screenshot Mockup",
+    family: "geometric",
+    isLightBg: false,
+    buildHtml: ({ headline, subtext, imageUrl, logoUrl, primaryColor, fontFamily }) => {
+      return `
+        <div style="width: 1080px; height: 1080px; position: relative; background: #0f172a; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; padding: 60px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;">
+          <div style="position: absolute; inset:0; background: radial-gradient(circle at top right, ${primaryColor}25 0%, transparent 60%); z-index: 1;"></div>
+          <!-- Header Area -->
+          <div style="position: relative; z-index: 10; display: flex; justify-content: space-between; align-items: flex-start; max-width: 85%;">
+            <div>
+              <h2 style="color: #ffffff; font-weight: 900; font-size: 44px; line-height: 1.2; margin: 0 0 10px 0;">${headline}</h2>
+              <p style="color: #94a3b8; font-weight: 500; font-size: 20px; margin: 0;">${subtext}</p>
+            </div>
+            ${logoUrl ? `<img src="${logoUrl}" style="max-height: 45px; max-width: 140px; object-fit: contain;" />` : ''}
+          </div>
+          <!-- Browser Window Frame Mockup -->
+          <div style="position: relative; z-index: 10; width: 100%; height: 720px; background: #1e293b; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; box-shadow: 0 30px 70px rgba(0,0,0,0.5); display: flex; flex-direction: column;">
+            <!-- Browser Bar -->
+            <div style="height: 44px; background: #0f172a; padding: 0 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <div style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444;"></div>
+              <div style="width: 12px; height: 12px; border-radius: 50%; background: #f59e0b;"></div>
+              <div style="width: 12px; height: 12px; border-radius: 50%; background: #10b981;"></div>
+              <div style="margin-left: 20px; background: #1e293b; border-radius: 6px; padding: 4px 12px; color: #64748b; font-size: 11px; font-family: monospace;">app.brandtopost.com/insight</div>
+            </div>
+            <!-- Image inside mockup -->
+            <div style="flex: 1; overflow: hidden; position: relative;">
+              <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  "brutalist-hero": {
+    id: "brutalist-hero",
+    name: "Brutalist Typography Hero",
+    family: "heavy-typography",
+    isLightBg: false,
+    buildHtml: ({ headline, subtext, imageUrl, logoUrl, primaryColor, fontFamily }) => {
+      return `
+        <div style="width: 1080px; height: 1080px; position: relative; background: #000; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; box-sizing: border-box; border: 16px solid ${primaryColor};">
+          <img src="${imageUrl}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.45; filter: grayscale(100%); z-index: 1;" />
+          <div style="position: absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 100%); z-index: 5;"></div>
+          <div style="position: absolute; inset:0; z-index: 10; padding: 80px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
+            ${logoUrl ? `<div><img src="${logoUrl}" style="max-height: 50px; max-width: 160px; object-fit: contain; filter: invert(1);" /></div>` : '<div></div>'}
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              <div style="background: ${primaryColor}; color: #000; font-weight: 900; font-size: 16px; padding: 6px 14px; text-transform: uppercase; width: fit-content; letter-spacing: 0.1em;">UNFILTERED FOUNDER TRUTH</div>
+              <h1 style="color: #ffffff; font-weight: 900; font-size: 68px; line-height: 1.05; text-transform: uppercase; margin: 0; word-break: break-word;">${headline}</h1>
+              <p style="color: #e2e8f0; font-weight: 600; font-size: 24px; line-height: 1.4; margin: 0; max-width: 850px; border-left: 4px solid ${primaryColor}; padding-left: 20px;">${subtext}</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  "quote-spotlight": {
+    id: "quote-spotlight",
+    name: "Spotlight Quote Card",
+    family: "minimalist",
+    isLightBg: false,
+    buildHtml: ({ headline, subtext, imageUrl, logoUrl, primaryColor, fontFamily }) => {
+      return `
+        <div style="width: 1080px; height: 1080px; position: relative; background: #09090b; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 80px;">
+          <img src="${imageUrl}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.25; filter: blur(10px); z-index: 1;" />
+          <div style="position: relative; z-index: 10; width: 100%; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 30px;">
+            <div style="font-size: 120px; line-height: 60px; color: ${primaryColor}; font-family: Georgia, serif; font-weight: 900; opacity: 0.8;">“</div>
+            <h2 style="color: #ffffff; font-weight: 700; font-size: 52px; line-height: 1.3; margin: 0; max-width: 900px; text-shadow: 0 4px 20px rgba(0,0,0,0.8);">${headline}</h2>
+            <div style="width: 80px; height: 4px; background: ${primaryColor}; border-radius: 2px;"></div>
+            <p style="color: #a1a1aa; font-weight: 500; font-size: 22px; line-height: 1.5; margin: 0; max-width: 750px;">${subtext}</p>
+            ${logoUrl ? `<div style="margin-top: 20px;"><img src="${logoUrl}" style="max-height: 45px; max-width: 150px; object-fit: contain;" /></div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  "minimal-thesis": {
+    id: "minimal-thesis",
+    name: "Minimalist Editorial Thesis",
+    family: "minimalist",
+    isLightBg: true,
+    buildHtml: ({ headline, subtext, imageUrl, logoUrl, fontFamily }) => {
+      return `
+        <div style="width: 1080px; height: 1080px; position: relative; background: #faf9f6; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; box-sizing: border-box; padding: 90px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e2e8f0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 30px;">
+            <span style="font-size: 14px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: #0f172a;">FOUNDER MEMO</span>
+            ${logoUrl ? `<img src="${logoUrl}" style="max-height: 40px; max-width: 140px; object-fit: contain;" />` : ''}
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 24px; margin: auto 0;">
+            <h1 style="color: #0f172a; font-weight: 850; font-size: 56px; line-height: 1.18; margin: 0; letter-spacing: -0.02em;">${headline}</h1>
+            <p style="color: #475569; font-weight: 500; font-size: 24px; line-height: 1.5; margin: 0;">${subtext}</p>
+          </div>
+          <div style="height: 380px; width: 100%; border-radius: 16px; overflow: hidden; position: relative; border: 1px solid #cbd5e1;">
+            <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  "stat-billboard": {
+    id: "stat-billboard",
+    name: "Stat & Metric Billboard",
+    family: "heavy-typography",
+    isLightBg: false,
+    buildHtml: ({ headline, subtext, imageUrl, logoUrl, primaryColor, fontFamily }) => {
+      return `
+        <div style="width: 1080px; height: 1080px; position: relative; background: #08080c; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; box-sizing: border-box; padding: 80px; display: flex; flex-direction: column; justify-content: space-between;">
+          <img src="${imageUrl}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.2; z-index: 1;" />
+          <div style="position: relative; z-index: 10; display: flex; justify-content: space-between; align-items: center;">
+            <div style="background: ${primaryColor}; color: #000; font-weight: 900; font-size: 13px; letter-spacing: 0.15em; padding: 6px 14px; border-radius: 6px; text-transform: uppercase;">METRIC BILLBOARD</div>
+            ${logoUrl ? `<img src="${logoUrl}" style="max-height: 45px; max-width: 150px; object-fit: contain;" />` : ''}
+          </div>
+          <div style="position: relative; z-index: 10; display: flex; flex-direction: column; gap: 20px;">
+            <h2 style="color: #ffffff; font-weight: 900; font-size: 64px; line-height: 1.1; margin: 0; text-transform: uppercase; letter-spacing: -0.02em;">${headline}</h2>
+            <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-left: 6px solid ${primaryColor}; border-radius: 12px; padding: 24px 30px;">
+              <p style="color: #cbd5e1; font-weight: 500; font-size: 22px; line-height: 1.45; margin: 0;">${subtext}</p>
+            </div>
           </div>
         </div>
       `;

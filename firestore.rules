@@ -115,8 +115,7 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'name', 'role', 'onboarded', 'lastActive', 'signupEmailSent', 'firstCampaignEmailSent', 'founderVoiceDescription', 'founderVoiceFileName', 'founderVoiceFileMimeType', 'founderVoiceFileData', 'founderAgentSynthesized', 'nonBrandedColors', 'nonBrandedPrimaryFont', 'nonBrandedSecondaryFont', 'automateFounderPosts', 'founderPostTimeUtc', 'founderPostAttachmentStyle', 'founderPostType', 'founderPostSelectedProducts', 'lastSocialsRecommendEmailSent', 'lastAdvantageEmailSent']) &&
-             (!('uid' in data) || (data.uid is string && data.uid.size() > 0 && data.uid.size() < 128)) &&
+      return (!('uid' in data) || (data.uid is string && data.uid.size() > 0 && data.uid.size() < 128)) &&
              (!('email' in data) || (data.email is string && isValidEmail(data.email) && data.email.size() < 256)) &&
              (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
              (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 2048)) &&
@@ -125,7 +124,10 @@ service cloud.firestore {
              (!('role' in data) || (data.role is string && data.role.size() < 100)) &&
              (!('onboarded' in data) || data.onboarded is bool) &&
              (!('signupEmailSent' in data) || data.signupEmailSent is bool) &&
-             (!('firstCampaignEmailSent' in data) || data.firstCampaignEmailSent is bool);
+             (!('firstCampaignEmailSent' in data) || data.firstCampaignEmailSent is bool) &&
+             (!('isLocked' in data) || data.isLocked is bool) &&
+             (!('lockReason' in data) || data.lockReason == null || (data.lockReason is string && data.lockReason.size() < 1000)) &&
+             (!('lockedAt' in data) || data.lockedAt == null || data.lockedAt is string || data.lockedAt is timestamp);
     }
 
     function isValidProduct(data) {
@@ -158,8 +160,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged();
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && uidNotModified() && createdAtUnchanged();
+      allow create: if isOwner(userId) && uidUnchanged();
+      allow update: if (isOwner(userId) && uidNotModified()) || isAdmin();
       allow delete: if isOwner(userId);
 
       match /founder_posts/{postId} {

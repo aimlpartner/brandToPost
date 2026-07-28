@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, CheckCircle2, HelpCircle, RefreshCw, UserPlus, Globe } from "lucide-react";
+import { Trash2, CheckCircle2, HelpCircle, RefreshCw, UserPlus, Globe, Mail, AlertTriangle, Clock, ShieldCheck } from "lucide-react";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
 import { db, auth } from "../firebase";
@@ -43,6 +43,13 @@ const RedditLogo = () => (
   <svg className="h-6 w-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="12" cy="12" r="12" fill="#FF4500" />
     <path d="M18.96 11.11a1.9 1.9 0 0 0-3.15-1.42 8.7 8.7 0 0 0-4.22-1.32l.86-2.73 2.8.6a1.44 1.44 0 1 0 1.44-1.42 1.44 1.44 0 0 0-1.39 1.09l-3.1-.66a.37.37 0 0 0-.44.25L10.87 8.35a8.76 8.76 0 0 0-4.25 1.33 1.9 1.9 0 0 0-3.13 1.43 1.88 1.88 0 0 0 .82 1.55 7.5 7.5 0 0 0-.08 1.13c0 3.19 3.93 5.78 8.77 5.78s8.77-2.59 8.77-5.78a7.14 7.14 0 0 0-.08-1.12 1.87 1.87 0 0 0 .88-1.56zm-11.83 2a1.08 1.08 0 1 1 1.08-1.08 1.08 1.08 0 0 1-1.08 1.08zm7.1 2.94a4.48 4.48 0 0 1-4.46 0 .37.37 0 0 1 .37-.64 3.73 3.73 0 0 0 3.72 0 .37.37 0 0 1 .37.64zm-.42-1.86a1.08 1.08 0 1 1 1.08-1.08 1.08 1.08 0 0 1-1.08 1.08z" fill="white" />
+  </svg>
+);
+
+const XLogo = () => (
+  <svg className="h-6 w-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="24" height="24" rx="4" fill="#000000" />
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" fill="white" />
   </svg>
 );
 
@@ -90,6 +97,41 @@ export function Settings() {
   const [blogSuccessMsg, setBlogSuccessMsg] = useState<string | null>(null);
   const [blogErrorMsg, setBlogErrorMsg] = useState<string | null>(null);
 
+  // Email Approval & Publishing Settings States
+  const [requireEmailApproval, setRequireEmailApproval] = useState(true);
+  const [autoUploadDelayHours, setAutoUploadDelayHours] = useState(12);
+  const [isSavingApproval, setIsSavingApproval] = useState(false);
+  const [approvalSuccessMsg, setApprovalSuccessMsg] = useState<string | null>(null);
+
+  const handleSaveApprovalConfig = async (reqApproval: boolean, delayHours: number) => {
+    if (!activeProduct) return;
+    setIsSavingApproval(true);
+    setApprovalSuccessMsg(null);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/automation/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          productId: activeProduct.id,
+          requireEmailApproval: reqApproval,
+          autoUploadDelayHours: delayHours
+        })
+      });
+      if (res.ok) {
+        setApprovalSuccessMsg("Email approval policy updated successfully!");
+        setTimeout(() => setApprovalSuccessMsg(null), 4000);
+      }
+    } catch (e) {
+      logSilentError(e as Error, { context: "saveApprovalConfig" });
+    } finally {
+      setIsSavingApproval(false);
+    }
+  };
+
   useEffect(() => {
     if (!activeProduct) return;
     
@@ -102,6 +144,20 @@ export function Settings() {
         const headers: HeadersInit = {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         };
+
+        // Fetch Approval & Automation Config
+        try {
+          const resAuto = await fetch(`/api/automation/config?productId=${activeProduct.id}`, { headers });
+          if (resAuto.ok) {
+            const autoData = await resAuto.json();
+            if (!isCancelled) {
+              setRequireEmailApproval(autoData.requireEmailApproval !== false);
+              setAutoUploadDelayHours(autoData.autoUploadDelayHours || 12);
+            }
+          }
+        } catch (e) {
+          logSilentError(e as Error, { context: "fetchApprovalConfig" });
+        }
 
         // Fetch Blog config in parallel immediately
         const blogPromise = (async () => {
@@ -527,6 +583,7 @@ export function Settings() {
      id: "instagram",
      name: "Instagram",
      isConnected: isInstagramConnected,
+     isLocked: true,
      connectFn: handleConnectInstagram,
      disconnectFn: () => handleDisconnect("instagram"),
      logo: <InstagramLogo />,
@@ -593,48 +650,54 @@ export function Settings() {
          </ul>
        </div>
      )
-   },
-   {
-     id: "facebook",
-     name: "Facebook",
-     isConnected: isFacebookConnected,
-     connectFn: handleConnectFacebook,
-     disconnectFn: () => handleDisconnect("facebook"),
-     logo: <FacebookLogo />,
-     showDev: showFacebookDev,
-     setShowDev: setShowFacebookDev,
-     devSetup: (
-       <div className="mt-4 text-xs text-slate-600 bg-slate-50 border border-slate-200/50 p-3 rounded-lg w-full animate-in slide-in-from-top-2 duration-200 text-left">
-         <p className="font-semibold text-slate-800 mb-1">Setup Instructions:</p>
-         <p>Make sure you have added the following Valid OAuth Redirect URIs in your Facebook App:</p>
-         <ul className="list-disc pl-4 mt-2 space-y-1 font-mono text-[10px] text-slate-500 break-all">
-           <li>{window.location.origin}/api/auth/facebook/callback</li>
-         </ul>
-       </div>
-     )
-   },
-   {
-     id: "reddit",
-     name: "Reddit",
-     isConnected: isRedditConnected,
-     connectFn: handleConnectReddit,
-     disconnectFn: () => handleDisconnect("reddit"),
-     logo: <RedditLogo />,
-     showDev: showRedditDev,
-     setShowDev: setShowRedditDev,
-     devSetup: (
-       <div className="mt-4 text-xs text-slate-600 bg-slate-50 border border-slate-200/50 p-3 rounded-lg w-full animate-in slide-in-from-top-2 duration-200 text-left">
-         <p className="font-semibold text-slate-800 mb-1">Setup Instructions:</p>
-         <p>Make sure you have added the following redirect uri in your Reddit App:</p>
-         <ul className="list-disc pl-4 mt-2 space-y-1 font-mono text-[10px] text-slate-500 break-all">
-           <li>{window.location.origin}/api/auth/reddit/callback</li>
-         </ul>
-       </div>
-     )
-   }
+    },
+    {
+      id: "facebook",
+      name: "Facebook",
+      isConnected: isFacebookConnected,
+      isLocked: true,
+      connectFn: handleConnectFacebook,
+      disconnectFn: () => handleDisconnect("facebook"),
+      logo: <FacebookLogo />,
+      showDev: showFacebookDev,
+      setShowDev: setShowFacebookDev,
+      devSetup: (
+        <div className="mt-4 text-xs text-slate-600 bg-slate-50 border border-slate-200/50 p-3 rounded-lg w-full animate-in slide-in-from-top-2 duration-200 text-left">
+          <p className="font-semibold text-slate-800 mb-1">Setup Instructions:</p>
+          <p>Make sure you have added the following Valid OAuth Redirect URIs in your Facebook App:</p>
+          <ul className="list-disc pl-4 mt-2 space-y-1 font-mono text-[10px] text-slate-500 break-all">
+            <li>{window.location.origin}/api/auth/facebook/callback</li>
+          </ul>
+        </div>
+      )
+    },
+    {
+      id: "x",
+      name: "X (Twitter)",
+      isConnected: false,
+      isLocked: true,
+      connectFn: () => {},
+      disconnectFn: () => {},
+      logo: <XLogo />,
+      showDev: false,
+      setShowDev: () => {},
+      devSetup: null
+    },
+    {
+      id: "reddit",
+      name: "Reddit",
+      isConnected: false,
+      isLocked: true,
+      connectFn: () => {},
+      disconnectFn: () => {},
+      logo: <RedditLogo />,
+      showDev: false,
+      setShowDev: () => {},
+      devSetup: null
+    }
  ];
 
- const firstUnconnectedIndex = platforms.findIndex((p) => !p.isConnected);
+ const firstUnconnectedIndex = platforms.findIndex((p) => !p.isConnected && !p.isLocked);
 
  return (
  <div className="space-y-8 w-full max-w-6xl animate-in fade-in duration-500">
@@ -684,7 +747,13 @@ export function Settings() {
 
            {/* Right Side: Status and Connect/Disconnect */}
            <div className="flex items-center gap-3">
-             {platform.isConnected ? (
+             {platform.id === "linkedin" || platform.isLocked ? (
+               <div className="flex items-center gap-2">
+                 <span className="text-xs font-sans font-semibold text-amber-700 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                   {platform.id === "linkedin" ? "🔒 Master Founder Exclusive • Open in Founder Console" : "🔒 Under Construction"}
+                 </span>
+               </div>
+             ) : platform.isConnected ? (
                <div className="flex items-center gap-3">
                  <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3 py-1.5 rounded-lg text-xs font-semibold">
                    <CheckCircle2 className="h-3.5 w-3.5" />
@@ -721,7 +790,7 @@ export function Settings() {
          </div>
 
          {/* Developer Settings Section */}
-         {!platform.isConnected && (
+         {!platform.isConnected && !platform.isLocked && platform.devSetup && (
            <div className={`text-left ${isNextUp ? "mt-2" : "mt-1 pl-9"}`}>
              <button
                onClick={() => platform.setShowDev(!platform.showDev)}
@@ -896,7 +965,7 @@ export function Settings() {
     <p className="mt-1 text-sm text-slate-500 mb-6">
       Control your guided tour settings and onboarding parameters.
     </p>
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="max-w-md">
       <div className="glass-card p-5 border border-slate-200/60 bg-slate-50/50 flex flex-col justify-between items-start gap-4">
         <div>
           <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -916,47 +985,98 @@ export function Settings() {
           Restart Guided Tour
         </button>
       </div>
+    </div>
+  </div>
 
-      <div className="glass-card p-5 border border-slate-200/60 bg-slate-50/50 flex flex-col justify-between items-start gap-4">
+  {/* Email Approval & Publishing Policy Section */}
+  <div className="border-t border-slate-200/65 pt-8 space-y-6 text-left">
+    <div>
+      <h3 className="text-lg font-semibold leading-6 text-slate-800 flex items-center gap-2">
+        <Mail className="h-5 w-5 text-[#7C3AED]" /> Email Approval & Publishing Policy
+      </h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Control whether generated campaigns, social posts, and blog posts require your email review before going live.
+      </p>
+    </div>
+
+    {approvalSuccessMsg && (
+      <div className="p-3.5 text-xs bg-emerald-50 border border-emerald-200/60 text-emerald-800 rounded-xl flex items-center gap-2 font-medium">
+        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        {approvalSuccessMsg}
+      </div>
+    )}
+
+    <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 space-y-5">
+      {/* Toggle Row */}
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 text-emerald-600" /> Onboarding Setup Wizard
-          </h4>
-          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-            Clears your brand's onboarding state and returns you to the multi-step Brand Scan and setup wizard to re-test the complete campaign generation process.
+          <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#7C3AED]" />
+            Require Email Approval Before Publishing
+          </label>
+          <p className="text-xs text-slate-500 mt-0.5">
+            When enabled, an interactive email is sent for every campaign, post, or blog. Clicking <strong>Approve</strong> uploads instantly.
           </p>
         </div>
         <button
           type="button"
-          onClick={async () => {
-            if (!user) return;
-            try {
-              localStorage.removeItem(`onboardingCompleted_${user.uid}`);
-              localStorage.removeItem(`dashboardTourCompleted_${user.uid}`);
-              deleteCookie(`dashboardTourCompleted_${user.uid}`);
-              
-              // Mark as NOT onboarded in Firestore user profile
-              await setDoc(doc(db, "users", user.uid), { onboarded: false }, { merge: true });
-              
-              if (activeProduct) {
-                await updateProduct(activeProduct.id, { website: "" });
-              }
-              navigate("/onboarding");
-            } catch (e) {
-              console.error("Failed to reset onboarding:", e);
-              navigate("/onboarding");
-            }
+          onClick={() => {
+            const newVal = !requireEmailApproval;
+            setRequireEmailApproval(newVal);
+            handleSaveApprovalConfig(newVal, autoUploadDelayHours);
           }}
-          className="glass-button rounded-xl text-emerald-600 hover:text-white hover:bg-emerald-600 border-emerald-500/20 hover:border-emerald-600 px-4.5 py-2.5 text-xs font-semibold flex items-center gap-2 shadow-sm transition-all duration-300 active:scale-95 cursor-pointer"
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+            requireEmailApproval ? 'bg-[#7C3AED]' : 'bg-slate-300'
+          }`}
         >
-          Reset Setup Wizard
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              requireEmailApproval ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
         </button>
+      </div>
+
+      {/* Warning Callout when OFF */}
+      {!requireEmailApproval && (
+        <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-900 leading-relaxed">
+            <strong className="font-bold text-amber-950 block mb-0.5">⚠️ Warning: Auto-Publish Active Without Approval Review</strong>
+            Email approval is currently turned <strong>OFF</strong> for this product. Any campaigns, social posts, or blog articles generated manually or via Autopilot will be uploaded and published automatically without asking for your email review first.
+          </div>
+        </div>
+      )}
+
+      {/* Timeline Delay Hours Input */}
+      <div className="pt-3 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-[#7C3AED]" /> Auto-Upload Delay Timeline
+          </label>
+          <p className="text-xs text-slate-500 mt-0.5">
+            If no action is taken on the approval email within this timeframe, content will auto-upload automatically.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <input
+            type="number"
+            min="1"
+            max="72"
+            value={autoUploadDelayHours}
+            onChange={(e) => {
+              const val = Math.max(1, Math.min(72, Number(e.target.value) || 12));
+              setAutoUploadDelayHours(val);
+              handleSaveApprovalConfig(requireEmailApproval, val);
+            }}
+            className="w-20 px-3 py-2 text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7C3AED] text-center"
+          />
+          <span className="text-xs font-semibold text-slate-600">Hours</span>
+        </div>
       </div>
     </div>
   </div>
 
-  {/* Data Management Section */}
- <div className="border-t border-[#7C3AED]/15 pt-8">
  <h3 className="text-lg font-semibold leading-6 text-red-600">Danger Zone</h3>
  <p className="mt-1 text-sm text-slate-500 mb-4">
  Clear your local data including Brand Position and generated campaigns. This action cannot be undone.
@@ -995,8 +1115,6 @@ export function Settings() {
  <Trash2 className="mr-2 h-4 w-4" />
  Clear All Data
  </button>
- </div>
-
  </div>
 
  {/* LinkedIn Organization Modal */}

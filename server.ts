@@ -11,6 +11,13 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
 import { LAYOUT_BLUEPRINTS, selectLayout } from './src/lib/layoutBlueprints';
+import {
+  sanitizeTemplateHtml,
+  escapeHtmlText,
+  escapeHtmlAttr,
+  safeUrlOrEmpty,
+  TEMPLATE_CSP_META,
+} from './src/lib/sanitizeTemplateHtml';
 
 // --- Stdio / Stdin EEXIST Error Workaround for Restricted Hosting Environments (like cPanel/Passenger) ---
 try {
@@ -625,6 +632,26 @@ Return the result in a JSON object with the following fields:
     automationLogs: trimmedLogs
   });
 
+  // Trigger Email Approval Workflow if enabled
+  try {
+    const userDoc = product.userId ? await db.collection('users').doc(product.userId).get() : null;
+    const userEmail = userDoc?.exists ? userDoc.data()?.email : null;
+    if (userEmail) {
+      await createAndSendApprovalRequest({
+        userId: product.userId,
+        productId,
+        productName: product.name,
+        userEmail,
+        itemType: 'campaign',
+        itemTitle: founderInputs.campaignTheme || "Weekly Campaign",
+        itemPreview: newCampaign.coreMessage || newCampaign.hook || founderInputs.focusInput,
+        itemData: newCampaign
+      });
+    }
+  } catch (apprErr) {
+    console.warn('[executeAutoCampaignGeneration] Could not send approval email:', apprErr);
+  }
+
   return newCampaign;
 }
 
@@ -634,6 +661,26 @@ async function executeAutoDailyPostGeneration(productId: string) {
   const productDoc = await db.collection('products').doc(productId).get();
   if (!productDoc.exists) throw new Error("Product not found");
   const product = productDoc.data()!;
+
+  const currentDateUtc = new Date().toISOString().split('T')[0];
+
+  // Idempotency defense: check if a daily post campaign was already generated for this product today
+  const existingPostsSnap = await db.collection('campaigns')
+    .where('productId', '==', productId)
+    .where('isOneDay', '==', true)
+    .where('isBlog', '==', false)
+    .orderBy('createdAt', 'desc')
+    .limit(5)
+    .get();
+
+  if (!existingPostsSnap.empty) {
+    const latestPost = existingPostsSnap.docs[0].data();
+    const createdDate = (latestPost.createdAt || "").split('T')[0];
+    if (createdDate === currentDateUtc) {
+      console.log(`[executeAutoDailyPostGeneration] Daily post already generated today (${currentDateUtc}) for product ${productId}. Bypassing duplicate creation.`);
+      return latestPost;
+    }
+  }
 
   const userDoc = await db.collection('users').doc(product.userId || 'anonymous').get();
   if (!userDoc.exists) throw new Error("User profile not found. Please set up the Master Founder Agent.");
@@ -852,7 +899,7 @@ Return the result in a JSON object with the following fields:
 
   // 6. Update logs in product
   console.log(`[executeAutoDailyGeneration] Daily content successfully created. Logging execution state.`);
-  const currentDateUtc = new Date().toISOString().split('T')[0];
+  const executionDateUtc = new Date().toISOString().split('T')[0];
   const newLog = {
     timestamp: new Date().toISOString(),
     type: 'daily_content',
@@ -869,6 +916,28 @@ Return the result in a JSON object with the following fields:
     automationLogs: trimmedLogs,
     lastDailyRunDate: currentDateUtc
   });
+
+  // Trigger Email Approval Workflow if enabled
+  try {
+    const userDoc = product.userId ? await db.collection('users').doc(product.userId).get() : null;
+    const userEmail = userDoc?.exists ? userDoc.data()?.email : null;
+    if (userEmail) {
+      const firstPost = newCampaign.dailyPosts?.[0]?.platformVersions?.[0];
+      const previewText = firstPost ? `${firstPost.platform}: ${firstPost.copy}` : (founderInputs.focusInput || founderInputs.campaignTheme);
+      await createAndSendApprovalRequest({
+        userId: product.userId,
+        productId,
+        productName: product.name,
+        userEmail,
+        itemType: 'post',
+        itemTitle: founderInputs.campaignTheme || "Daily Post",
+        itemPreview: previewText,
+        itemData: newCampaign
+      });
+    }
+  } catch (apprErr) {
+    console.warn('[executeAutoDailyPostGeneration] Could not send approval email:', apprErr);
+  }
 
   return newCampaign;
 }
@@ -958,6 +1027,26 @@ async function executeAutoDailyBlogGeneration(productId: string) {
   const productDoc = await db.collection('products').doc(productId).get();
   if (!productDoc.exists) throw new Error("Product not found");
   const product = productDoc.data()!;
+
+  const currentDateUtc = new Date().toISOString().split('T')[0];
+
+  // Idempotency defense: check if a blog was already generated for this product today
+  const existingBlogsSnap = await db.collection('campaigns')
+    .where('productId', '==', productId)
+    .where('isOneDay', '==', true)
+    .where('isBlog', '==', true)
+    .orderBy('createdAt', 'desc')
+    .limit(5)
+    .get();
+
+  if (!existingBlogsSnap.empty) {
+    const latestBlog = existingBlogsSnap.docs[0].data();
+    const createdDate = (latestBlog.createdAt || "").split('T')[0];
+    if (createdDate === currentDateUtc) {
+      console.log(`[executeAutoDailyBlogGeneration] Blog already generated today (${currentDateUtc}) for product ${productId}. Bypassing duplicate creation.`);
+      return latestBlog;
+    }
+  }
 
   const userDoc = await db.collection('users').doc(product.userId || 'anonymous').get();
   if (!userDoc.exists) throw new Error("User profile not found. Please set up the Master Founder Agent.");
@@ -1270,7 +1359,7 @@ Return the result in a JSON object with the following fields:
 
   // 6. Update logs in product
   console.log(`[executeAutoDailyBlogGeneration] Blog content successfully created. Logging execution state.`);
-  const currentDateUtc = new Date().toISOString().split('T')[0];
+  const blogExecutionDateUtc = new Date().toISOString().split('T')[0];
   const newLog = {
     timestamp: new Date().toISOString(),
     type: 'daily_content',
@@ -1287,6 +1376,26 @@ Return the result in a JSON object with the following fields:
     automationLogs: trimmedLogs,
     lastDailyRunDate: currentDateUtc
   });
+
+  // Trigger Email Approval Workflow if enabled
+  try {
+    const userDoc = product.userId ? await db.collection('users').doc(product.userId).get() : null;
+    const userEmail = userDoc?.exists ? userDoc.data()?.email : null;
+    if (userEmail) {
+      await createAndSendApprovalRequest({
+        userId: product.userId,
+        productId,
+        productName: product.name,
+        userEmail,
+        itemType: 'blog',
+        itemTitle: founderInputs.blogTitle,
+        itemPreview: blogData.blogContent,
+        itemData: newCampaign
+      });
+    }
+  } catch (apprErr) {
+    console.warn('[executeAutoDailyBlogGeneration] Could not send approval email:', apprErr);
+  }
 
   return newCampaign;
 }
@@ -1356,9 +1465,44 @@ async function executeAutoFounderPostGeneration(userId: string) {
   }
   const ai = new GoogleGenAI({ apiKey });
 
-  const attachmentStyle = user.founderPostAttachmentStyle || "text-only";
+  const attachmentStyle = user.founderPostAttachmentStyle || "image-overlay";
   const postType = user.founderPostType || "general"; // 'general' | 'branded' | 'both'
   console.log(`[executeAutoFounderPostGeneration] Run for user ${userId}. Type: ${postType}, Style: ${attachmentStyle}...`);
+
+  // Helper to render rawHtml template into an SVG data URL for background automation
+  const renderHtmlToSvgDataUrl = (rawHtml: string, data: {
+    headline: string;
+    subtext: string;
+    imageUrl?: string | null;
+    logoUrl?: string | null;
+    primaryColor?: string;
+    secondaryColor?: string;
+    fontFamily?: string;
+  }): string => {
+    let html = rawHtml
+      .replace(/\{\{HEADLINE\}\}/g, data.headline || '')
+      .replace(/\{\{SUBTEXT\}\}/g, data.subtext || '')
+      .replace(/\{\{IMAGE_URL\}\}/g, data.imageUrl || '')
+      .replace(/\{\{PRIMARY_COLOR\}\}/g, data.primaryColor || '#7C3AED')
+      .replace(/\{\{SECONDARY_COLOR\}\}/g, data.secondaryColor || '#08080C')
+      .replace(/\{\{FONT_FAMILY\}\}/g, data.fontFamily || 'Inter');
+
+    if (data.logoUrl) {
+      html = html.replace(/\{\{LOGO_URL\}\}/g, `<img src="${data.logoUrl}" style="height:32px;object-fit:contain;" />`);
+    } else {
+      html = html.replace(/\{\{LOGO_URL\}\}/g, '');
+    }
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080">
+      <foreignObject width="1080" height="1080">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="width:1080px;height:1080px;">
+          ${html}
+        </div>
+      </foreignObject>
+    </svg>`;
+
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  };
 
   // 1. Generate topic to focus on today based on pillars and strategic context
   let selectedTopic = "entrepreneurship and personal lessons from building startups";
@@ -1519,7 +1663,7 @@ Return a JSON object containing:
     const postData = JSON.parse(response.text || "{}");
     if (!postData.postCopy) return;
 
-    let imageUrl = null;
+    let imageUrl: string | null = null;
     if (attachmentStyle !== "text-only" && postData.imagePrompt) {
       try {
         console.log(`[executeAutoFounderPostGeneration] Generating Imagen backdrop for: "${postData.imagePrompt}"...`);
@@ -1553,12 +1697,64 @@ Return a JSON object containing:
       }
     }
 
+    // Fallback image if Imagen generation skipped or failed
+    if (attachmentStyle !== "text-only" && !imageUrl) {
+      imageUrl = "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1080&auto=format&fit=crop";
+    }
+
+    // Synthesize visual template composite SVG for automated post using live web research
+    let approvedTemplateImage: string | null = null;
+    if (attachmentStyle !== "text-only") {
+      try {
+        let activeRawHtml = `<div style="width:1080px;height:1080px;position:relative;background:#08080c;overflow:hidden;font-family:{{FONT_FAMILY}},sans-serif;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:80px;"><img src="{{IMAGE_URL}}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.35;filter:brightness(0.5);z-index:1;" /><div style="position:relative;z-index:10;width:860px;background:#08080c;border:2px solid rgba(255,255,255,0.15);border-left:8px solid {{PRIMARY_COLOR}};border-radius:24px;padding:60px;box-sizing:border-box;"><div style="display:inline-block;background:{{PRIMARY_COLOR}}22;color:{{PRIMARY_COLOR}};font-size:14px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;padding:6px 16px;border-radius:100px;margin-bottom:24px;border:1px solid {{PRIMARY_COLOR}}44;">FOUNDER INSIGHT</div><h2 style="color:#ffffff;font-weight:850;font-size:48px;line-height:1.2;margin:0 0 20px 0;word-break:break-word;">{{HEADLINE}}</h2><p style="color:#94a3b8;font-weight:500;font-size:22px;line-height:1.5;margin:0;">{{SUBTEXT}}</p><div style="margin-top:36px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.1);">{{LOGO_URL}}</div></div></div>`;
+        let activePrimary = productData?.visualData?.colors?.[0] || "#7C3AED";
+        let activeSecondary = productData?.visualData?.colors?.[1] || "#08080C";
+        let activeFont = "Inter";
+
+        // Execute live trend research for automated post visual structure
+        try {
+          const nicheLens = productData?.industry || founderAgent.targetIndustry || "AI agent tooling & B2B SaaS";
+          const resRes = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: [{ text: `Synthesize a single 1080x1080 inline-styled HTML code for a discovered B2B founder visual trend in "${nicheLens}". Inside rawHtml use placeholders: {{HEADLINE}}, {{SUBTEXT}}, {{IMAGE_URL}}, {{LOGO_URL}}, {{PRIMARY_COLOR}}, {{SECONDARY_COLOR}}, {{FONT_FAMILY}}. Return JSON: {"rawHtml": "...", "primaryColor": "#...", "secondaryColor": "#...", "fontFamily": "Inter"}` }],
+            config: { tools: [{ googleSearch: {} }] }
+          });
+          let cleanRes = (resRes.text || "").trim();
+          if (cleanRes.startsWith('```')) {
+            cleanRes = cleanRes.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+          }
+          const parsedRes = JSON.parse(cleanRes);
+          if (parsedRes.rawHtml) {
+            activeRawHtml = parsedRes.rawHtml;
+            if (parsedRes.primaryColor) activePrimary = parsedRes.primaryColor;
+            if (parsedRes.secondaryColor) activeSecondary = parsedRes.secondaryColor;
+            if (parsedRes.fontFamily) activeFont = parsedRes.fontFamily;
+          }
+        } catch (errResHtml) {
+          console.warn("[executeAutoFounderPostGeneration] Live research fallback to default template:", errResHtml);
+        }
+
+        approvedTemplateImage = renderHtmlToSvgDataUrl(activeRawHtml, {
+          headline: postData.headline || selectedTopic,
+          subtext: postData.subtext || "",
+          imageUrl,
+          logoUrl: productData?.logoDarkUrl || productData?.logoUrl || null,
+          primaryColor: activePrimary,
+          secondaryColor: activeSecondary,
+          fontFamily: activeFont
+        });
+      } catch (errSvg) {
+        console.warn("[executeAutoFounderPostGeneration] SVG composite synthesis failed:", errSvg);
+      }
+    }
+
     const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
     const newPost = {
       id: newPostId,
       userId: userId,
       postCopy: postData.postCopy,
       imageUrl: imageUrl || null,
+      approvedTemplateImage: approvedTemplateImage || imageUrl || null,
       headline: postData.headline || null,
       subtext: postData.subtext || null,
       imagePrompt: postData.imagePrompt || null,
@@ -1569,28 +1765,29 @@ Return a JSON object containing:
       productId: productData ? productData.id : null
     };
 
-    await db.collection('users').doc(userId).collection('founder_posts').doc(newPostId).set(newPost);
-    console.log(`[executeAutoFounderPostGeneration] Saved post ${newPostId} (branded: ${!!productData}).`);
-
-    // Attempt auto-publishing if personal LinkedIn is connected
+    console.log(`[executeAutoFounderPostGeneration] Routing founder post ${newPostId} to approval system (branded: ${!!productData}).`);
+    
+    // Check user email for notification
+    let userEmail = 'founder@brandtopost.com';
     try {
-      const token = await getToken(`founder_${userId}`, 'linkedin');
-      if (token) {
-        console.log(`[executeAutoFounderPostGeneration] Personal LinkedIn connected. Auto-publishing post ${newPostId} to personal profile...`);
-        await publishPostToLinkedIn(token, newPost.postCopy, newPost.imageUrl);
-        newPost.status = "published";
-        (newPost as any).publishedAt = new Date().toISOString();
-        await db.collection('users').doc(userId).collection('founder_posts').doc(newPostId).set(newPost);
-        console.log(`[executeAutoFounderPostGeneration] Post ${newPostId} successfully auto-published to LinkedIn.`);
-      } else {
-        console.log(`[executeAutoFounderPostGeneration] Personal LinkedIn not connected. Post ${newPostId} left as draft/scheduled.`);
+      const uDoc = await db.collection('users').doc(userId).get();
+      if (uDoc.exists && uDoc.data()?.email) {
+        userEmail = uDoc.data()!.email;
       }
-    } catch (pubErr: any) {
-      console.error(`[executeAutoFounderPostGeneration] Auto-publishing failed for post ${newPostId}:`, pubErr);
-      newPost.status = "failed";
-      (newPost as any).publishError = pubErr.message || String(pubErr);
-      await db.collection('users').doc(userId).collection('founder_posts').doc(newPostId).set(newPost);
+    } catch(e) {
+      console.warn("Could not fetch user email for founder post approval:", e);
     }
+    
+    await createAndSendApprovalRequest({
+      userId,
+      productId: productData ? productData.id : userId, // use userId if no specific product
+      productName: productData ? productData.name : founderAgent.personaName + "'s Profile",
+      userEmail,
+      itemType: 'founder_post',
+      itemTitle: postData.headline || "Automated Founder Post",
+      itemPreview: postData.postCopy,
+      itemData: newPost
+    });
   };
 
   // Run general post generation if applicable
@@ -1871,35 +2068,16 @@ setInterval(async () => {
     try {
       console.log(`[Scheduler] Attempting to publish post ${post.id} to ${post.platform}...`);
       if (post.platform === 'linkedin') {
-        const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!userRes.ok) throw new Error('Failed to fetch user info');
-        const userData = await userRes.json();
-        const authorUrn = `urn:li:person:${userData.sub}`;
+        let targetImage = (post as any).approvedTemplateImage || post.imageUrl;
+        if (typeof targetImage === 'string' && targetImage.startsWith('data:image/svg+xml')) {
+          targetImage = post.imageUrl || null;
+        }
 
-        const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'X-Restli-Protocol-Version': '2.0.0'
-          },
-          body: JSON.stringify({
-            author: authorUrn,
-            lifecycleState: 'PUBLISHED',
-            specificContent: {
-              'com.linkedin.ugc.ShareContent': {
-                shareCommentary: { text: post.text },
-                shareMediaCategory: 'NONE'
-              }
-            },
-            visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-          })
-        });
-
-        if (!postRes.ok) {
-          const errorText = await postRes.text();
+        try {
+          await publishPostToLinkedIn(token, post.text, targetImage);
+          console.log('[Scheduler] Successfully published scheduled post to LinkedIn:', post.id);
+        } catch (postErr: any) {
+          const errorText = postErr?.message || String(postErr);
           console.error('[Scheduler] Failed to publish scheduled post:', errorText);
           if (errorText.includes('DUPLICATE_POST')) {
             console.log(`[Scheduler] Post ${post.id} is a duplicate, removing from queue.`);
@@ -1926,8 +2104,6 @@ setInterval(async () => {
               lastPostedDates[productId] = "";
             }
           }
-        } else {
-          console.log('[Scheduler] Successfully published scheduled post:', post.id);
         }
       } else if (post.platform === 'instagram') {
         if (typeof token === 'string' && token.startsWith('IGAAN')) {
@@ -1970,6 +2146,7 @@ setInterval(async () => {
 
 // --- Automation Agent Background Check ---
 const processingProductIds = new Set<string>();
+const processingUserFounderPostIds = new Set<string>();
 let lastEmailCheckHour = -1;
 setInterval(async () => {
   if (!db) return;
@@ -2042,12 +2219,14 @@ setInterval(async () => {
           }
 
           if (needsGeneration) {
+            // Pre-update lastWeeklyRunDate immediately to prevent race conditions
+            await db.collection('products').doc(product.id).update({
+              lastWeeklyRunDate: currentDateUtc
+            });
+
             console.log(`[Automation Agent] Triggering campaign generation for product ${product.id} automatically...`);
             try {
               await executeAutoCampaignGeneration(product.id);
-              await db.collection('products').doc(product.id).update({
-                lastWeeklyRunDate: currentDateUtc
-              });
             } catch (err: any) {
               console.error(`[Automation Agent] Generation failed for product ${product.id}:`, err);
               // Log failure
@@ -2095,12 +2274,14 @@ setInterval(async () => {
         }
 
         if (needsDailyGeneration) {
+          // Pre-update lastDailyRunDate immediately to prevent race conditions during long-lived HTTP generation calls
+          await db.collection('products').doc(product.id).update({
+            lastDailyRunDate: currentDateUtc
+          });
+
           console.log(`[Automation Agent] Triggering daily generation for product ${product.id} automatically...`);
           try {
             await executeAutoDailyGeneration(product.id, !!product.automateDailyPosts, !!product.automateDailyBlogs);
-            await db.collection('products').doc(product.id).update({
-              lastDailyRunDate: currentDateUtc
-            });
           } catch (err: any) {
             console.error(`[Automation Agent] Daily generation failed for product ${product.id}:`, err);
             // Log failure in database
@@ -2132,6 +2313,11 @@ setInterval(async () => {
         const user = userDoc.data();
         const userId = userDoc.id;
 
+        if (processingUserFounderPostIds.has(userId)) {
+          console.log(`[Automation Agent] Skipping user ${userId} because founder post generation is already in progress.`);
+          continue;
+        }
+
         if (!user.founderAgentSynthesized) {
           continue;
         }
@@ -2152,18 +2338,19 @@ setInterval(async () => {
           continue;
         }
 
-        console.log(`[Automation Agent] Triggering automated founder post generation for user ${userId}...`);
+        processingUserFounderPostIds.add(userId);
         try {
-          await executeAutoFounderPostGeneration(userId);
+          // Pre-update date in Firestore immediately to prevent secondary containers / triggers from racing
           await db.collection('users').doc(userId).update({
             lastFounderPostRunDate: currentDateUtc
           });
+
+          console.log(`[Automation Agent] Triggering automated founder post generation for user ${userId}...`);
+          await executeAutoFounderPostGeneration(userId);
         } catch (err: any) {
           console.error(`[Automation Agent] Founder post generation failed for user ${userId}:`, err);
-          // Set date anyway to avoid hammer
-          await db.collection('users').doc(userId).update({
-            lastFounderPostRunDate: currentDateUtc
-          });
+        } finally {
+          processingUserFounderPostIds.delete(userId);
         }
       }
     } catch (errUser) {
@@ -2426,14 +2613,297 @@ async function sendBrandedEmail(options: SendEmailOptions) {
   return info;
 }
 
+async function publishItemInstantly(itemType: 'campaign' | 'post' | 'blog' | 'founder_post', itemData: any, productId: string) {
+  if (!db) return;
+  const now = new Date().toISOString();
+  console.log(`[Publish Engine] Publishing ${itemType} instantly for product ${productId}...`);
+
+  if (itemType === 'blog') {
+    const blogId = itemData.id || ("blog_" + Math.random().toString(36).substring(2, 9));
+    const slug = (itemData.title || itemData.blogTitle || "article")
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    const blogDoc = {
+      ...itemData,
+      id: blogId,
+      slug: itemData.slug || slug,
+      title: itemData.title || itemData.blogTitle || "Untitled Blog Post",
+      content: itemData.content || itemData.blogContent || "",
+      coverImage: itemData.coverImage || itemData.blogImageUrl || itemData.imageUrl || "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=1200",
+      published: true,
+      publishedAt: now,
+      updatedAt: now,
+      status: 'published',
+      productId
+    };
+
+    await db.collection("blogs").doc(blogId).set(blogDoc, { merge: true });
+    console.log(`[Publish Engine] Blog published: "${blogDoc.title}" (ID: ${blogId})`);
+
+    // Check if Product has Webhook or WordPress integration configured
+    try {
+      const blogConfigSnap = await db.collection("products").doc(productId).collection("settings").doc("blog_config").get();
+      if (blogConfigSnap.exists) {
+        const config = blogConfigSnap.data();
+        if (config?.type === 'webhook' && config?.webhook?.url) {
+          console.log(`[Publish Engine] Triggering blog webhook for product ${productId} -> ${config.webhook.url}`);
+          fetch(config.webhook.url, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json', 
+              ...(config.webhook.secret ? { 'X-Webhook-Secret': config.webhook.secret } : {}) 
+            },
+            body: JSON.stringify({ event: 'blog.published', article: blogDoc })
+          }).catch(e => console.error('[Publish Engine] Webhook error:', e));
+        }
+      }
+    } catch (err) {
+      console.warn('[Publish Engine] Webhook trigger check error:', err);
+    }
+  } else if (itemType === 'campaign') {
+    const campaignId = itemData.id || ("camp_" + Math.random().toString(36).substring(2, 9));
+    const campaignDoc = {
+      ...itemData,
+      id: campaignId,
+      productId,
+      status: 'active',
+      publishedAt: now,
+      isShared: true
+    };
+    await db.collection("campaigns").doc(campaignId).set(campaignDoc, { merge: true });
+    console.log(`[Publish Engine] Campaign published: "${campaignDoc.theme || campaignDoc.title || 'Campaign'}" (ID: ${campaignId})`);
+  } else if (itemType === 'post') {
+    const postId = itemData.id || ("post_" + Math.random().toString(36).substring(2, 9));
+    const postDoc = {
+      ...itemData,
+      id: postId,
+      productId,
+      status: 'published',
+      publishedAt: now
+    };
+    await db.collection("posts").doc(postId).set(postDoc, { merge: true });
+    console.log(`[Publish Engine] Social Post published (ID: ${postId})`);
+  } else if (itemType === 'founder_post') {
+    // Founder post: save to user's founder_posts subcollection and attempt LinkedIn auto-publish
+    const userId = itemData.userId;
+    const postId = itemData.id || ('fpost_' + Math.random().toString(36).substring(2, 11));
+    const postDoc = {
+      ...itemData,
+      id: postId,
+      status: 'published',
+      publishedAt: now
+    };
+
+    if (userId) {
+      await db.collection('users').doc(userId).collection('founder_posts').doc(postId).set(postDoc, { merge: true });
+      console.log(`[Publish Engine] Founder Post saved (ID: ${postId}) for user ${userId}.`);
+
+      // Attempt auto-publish to personal LinkedIn if token exists
+      try {
+        const linkedinToken = await getToken(`founder_${userId}`, 'linkedin');
+        if (linkedinToken) {
+          console.log(`[Publish Engine] Auto-publishing founder post ${postId} to LinkedIn...`);
+          let targetImage = postDoc.approvedTemplateImage || postDoc.imageUrl;
+          if (typeof targetImage === 'string' && targetImage.startsWith('data:image/svg+xml')) {
+            targetImage = postDoc.imageUrl || null;
+          }
+          await publishPostToLinkedIn(linkedinToken, postDoc.postCopy, targetImage);
+          postDoc.status = 'published';
+          (postDoc as any).publishedAt = new Date().toISOString();
+          await db.collection('users').doc(userId).collection('founder_posts').doc(postId).set(postDoc, { merge: true });
+          console.log(`[Publish Engine] Founder Post ${postId} auto-published to LinkedIn.`);
+        } else {
+          console.log(`[Publish Engine] Personal LinkedIn not connected for user ${userId}. Founder Post ${postId} saved as published (no social push).`);
+        }
+      } catch (pubErr: any) {
+        console.error(`[Publish Engine] LinkedIn auto-publish failed for founder post ${postId}:`, pubErr);
+        postDoc.status = 'failed';
+        (postDoc as any).publishError = pubErr.message || String(pubErr);
+        await db.collection('users').doc(userId).collection('founder_posts').doc(postId).set(postDoc, { merge: true });
+      }
+    } else {
+      console.warn(`[Publish Engine] Founder post missing userId. Skipping publish.`);
+    }
+  }
+}
+
+async function createAndSendApprovalRequest(options: {
+  userId?: string;
+  productId: string;
+  productName?: string;
+  userEmail: string;
+  itemType: 'campaign' | 'post' | 'blog' | 'founder_post';
+  itemTitle: string;
+  itemPreview?: string;
+  itemData: any;
+  autoUploadDelayHours?: number;
+}) {
+  if (!db) throw new Error("Database connection is not active.");
+  const { userId, productId, productName, userEmail, itemType, itemTitle, itemPreview, itemData } = options;
+
+  let requireEmailApproval = true;
+  let delayHours = options.autoUploadDelayHours || 12;
+
+  try {
+    const prodSnap = await db.collection("products").doc(productId).get();
+    if (prodSnap.exists) {
+      const pData = prodSnap.data()!;
+      if (pData.requireEmailApproval === false) {
+        requireEmailApproval = false;
+      }
+      if (pData.autoUploadDelayHours) {
+        delayHours = Number(pData.autoUploadDelayHours) || 12;
+      }
+    }
+  } catch (err) {
+    console.warn("[createAndSendApprovalRequest] Could not read product approval settings:", err);
+  }
+
+  // If requireEmailApproval is FALSE -> Instant Upload without approval
+  if (!requireEmailApproval) {
+    console.log(`[Approval Engine] requireEmailApproval is OFF for product ${productId}. Auto-publishing instantly...`);
+    await publishItemInstantly(itemType, itemData, productId);
+    
+    // Send informational notification email
+    sendBrandedEmail({
+      to: userEmail,
+      subject: `[Auto-Published] Your ${itemType.toUpperCase()} '${itemTitle}' is live! 🚀`,
+      title: `Content Published Automatically`,
+      bodyHtml: `
+        <p>Your <strong>${itemType}</strong> titled <strong>"${itemTitle}"</strong> was published automatically based on your product's Auto-Publish settings.</p>
+        <p style="color: #64748b; font-size: 14px;">(Note: Email approval is currently turned OFF for this product. You can enable Email Approval anytime in Settings.)</p>
+      `,
+      ctaText: "View Dashboard",
+      ctaUrl: `${process.env.APP_URL || 'http://localhost:5173'}/dashboard`
+    }).catch(e => console.error("Failed to send auto-published email:", e));
+
+    return { approvedInstantly: true };
+  }
+
+  // requireEmailApproval is TRUE -> Create pending approval request
+  const crypto = await import('crypto');
+  const token = crypto.randomUUID();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + delayHours * 60 * 60 * 1000).toISOString();
+  const approvalId = "appr_" + Math.random().toString(36).substring(2, 9);
+
+  const approvalDoc = {
+    id: approvalId,
+    token,
+    userId: userId || null,
+    productId,
+    productName: productName || 'Brand',
+    userEmail,
+    itemType,
+    itemTitle,
+    itemPreview: itemPreview || itemTitle,
+    itemData,
+    status: 'pending',
+    createdAt: now.toISOString(),
+    expiresAt
+  };
+
+  await db.collection("approval_requests").doc(approvalId).set(approvalDoc);
+  console.log(`[Approval Engine] Created approval request ${approvalId} for ${itemType} "${itemTitle}". Expires in ${delayHours}h.`);
+
+  // Send Branded Approval Email — links to the full-preview review page, NOT direct action
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const reviewUrl = `${appUrl}/api/approval/review?token=${token}`;
+
+  const itemTypeLabel = itemType === 'founder_post' ? 'FOUNDER POST' : itemType.toUpperCase();
+
+  const previewHtml = itemPreview ? `
+    <div style="background-color: #f1f5f9; border-left: 4px solid #7c3aed; padding: 16px; margin: 20px 0; border-radius: 8px; font-style: italic; color: #334155; font-size: 15px; line-height: 1.6;">
+      "${itemPreview.slice(0, 500)}${itemPreview.length > 500 ? '...' : ''}"
+    </div>
+  ` : '';
+
+  const emailBody = `
+    <p>A new <strong>${itemTypeLabel}</strong> has been generated for <strong>${productName || 'your brand'}</strong> and is awaiting your approval before publication.</p>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+      <div style="display: inline-block; background: #7c3aed; color: #ffffff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase; margin-bottom: 10px;">${itemTypeLabel}</div>
+      <h3 style="margin: 0 0 10px 0; color: #0f172a; font-size: 18px; font-weight: 700;">${itemTitle}</h3>
+      ${previewHtml}
+    </div>
+    <p style="text-align: center; font-weight: 600; color: #0f172a; margin-top: 24px; font-size: 15px;">Click below to review the full content and approve or reject:</p>
+    <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #92400e; margin-top: 24px;">
+      ⏱️ <strong>Auto-Upload Timeline:</strong> If no action is taken within <strong>${delayHours} hours</strong>, this content will be automatically approved and published.
+    </div>
+  `;
+
+  await sendBrandedEmail({
+    to: userEmail,
+    subject: `[Action Required] Approve New ${itemTypeLabel}: ${itemTitle}`,
+    title: `Approval Request: ${itemTitle}`,
+    bodyHtml: emailBody,
+    ctaText: "Review Content & Decide",
+    ctaUrl: reviewUrl
+  });
+
+  return { approvedInstantly: false, approvalId, expiresAt };
+}
+
 async function runPeriodicEmailChecks() {
   if (!db) {
     console.warn('[Background Email Check] Firebase Admin Firestore not initialized. Skipping checks.');
     return;
   }
 
-  console.log('[Background Email Check] Starting periodic inactivity and engagement check...');
+  console.log('[Background Email Check] Starting periodic inactivity and approval checks...');
   const now = new Date();
+
+  // 1. Check for expired pending approval requests (12-Hour Auto-Upload Worker)
+  try {
+    const expiredSnap = await db.collection('approval_requests')
+      .where('status', '==', 'pending')
+      .get();
+    
+    const nowIso = now.toISOString();
+    for (const docSnap of expiredSnap.docs) {
+      const reqData = docSnap.data();
+      if (reqData.expiresAt && reqData.expiresAt <= nowIso) {
+        console.log(`[Auto-Upload Worker] Request ${docSnap.id} (${reqData.itemType}: "${reqData.itemTitle}") expired after timeline. Auto-approving...`);
+        
+        await db.collection('approval_requests').doc(docSnap.id).update({
+          status: 'auto_approved',
+          processedAt: nowIso
+        });
+
+        await publishItemInstantly(reqData.itemType, reqData.itemData, reqData.productId);
+
+        // Send notification email
+        if (reqData.userEmail) {
+          sendBrandedEmail({
+            to: reqData.userEmail,
+            subject: `[Auto-Uploaded] Your ${reqData.itemType.toUpperCase()} '${reqData.itemTitle}' is live! ⏰`,
+            title: `Content Auto-Uploaded After Timeline`,
+            bodyHtml: `
+              <p>Because no response was received within the 12-hour review timeline, your <strong>${reqData.itemType}</strong> titled <strong>"${reqData.itemTitle}"</strong> was automatically approved and published.</p>
+              <p>You can view and manage your live content in the dashboard anytime.</p>
+            `,
+            ctaText: "View Published Content",
+            ctaUrl: `${process.env.APP_URL || 'http://localhost:5173'}/dashboard`
+          }).catch(e => console.error("Failed to send auto-approval notification email:", e));
+        }
+
+        // Log in admin_logs
+        db.collection('admin_logs').add({
+          timestamp: nowIso,
+          type: 'auto_upload_approved',
+          itemType: reqData.itemType,
+          itemTitle: reqData.itemTitle,
+          productId: reqData.productId,
+          status: 'Auto-approved and published after timeline expiration'
+        }).catch(e => console.error("Failed to log auto-approval:", e));
+      }
+    }
+  } catch (errExp) {
+    console.error('[Auto-Upload Worker Error]:', errExp);
+  }
 
   try {
     const usersSnap = await db.collection('users').get();
@@ -2496,22 +2966,26 @@ async function runPeriodicEmailChecks() {
 
           if (!hasConnectedSocials && productsSnap.docs.length > 0) {
             console.log(`[Background Email Check] User ${userEmail} has not connected socials. Sending recommendation...`);
-            await sendBrandedEmail({
-              to: userEmail,
-              subject: "Recommending: Connect your Social Channels to Automate Posting 🔗",
-              title: "Boost Your Reach with Social Connections",
-              bodyHtml: `
-                <p>Hi ${userData.name || 'there'},</p>
-                <p>You have successfully set up your product DNA, but you haven't connected your social channels yet.</p>
-                <p>To fully unlock automated posting, scheduling, and direct publishing from B2P, connect your social channels now. We support LinkedIn, Facebook, Instagram, and Reddit!</p>
-              `,
-              ctaText: "Connect Social Channels",
-              ctaUrl: `${process.env.APP_URL || 'http://localhost:5173'}/settings`
-            });
+            try {
+              await sendBrandedEmail({
+                to: userEmail,
+                subject: "Recommending: Connect your Social Channels to Automate Posting 🔗",
+                title: "Boost Your Reach with Social Connections",
+                bodyHtml: `
+                  <p>Hi ${userData.name || 'there'},</p>
+                  <p>You have successfully set up your product DNA, but you haven't connected your social channels yet.</p>
+                  <p>To fully unlock automated posting, scheduling, and direct publishing from B2P, connect your social channels now. We support LinkedIn, Facebook, Instagram, and Reddit!</p>
+                `,
+                ctaText: "Connect Social Channels",
+                ctaUrl: `${process.env.APP_URL || 'http://localhost:5173'}/settings`
+              });
 
-            await db.collection('users').doc(userId).update({
-              lastSocialsRecommendEmailSent: now.toISOString()
-            });
+              await db.collection('users').doc(userId).update({
+                lastSocialsRecommendEmailSent: now.toISOString()
+              });
+            } catch (err) {
+              console.error(`[Background Email Check] Failed to send recommendation to ${userEmail}:`, err);
+            }
           }
         }
       }
@@ -2890,6 +3364,140 @@ async function publishToInstagramGraphAPI(token: string, text: string, imageUrl:
   return publishData.id;
 }
 
+// ============================================================================
+// HTML Builders for Approval Review Page
+// ============================================================================
+function escHtml(str: string | undefined | null): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildApprovalStatusPage(options: { appUrl: string; emoji: string; title: string; message: string; borderColor: string }): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>${escHtml(options.title)} — B2P</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; background: #08080c; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; padding: 24px; -webkit-font-smoothing: antialiased; }
+    .status-card { background: #12121a; border: 1px solid #27273a; border-top: 4px solid ${options.borderColor}; border-radius: 16px; padding: 40px 32px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+    .emoji { font-size: 64px; margin-bottom: 24px; line-height: 1; }
+    .title { font-size: 24px; font-weight: 800; color: #f8fafc; margin-bottom: 16px; }
+    .message { font-size: 15px; color: #94a3b8; line-height: 1.6; margin-bottom: 32px; }
+    .btn { display: inline-flex; background: #27273a; color: #f8fafc; padding: 12px 28px; font-weight: 600; font-size: 14px; text-decoration: none; border-radius: 9999px; transition: background 0.2s; }
+    .btn:hover { background: #3f3f5a; }
+  </style>
+</head>
+<body>
+  <div class="status-card">
+    <div class="emoji">${options.emoji}</div>
+    <div class="title">${options.title}</div>
+    <div class="message">${options.message}</div>
+    <a href="${options.appUrl}/dashboard" class="btn">Go to Dashboard</a>
+  </div>
+</body>
+</html>`;
+}
+
+function buildContentPreview(data: any): string {
+  let html = '';
+  const itemType = data.itemType;
+  const itemData = data.itemData || {};
+
+  if (itemType === 'campaign') {
+    html += `
+      <div class="content-card">
+        <div class="card-header">
+          <span class="type-badge">Campaign Plan</span>
+          <span class="card-title">${escHtml(itemData.theme || data.itemTitle)}</span>
+        </div>
+        <div class="card-body">
+          <div class="section-label">Core Message</div>
+          <div class="section-value">${escHtml(itemData.coreMessage)}</div>
+          
+          <div class="section-label">Target Audience</div>
+          <div class="section-value">${escHtml(itemData.targetAudience)}</div>
+
+          <div class="section-label">Campaign Hook</div>
+          <div class="section-value">${escHtml(itemData.hook)}</div>
+        </div>
+      </div>
+      
+      <div class="content-card">
+        <div class="card-header">
+          <span class="type-badge">Daily Posts</span>
+          <span class="card-title">Generated Content Map</span>
+        </div>
+        <div class="card-body" style="background: #08080c;">
+    `;
+
+    if (Array.isArray(itemData.dailyPosts)) {
+      itemData.dailyPosts.forEach((post: any) => {
+        html += `
+          <div class="daily-post">
+            <div class="day-label">Day ${post.day}</div>
+            <div>
+              ${post.platforms ? Object.keys(post.platforms).map(p => `<span class="platform-tag">${escHtml(p)}</span>`).join('') : ''}
+            </div>
+            <div class="post-copy">${escHtml(post.postCopy || post.copy || 'No copy available')}</div>
+          </div>
+        `;
+      });
+    } else {
+      html += `<div class="section-value">No daily posts found in campaign data.</div>`;
+    }
+
+    html += `</div></div>`;
+  } else if (itemType === 'post' || itemType === 'founder_post') {
+    html += `
+      <div class="content-card">
+        <div class="card-header">
+          <span class="type-badge">${itemType === 'founder_post' ? 'Founder Post' : 'Social Post'}</span>
+          <span class="card-title">${escHtml(itemData.headline || data.itemTitle)}</span>
+        </div>
+        <div class="card-body">
+          <div class="section-label">Post Copy</div>
+          <div class="section-value" style="font-size: 16px;">${escHtml(itemData.postCopy || itemData.copy)}</div>
+          
+          ${itemData.imagePrompt ? `
+          <div class="section-label" style="margin-top: 24px;">Visual Generation Prompt</div>
+          <div class="section-value" style="font-style: italic; color: #94a3b8;">${escHtml(itemData.imagePrompt)}</div>
+          ` : ''}
+          
+          ${itemData.platform ? `
+          <div class="section-label" style="margin-top: 24px;">Target Platform</div>
+          <div class="section-value" style="text-transform: capitalize;">${escHtml(itemData.platform)}</div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  } else if (itemType === 'blog') {
+    html += `
+      <div class="content-card">
+        <div class="card-header">
+          <span class="type-badge">Blog Article</span>
+          <span class="card-title">${escHtml(itemData.title || itemData.blogTitle || data.itemTitle)}</span>
+        </div>
+        <div class="card-body">
+          <div class="blog-content">
+            ${itemData.content || itemData.blogContent ? (itemData.content || itemData.blogContent) : '<p>No content available</p>'}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  return html;
+}
+
 async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -3038,8 +3646,12 @@ async function startServer() {
       }
 
       const puppeteer = await import('puppeteer');
-      if (!sharedBrowser) {
-        console.log(`[PUPPETEER POOL] Initializing singleton background browser instance...`);
+      if (!sharedBrowser || !sharedBrowser.isConnected()) {
+        if (sharedBrowser) {
+          try { await sharedBrowser.close().catch(() => {}); } catch (_) {}
+          sharedBrowser = null;
+        }
+        console.log(`[PUPPETEER POOL] Initializing background browser instance...`);
         const launchOptions: any = {
           headless: true,
           args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
@@ -3048,7 +3660,7 @@ async function startServer() {
           console.log(`[PUPPETEER POOL] Specifying explicit Chrome executable path: ${chromeExecutable}`);
           launchOptions.executablePath = chromeExecutable;
         } else {
-          console.warn(`[PUPPETEER POOL] Chrome missing. Checking other default fallback paths.`);
+          console.warn(`[PUPPETEER POOL] Chrome missing. Checking default fallback paths.`);
         }
         console.log(`[PUPPETEER POOL] Launching browser with options:`, JSON.stringify(launchOptions));
         try {
@@ -3060,7 +3672,21 @@ async function startServer() {
         }
       }
       console.log(`[runWithRenderLock] Calling task function...`);
-      const result = await task(sharedBrowser);
+      let result;
+      try {
+        result = await task(sharedBrowser);
+      } catch (taskErr: any) {
+        console.warn(`[PUPPETEER POOL] Task failed: ${taskErr.message}. Attempting browser reconnect and retry once...`);
+        try { await sharedBrowser?.close().catch(() => {}); } catch (_) {}
+        sharedBrowser = null;
+        const launchOptions: any = {
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+        };
+        if (hasInstall && chromeExecutable) launchOptions.executablePath = chromeExecutable;
+        sharedBrowser = await puppeteer.default.launch(launchOptions);
+        result = await task(sharedBrowser);
+      }
       console.log(`[runWithRenderLock] Task function completed successfully.`);
       return result;
     } catch (err: any) {
@@ -3236,17 +3862,82 @@ async function startServer() {
     }
   };
 
+  // --- Admin API: Lock / Unlock User Account ---
+  app.post('/api/admin/users/lock', async (req, res) => {
+    try {
+      const { adminEmail, targetUserId, isLocked, lockReason } = req.body;
+
+      if (!targetUserId) {
+        return res.status(400).json({ error: "targetUserId is required" });
+      }
+
+      if (!db) {
+        return res.status(500).json({ error: "Database connection not active on server" });
+      }
+
+      const defaultReason = "The testing phase is over. Access to your account has been suspended by administration.";
+      const userRef = db.collection('users').doc(targetUserId);
+      
+      await userRef.set({
+        isLocked: !!isLocked,
+        lockReason: isLocked ? (lockReason || defaultReason) : null,
+        lockedAt: isLocked ? new Date().toISOString() : null
+      }, { merge: true });
+
+      console.log(`[Admin Lock] User ${targetUserId} lock status updated to ${isLocked} by ${adminEmail || 'admin'}.`);
+      return res.json({ success: true, targetUserId, isLocked });
+    } catch (err: any) {
+      console.error("[Admin Lock Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to update user lock state" });
+    }
+  });
+
+  // --- Admin API: Emergency Lock All Users ---
+  app.post('/api/admin/users/lock-all', async (req, res) => {
+    try {
+      const { adminEmail, lockReason } = req.body;
+
+      if (!db) {
+        return res.status(500).json({ error: "Database connection not active on server" });
+      }
+
+      const defaultReason = "The testing phase is over. Access to your account has been suspended by administration.";
+      const reasonToSave = lockReason && lockReason.trim() ? lockReason.trim() : defaultReason;
+
+      const usersSnap = await db.collection('users').get();
+      let lockedCount = 0;
+
+      for (const userDoc of usersSnap.docs) {
+        const userData = userDoc.data();
+        if (userData.email !== 'garvitbansal2303@gmail.com' && userData.role !== 'Admin') {
+          await userDoc.ref.set({
+            isLocked: true,
+            lockReason: reasonToSave,
+            lockedAt: new Date().toISOString()
+          }, { merge: true });
+          lockedCount++;
+        }
+      }
+
+      console.log(`[Admin Emergency Lock All] ${lockedCount} non-admin users locked by ${adminEmail || 'admin'}.`);
+      return res.json({ success: true, lockedCount });
+    } catch (err: any) {
+      console.error("[Admin Emergency Lock All Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to lock all users" });
+    }
+  });
+
   // --- Server Rendering Endpoint with Active Mutex Pool Lock (Caching Removed) ---
-  app.post('/api/render-visual', requireAuth, routeRateLimiter(6, 60 * 1000), async (req, res) => {
+  app.post('/api/render-visual', routeRateLimiter(120, 60 * 1000), async (req, res) => {
     try {
       const { visualType, visualData, imageUrl, dna, fallbackText, activeLogo, recentLayoutHistory } = req.body;
 
-      const primaryColor = dna?.visualData?.colors?.[0] || "#4F46E5";
-      const secondaryColor = dna?.visualData?.colors?.[1] || "#111827";
+      const primaryColor = visualData?.primaryColor || dna?.visualData?.colors?.[0] || "#F59E0B";
+      const secondaryColor = visualData?.secondaryColor || dna?.visualData?.colors?.[1] || "#08080C";
       const safeVisualType = visualType || "custom-overlay";
       const headline = visualData?.headline || fallbackText || "Your text here";
       
-      const primaryFont = dna?.visualData?.fonts?.primary || "Inter";
+      const primaryFont = visualData?.fontFamily || dna?.visualData?.fonts?.primary || "Inter";
       const fontFamily = primaryFont.includes(" ") && !primaryFont.includes("'") 
         ? `'${primaryFont}'` 
         : primaryFont;
@@ -3254,8 +3945,34 @@ async function startServer() {
       let selectedBlueprintId = "";
       let htmlContent = "";
 
+      // 0. Check if hydrated renderedHtml is passed for V3 Master Templates
+      if (visualData?.renderedHtml || visualData?.customHtml) {
+        htmlContent = visualData.renderedHtml || visualData.customHtml;
+      } else if (safeVisualType === "grounded-research" || visualData?.rawHtml) {
+        // rawHtml is model-generated and is about to be executed by headless
+        // Chrome inside our own network. Sanitize the template before any
+        // substitution. See src/lib/sanitizeTemplateHtml.ts
+        const { html: templateHtml, violations } = sanitizeTemplateHtml(visualData.rawHtml || "");
+        if (violations.length > 0) {
+          console.warn("[/api/render-visual] template sanitizer stripped unsafe markup:", violations);
+        }
+
+        const logoSrc = safeUrlOrEmpty(activeLogo || "");
+        const logoReplacement = logoSrc
+          ? `<img src="${escapeHtmlAttr(logoSrc)}" style="height: 48px; width: auto; max-width: 180px; object-fit: contain;" />`
+          : "";
+
+        htmlContent = templateHtml
+          .replaceAll("{{HEADLINE}}", escapeHtmlText(headline || ""))
+          .replaceAll("{{SUBTEXT}}", escapeHtmlText(visualData?.subtext || ""))
+          .replaceAll("{{IMAGE_URL}}", escapeHtmlAttr(safeUrlOrEmpty(imageUrl || "")))
+          .replaceAll("{{LOGO_URL}}", logoReplacement)
+          .replaceAll("{{PRIMARY_COLOR}}", escapeHtmlAttr(primaryColor))
+          .replaceAll("{{SECONDARY_COLOR}}", escapeHtmlAttr(secondaryColor))
+          .replaceAll("{{FONT_FAMILY}}", escapeHtmlAttr(fontFamily));
+      }
       // 1. Check if visualType directly matches a layout blueprint
-      if (LAYOUT_BLUEPRINTS[safeVisualType]) {
+      else if (LAYOUT_BLUEPRINTS[safeVisualType]) {
         selectedBlueprintId = safeVisualType;
       } 
       // 2. Check if visualData.layoutId matches a layout blueprint
@@ -3269,19 +3986,20 @@ async function startServer() {
         selectedBlueprintId = chosenBlueprint.id;
       }
 
-      const blueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId];
-      if (blueprint) {
-        // Render via the Layout Composition Engine blueprint
-        htmlContent = blueprint.buildHtml({
-          headline,
-          subtext: visualData?.subtext || "",
-          imageUrl: imageUrl || "",
-          logoUrl: activeLogo || null,
-          primaryColor,
-          secondaryColor,
-          fontFamily
-        });
-      } else {
+      if (!htmlContent) {
+        const blueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId];
+        if (blueprint) {
+          // Render via the Layout Composition Engine blueprint
+          htmlContent = blueprint.buildHtml({
+            headline,
+            subtext: visualData?.subtext || "",
+            imageUrl: imageUrl || "",
+            logoUrl: activeLogo || null,
+            primaryColor,
+            secondaryColor,
+            fontFamily
+          });
+        } else {
         // Fallback to legacy hardcoded templates for backwards compatibility
         let resolvedTextPos = visualData?.layout?.textPosition || 'bottom';
         if (safeVisualType === 'creative-story') {
@@ -3318,15 +4036,24 @@ async function startServer() {
         if (pos === 'bottom-right') logoStyles = 'bottom: 80px; right: 80px;';
 
         const textShadowDeep = "0 8px 32px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.6)";
-        let processedCustomHtml = visualData?.customHtml || "";
+        // customHtml is model-generated per daily post and reaches Puppeteer the
+        // same way rawHtml does — sanitize it on the same terms.
+        const customHtmlResult = sanitizeTemplateHtml(visualData?.customHtml || "");
+        if (customHtmlResult.violations.length > 0) {
+          console.warn("[/api/render-visual] customHtml sanitizer stripped unsafe markup:", customHtmlResult.violations);
+        }
+        let processedCustomHtml = customHtmlResult.html;
         if (processedCustomHtml && activeLogo) {
-          processedCustomHtml = processedCustomHtml.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
-            const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
-            if (isLogo) {
-              return `<img${p1}src="${activeLogo}"${p3}>`;
-            }
-            return match;
-          });
+          const safeLogo = safeUrlOrEmpty(activeLogo);
+          if (safeLogo) {
+            processedCustomHtml = processedCustomHtml.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
+              const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
+              if (isLogo) {
+                return `<img${p1}src="${escapeHtmlAttr(safeLogo)}"${p3}>`;
+              }
+              return match;
+            });
+          }
         }
 
         if (safeVisualType === "creative-story") {
@@ -3390,11 +4117,13 @@ async function startServer() {
   </div>`;
         }
       }
+    }
 
       const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
+${TEMPLATE_CSP_META}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3408,31 +4137,101 @@ ${htmlContent}
 </body>
 </html>`;
 
-      // Utilize protected browser locked queue processing
-      const renderResult = await runWithRenderLock(async (browser) => {
-        const page = await browser.newPage();
-        try {
-          await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
-          await page.setContent(fullHtml, { waitUntil: 'domcontentloaded', timeout: 10000 });
-          
-          await page.evaluate(async () => {
-            await document.fonts.ready;
-            const images = Array.from(document.querySelectorAll('img'));
-            await Promise.all(images.map(img => {
-              if (img.complete) return Promise.resolve();
-              return new Promise((resolve) => {
-                img.onload = resolve;
-                img.onerror = resolve;
+      // Function to render HTML in Puppeteer
+      const executeRender = async (targetHtml: string) => {
+        return await runWithRenderLock(async (browser) => {
+          const page = await browser.newPage();
+          try {
+            await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
+            await page.setContent(targetHtml, { waitUntil: ['domcontentloaded', 'networkidle2'], timeout: 20000 }).catch(() => {});
+            
+            await page.evaluate(async () => {
+              try {
+                await Promise.race([
+                  document.fonts.ready,
+                  new Promise(resolve => setTimeout(resolve, 3000))
+                ]);
+              } catch (_) {}
+
+              const elements = Array.from(document.querySelectorAll('*'));
+              const imagePromises: Promise<any>[] = [];
+
+              elements.forEach((el) => {
+                if (el.tagName === 'IMG') {
+                  const img = el as HTMLImageElement;
+                  if (!img.complete) {
+                    imagePromises.push(new Promise((resolve) => {
+                      const t = setTimeout(() => resolve(null), 3000);
+                      img.onload = () => { clearTimeout(t); resolve(null); };
+                      img.onerror = () => { clearTimeout(t); resolve(null); };
+                    }));
+                  }
+                }
+                const bg = window.getComputedStyle(el).backgroundImage;
+                if (bg && bg.startsWith('url(')) {
+                  const url = bg.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+                  if (url && !url.startsWith('data:')) {
+                    const img = new Image();
+                    img.src = url;
+                    imagePromises.push(new Promise((resolve) => {
+                      const t = setTimeout(() => resolve(null), 3000);
+                      img.onload = () => { clearTimeout(t); resolve(null); };
+                      img.onerror = () => { clearTimeout(t); resolve(null); };
+                    }));
+                  }
+                }
               });
-            }));
-          });
-          
-          const buffer = await page.screenshot({ type: 'jpeg', quality: 92 });
-          return `data:image/jpeg;base64,${Buffer.from(buffer).toString('base64')}`;
-        } finally {
-          await page.close().catch(() => {});
-        }
-      });
+
+              await Promise.all(imagePromises);
+            });
+            
+            const buffer = await page.screenshot({ type: 'png' });
+            return `data:image/png;base64,${Buffer.from(buffer).toString('base64')}`;
+          } finally {
+            await page.close().catch(() => {});
+          }
+        });
+      };
+
+      let renderResult: string;
+      try {
+        renderResult = await executeRender(fullHtml);
+      } catch (firstErr: any) {
+        console.warn("[PUPPETEER POOL WARNING] Initial template render failed, attempting blueprint fallback:", firstErr?.message);
+        
+        // If grounded-research AI HTML failed, build a guaranteed clean fallback HTML using selectLayout
+        const fallbackBlueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId] || selectLayout([]);
+        const fallbackHtmlContent = fallbackBlueprint.buildHtml({
+          headline,
+          subtext: visualData?.subtext || "",
+          imageUrl: imageUrl || "",
+          logoUrl: activeLogo || null,
+          primaryColor,
+          secondaryColor,
+          fontFamily
+        });
+
+        const fallbackFullHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+${TEMPLATE_CSP_META}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; padding: 0; }
+  h1, h2, h3, h4, h5, p, div { box-sizing: border-box; }
+</style>
+</head>
+<body>
+${fallbackHtmlContent}
+</body>
+</html>`;
+
+        renderResult = await executeRender(fallbackFullHtml);
+        selectedBlueprintId = fallbackBlueprint.id;
+      }
 
       // Log Puppeteer layout render cost usage
       const userId = (req as any).user?.uid;
@@ -3530,39 +4329,245 @@ ${htmlContent}
     }
   });
 
-  // --- Real AI Trend Research Endpoint ---
-  app.post('/api/ai/research-trends', requireAuth, routeRateLimiter(5, 60 * 1000), async (req, res) => {
+  app.post('/api/ai/generate-campaign-images', requireAuth, routeRateLimiter(10, 60 * 1000), async (req, res) => {
+    try {
+      const { prompts } = req.body;
+      if (!Array.isArray(prompts) || prompts.length === 0) {
+        return res.status(400).json({ error: "prompts array is required." });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Missing GEMINI_API_KEY." });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+
+      const imageUrls: string[] = [];
+
+      for (let i = 0; i < prompts.length; i++) {
+        const promptText = typeof prompts[i] === 'string' ? prompts[i] : prompts[i]?.prompt || `High quality photographic backdrop graphic #${i+1}`;
+        try {
+          const imgRes = await ai.models.generateContent({
+            model: 'gemini-3.1-flash-image-preview',
+            contents: { parts: [{ text: promptText }] },
+            config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
+          });
+
+          let generatedUrl = null;
+          if (imgRes?.candidates?.[0]?.content?.parts) {
+            for (const pt of imgRes.candidates[0].content.parts) {
+              if (pt.inlineData) {
+                const base64Data = pt.inlineData.data;
+                const mimeType = pt.inlineData.mimeType || 'image/png';
+                const imageId = 'img_camp_' + Math.random().toString(36).substring(2, 10);
+                await saveImageLocalAndDb(imageId, base64Data, mimeType, promptText);
+                generatedUrl = `/api/whatsapp/images/${imageId}.png`;
+                break;
+              }
+            }
+          }
+          imageUrls.push(generatedUrl || `https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80`);
+        } catch (e) {
+          console.warn(`[generate-campaign-images] Failed prompt #${i+1}:`, e);
+          imageUrls.push(`https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80`);
+        }
+      }
+
+      res.json({ success: true, imageUrls });
+    } catch (err: any) {
+      console.error("[POST /api/ai/generate-campaign-images error]", err);
+      res.status(500).json({ error: err.message || "Failed to generate campaign images." });
+    }
+  });
+
+  // --- Real AI Trend Research Endpoint (Grounded Web Research Engine) ---
+  app.post('/api/ai/research-trends', requireAuth, routeRateLimiter(15, 60 * 1000), async (req, res) => {
+    const { focusNiche } = req.body || {};
+    console.log(`\n======================================================`);
+    console.log(`[STEP 1/6 SERVER] POST /api/ai/research-trends received.`);
+    console.log(`[STEP 1/6 SERVER] Focus Niche requested: "${focusNiche || '(Auto-random)'}" -> PASSED`);
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
+      console.error(`[STEP 2/6 SERVER] GEMINI_API_KEY check -> FAILED (Missing environment variable)`);
       return res.status(500).json({ error: 'Server API key not configured.' });
     }
+    console.log(`[STEP 2/6 SERVER] GEMINI_API_KEY check -> PASSED`);
     
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const promptText = `Perform a deep research analysis on the latest B2B social media visual trends (specifically LinkedIn and X). Identify 3 high-converting visual styles/formats.
-Return a JSON object matching this schema:
-{
-  "summary": "Brief summary of the current landscape",
-  "trends": [
-    {
-      "name": "Name of the visual trend",
-      "description": "Specific layout/composition details",
-      "layouts": ["layout-id-1", "layout-id-2"], // Choose 1-3 layout IDs from our blueprint list: [editorial-left, editorial-right, split-horizontal, frame-border, cinema-bottom, top-banner, corner-badge, full-overlay-minimal, knockout-type, sidebar-right, ticker-strip, asymmetric-focus, diagonal-split, stacked-blocks, neon-minimal, editorial-grid, strategic-grid-split, neon-code-blur, notebook-sketch]
-      "metrics": "Estimated engagement increase or performance hook",
-      "examplePrompt": "A sample prompt to generate this image"
-    }
-  ]
-}`;
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ text: promptText }],
+      const FOCUS_NICHES = [
+        "AI agent tooling & B2B SaaS",
+        "developer tools & cloud infrastructure",
+        "fractional executives & high-ticket B2B consulting",
+        "fintech B2B & enterprise software",
+        "creator-economy marketplaces & growth platforms",
+        "hiring & HR tech platforms",
+        "healthcare software & biotech SaaS"
+      ];
+      const nicheLens = focusNiche || FOCUS_NICHES[Math.floor(Math.random() * FOCUS_NICHES.length)];
+      const currentDate = new Date().toISOString().split('T')[0];
+
+      // --- PHASE 1: Live Grounded Web Research on LinkedIn & X Visual Trends ---
+      console.log(`[STEP 3/6 SERVER] Phase 1: Initiating Live Web Grounding for [${nicheLens}]...`);
+      let groundingResearchText = "";
+      try {
+        const searchRes = await ai.models.generateContent({
+          model: 'gemini-3.1-pro-preview',
+          contents: [{
+            text: `Today's date is ${currentDate}. Perform live web searches on LinkedIn and X for recent viral B2B posts in: "${nicheLens}".
+Identify 3 to 5 active, rising visual layout structures, graphic compositions, typography trends, and contrast patterns being used by top founders and accounts.
+Explain why each layout is converting.`
+          }],
+          config: {
+            tools: [{ googleSearch: {} }]
+          }
+        });
+        groundingResearchText = searchRes.text || "";
+        console.log(`[STEP 3/6 SERVER] Phase 1 Grounding Search -> PASSED (Received ${groundingResearchText.length} chars of trend findings)`);
+      } catch (searchErr: any) {
+        console.warn(`[STEP 3/6 SERVER] Phase 1 Grounding Search -> WARN (${searchErr.message}). Continuing with core synthesis...`);
+        groundingResearchText = `Focus on high-contrast B2B founder visual cards, split panels, dark-mode callout boxes, minimal typography, and metric billboards.`;
+      }
+
+      // --- PHASE 2: Structured JSON Synthesis with Guaranteed Schema ---
+      const timestamp = Date.now();
+      console.log(`[STEP 4/6 SERVER] Phase 2: Synthesizing Dynamic HTML/CSS Visual Templates with responseSchema...`);
+      const synthesisPrompt = `You are a world-class senior brand systems designer and B2B visual director.
+Today's date is ${currentDate}.
+
+Live Grounded Market Trend Research for "${nicheLens}":
+${groundingResearchText}
+
+Based on these grounded insights, synthesize 4 to 6 COMPLETELY ORIGINAL, DISTINCT visual templates.
+Each template MUST have a unique ID using format "dynamic-${timestamp}-1", "dynamic-${timestamp}-2", etc. (Do NOT use 'editorial-left' or static prebuilt names).
+Each template MUST provide full 1080x1080px HTML/CSS code inside "rawHtml" using inline styles and placeholders:
+{{HEADLINE}}, {{SUBTEXT}}, {{IMAGE_URL}}, {{LOGO_URL}}, {{PRIMARY_COLOR}}, {{SECONDARY_COLOR}}, {{FONT_FAMILY}}.
+
+CRITICAL DESIGN RULES:
+1. Every template must look like a high-end $10k/mo designer built it.
+2. Pitch-black dark mode (#08080C) or warm off-white (#FAF9F6) backgrounds.
+3. Clean flexbox layout, strong visual contrast, and high-impact typography.
+4. No generic AI slop: no rounded pill badges, no giant quote marks, no stock photo laptop mockups.`;
+
+      const visualTrendSchema = {
+        type: Type.OBJECT,
+        properties: {
+          summary: { type: Type.STRING },
+          viralPick: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              viralityScore: { type: Type.STRING },
+              whyViral: { type: Type.STRING }
+            },
+            required: ["name", "viralityScore", "whyViral"]
+          },
+          discoveredTemplates: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                name: { type: Type.STRING },
+                sourceTrend: { type: Type.STRING },
+                evidenceRef: { type: Type.STRING },
+                signatureDetail: { type: Type.STRING },
+                primaryColor: { type: Type.STRING },
+                secondaryColor: { type: Type.STRING },
+                fontFamily: { type: Type.STRING },
+                viralityScore: { type: Type.STRING },
+                whyViral: { type: Type.STRING },
+                isLightBg: { type: Type.BOOLEAN },
+                rawHtml: { type: Type.STRING }
+              },
+              required: ["id", "name", "primaryColor", "secondaryColor", "fontFamily", "isLightBg", "rawHtml"]
+            }
+          }
+        },
+        required: ["summary", "viralPick", "discoveredTemplates"]
+      };
+
+      const synthesisRes = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: [{ text: synthesisPrompt }],
         config: {
-          responseMimeType: 'application/json'
+          responseMimeType: 'application/json',
+          responseSchema: visualTrendSchema
         }
       });
-      res.json(JSON.parse(response.text || '{}'));
+
+      const responseText = synthesisRes.text || "{}";
+      console.log(`[STEP 5/6 SERVER] Phase 2 Synthesis -> PASSED (Received ${responseText.length} chars)`);
+
+      const parsedData = JSON.parse(responseText);
+      console.log(`[STEP 6/6 SERVER] Raw parsed keys from Gemini:`, Object.keys(parsedData));
+
+      // --- KEY NORMALIZATION: Gemini sometimes outputs the array under a different key name ---
+      // Remap any common alias keys to the canonical 'discoveredTemplates' field the client expects
+      // NOTE: Check .length > 0, not just truthiness — empty arrays [] are truthy but useless
+      if (!Array.isArray(parsedData.discoveredTemplates) || parsedData.discoveredTemplates.length === 0) {
+        const aliasKeys = ['trends', 'templates', 'visualTemplates', 'discoveredTrends', 'visualTrends', 'items', 'layouts'];
+        for (const alias of aliasKeys) {
+          if (Array.isArray(parsedData[alias]) && parsedData[alias].length > 0) {
+            console.warn(`[STEP 6/6 SERVER] Key normalization: Remapping Gemini field "${alias}" -> "discoveredTemplates"`);
+            parsedData.discoveredTemplates = parsedData[alias];
+            delete parsedData[alias];
+            break;
+          }
+        }
+        // Last resort: find any array with items that look like templates
+        if (!Array.isArray(parsedData.discoveredTemplates) || parsedData.discoveredTemplates.length === 0) {
+          for (const key of Object.keys(parsedData)) {
+            if (Array.isArray(parsedData[key]) && parsedData[key].length > 0 && parsedData[key][0]?.rawHtml) {
+              console.warn(`[STEP 6/6 SERVER] Key normalization (rawHtml scan): Remapping Gemini field "${key}" -> "discoveredTemplates"`);
+              parsedData.discoveredTemplates = parsedData[key];
+              delete parsedData[key];
+              break;
+            }
+          }
+        }
+      }
+
+      // --- rawHtml VALIDATION: Patch any templates that are missing rawHtml ---
+      if (Array.isArray(parsedData.discoveredTemplates)) {
+        parsedData.discoveredTemplates = parsedData.discoveredTemplates.map((t: any, idx: number) => {
+          if (!t.rawHtml || typeof t.rawHtml !== 'string' || t.rawHtml.trim().length < 50) {
+            console.warn(`[STEP 6/6 SERVER] Template "${t.id || idx}" missing valid rawHtml (got ${(t.rawHtml || '').length} chars). Injecting server-side fallback HTML.`);
+            const pc = t.primaryColor || '#7C3AED';
+            const sc = t.secondaryColor || '#08080C';
+            const ff = t.fontFamily || 'Inter';
+            t.rawHtml = `<div style="width:1080px;height:1080px;position:relative;background:${sc};overflow:hidden;font-family:'${ff}',system-ui,sans-serif;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;padding:80px;">
+              <img src="{{IMAGE_URL}}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.3;filter:brightness(0.5);z-index:1;" />
+              <div style="position:relative;z-index:10;display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="background:${pc};color:#000;font-weight:900;font-size:13px;letter-spacing:0.15em;padding:6px 14px;border-radius:6px;text-transform:uppercase;">${(t.sourceTrend || t.name || 'TREND INSIGHT').toUpperCase()}</div>
+                <div>{{LOGO_URL}}</div>
+              </div>
+              <div style="position:relative;z-index:10;display:flex;flex-direction:column;gap:20px;">
+                <div style="width:60px;height:6px;background:${pc};border-radius:3px;"></div>
+                <h2 style="color:#ffffff;font-weight:900;font-size:clamp(38px,5vw,64px);line-height:1.1;margin:0;text-transform:uppercase;letter-spacing:-0.02em;">{{HEADLINE}}</h2>
+                <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-left:6px solid ${pc};border-radius:12px;padding:24px 30px;">
+                  <p style="color:#cbd5e1;font-weight:500;font-size:22px;line-height:1.45;margin:0;">{{SUBTEXT}}</p>
+                </div>
+              </div>
+            </div>`;
+          }
+          return t;
+        });
+      }
+
+      if (parsedData.discoveredTemplates?.length > 0) {
+        console.log(`[STEP 6/6 SERVER] Schema Validation -> PASSED (${parsedData.discoveredTemplates.length} dynamic AI templates! IDs: ${parsedData.discoveredTemplates.map((t: any) => t.id).join(', ')})`);
+        console.log(`======================================================\n`);
+        return res.json(parsedData);
+      } else {
+        console.error(`[STEP 6/6 SERVER] Schema Validation -> FAILED. No discoveredTemplates found. Final keys:`, Object.keys(parsedData));
+        console.log(`======================================================\n`);
+        return res.status(500).json({ error: 'AI returned invalid schema without discoveredTemplates array.' });
+      }
     } catch (error: any) {
-      console.error('Trend research failed:', error);
+      console.error(`[SERVER /api/ai/research-trends CRITICAL ERROR] -> FAILED: ${error.message}`);
+      console.log(`======================================================\n`);
       res.status(500).json({ error: error.message || 'Failed to research trends.' });
     }
   });
@@ -3690,6 +4695,8 @@ Return a JSON object matching this schema:
         automateWeeklyCampaigns: !!p.automateWeeklyCampaigns,
         automationTimeUtc: p.automationTimeUtc || "14:00",
         automationWeeklyDay: p.automationWeeklyDay || "Monday",
+        requireEmailApproval: p.requireEmailApproval !== false,
+        autoUploadDelayHours: p.autoUploadDelayHours || 12,
         logs: p.automationLogs || []
       });
     } catch (e: any) {
@@ -3706,7 +4713,9 @@ Return a JSON object matching this schema:
         automateDailyBlogs, 
         automateWeeklyCampaigns,
         automationTimeUtc,
-        automationWeeklyDay
+        automationWeeklyDay,
+        requireEmailApproval,
+        autoUploadDelayHours
       } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
       if (!db) return res.status(500).json({ error: 'Database connection is not active' });
@@ -3724,6 +4733,8 @@ Return a JSON object matching this schema:
       if (automateWeeklyCampaigns !== undefined) updates.automateWeeklyCampaigns = automateWeeklyCampaigns;
       if (automationTimeUtc !== undefined) updates.automationTimeUtc = automationTimeUtc;
       if (automationWeeklyDay !== undefined) updates.automationWeeklyDay = automationWeeklyDay;
+      if (requireEmailApproval !== undefined) updates.requireEmailApproval = requireEmailApproval;
+      if (autoUploadDelayHours !== undefined) updates.autoUploadDelayHours = Number(autoUploadDelayHours) || 12;
 
       await docRef.update(updates);
 
@@ -3939,6 +4950,45 @@ Return a JSON object matching this schema:
     }
   });
 
+  // --- User Settings Server Proxy Endpoint ---
+  app.post('/api/user/settings', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user?.uid || req.body?.userId;
+      if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+      if (!db) return res.status(500).json({ error: 'Database connection is not active' });
+
+      const settingsData = req.body || {};
+      const allowedKeys = [
+        'automateFounderPosts',
+        'founderPostTimeUtc',
+        'founderPostAttachmentStyle',
+        'founderPostType',
+        'founderPostSelectedProducts',
+        'nonBrandedColors',
+        'nonBrandedPrimaryFont',
+        'nonBrandedSecondaryFont',
+        'founderVoiceDescription',
+        'founderAgentSynthesized'
+      ];
+
+      const updatePayload: Record<string, any> = {};
+      for (const key of allowedKeys) {
+        if (key in settingsData) {
+          updatePayload[key] = settingsData[key];
+        }
+      }
+
+      updatePayload.updatedAt = new Date().toISOString();
+
+      await db.collection('users').doc(userId).set(updatePayload, { merge: true });
+      console.log(`[API User Settings] Updated settings for user ${userId} cleanly.`);
+      res.json({ success: true, updated: updatePayload });
+    } catch (e: any) {
+      console.error('[API User Settings Error]:', e);
+      res.status(500).json({ error: e.message || 'Failed to update user settings.' });
+    }
+  });
+
   app.post('/api/linkedin/select-organization', requireAuth, async (req, res) => {
     try {
       const { productId, organizationUrn } = req.body;
@@ -3996,8 +5046,12 @@ Return a JSON object matching this schema:
         return res.status(400).json({ error: 'Personal LinkedIn account not connected' });
       }
 
-      // Publish using our helper
-      await publishPostToLinkedIn(token, post.postCopy, post.imageUrl);
+      // Publish using our helper (prioritize raster PNG/JPEG over raw SVG Data URLs)
+      let targetImage = post.approvedTemplateImage || post.imageUrl;
+      if (typeof targetImage === 'string' && targetImage.startsWith('data:image/svg+xml')) {
+        targetImage = post.imageUrl || null;
+      }
+      await publishPostToLinkedIn(token, post.postCopy, targetImage);
 
       // Update post status in Firestore
       await postRef.update({
@@ -5021,7 +6075,7 @@ Return a JSON object matching this schema:
         <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.92) 80%); z-index: 2;"></div>
         ${visualData?.customHtml ? `
           <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 5;">
-            ${visualData.customHtml}
+            ${sanitizeTemplateHtml(visualData.customHtml).html}
           </div>
         ` : `
           <div style="position: absolute; bottom: 250px; left: 75px; right: 75px; text-align: center; z-index: 5; display: flex; flex-direction: column; align-items: center;">
@@ -5036,6 +6090,7 @@ Return a JSON object matching this schema:
 <html>
 <head>
 <meta charset="UTF-8">
+${TEMPLATE_CSP_META}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;950&family=JetBrains+Mono:wght@400;500;700;800&family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -6295,6 +7350,581 @@ However, if they ask to make a campaign or send a product photo, and they have n
     }
   });
 
+  // ============================================================================
+  //  FULL-PREVIEW APPROVAL REVIEW PAGE
+  //  User clicks the email CTA → lands here to see the full content preview
+  //  with Approve / Reject buttons and a live countdown timer.
+  // ============================================================================
+  app.get('/api/approval/review', async (req, res) => {
+    const token = req.query.token as string;
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+
+    if (!token) {
+      return res.status(400).send(buildApprovalStatusPage({
+        appUrl,
+        emoji: '⚠️',
+        title: 'Invalid Review Link',
+        message: 'Missing approval token. Please check your email link.',
+        borderColor: '#ef4444'
+      }));
+    }
+
+    if (!db) {
+      return res.status(500).send(buildApprovalStatusPage({
+        appUrl,
+        emoji: '🔌',
+        title: 'Service Unavailable',
+        message: 'Database connection is temporarily unavailable. Please try again shortly.',
+        borderColor: '#f59e0b'
+      }));
+    }
+
+    try {
+      const snap = await db.collection('approval_requests').where('token', '==', token).limit(1).get();
+      if (snap.empty) {
+        return res.status(404).send(buildApprovalStatusPage({
+          appUrl,
+          emoji: '🔍',
+          title: 'Request Expired or Invalid',
+          message: 'This approval link is invalid or has already expired.',
+          borderColor: '#f59e0b'
+        }));
+      }
+
+      const docSnap = snap.docs[0];
+      const data = docSnap.data();
+
+      // Already processed → show status page
+      if (data.status !== 'pending') {
+        const isApproved = data.status === 'approved' || data.status === 'auto_approved';
+        return res.send(buildApprovalStatusPage({
+          appUrl,
+          emoji: isApproved ? '✅' : '❌',
+          title: 'Request Already Processed',
+          message: `This <strong>${data.itemType}</strong> titled <strong>"${data.itemTitle}"</strong> was previously processed with status: <span style="color: ${isApproved ? '#10b981' : '#ef4444'}; font-weight: 700;">${data.status.toUpperCase()}</span>.`,
+          borderColor: isApproved ? '#10b981' : '#ef4444'
+        }));
+      }
+
+      // Pending → render the full preview page
+      const approveActionUrl = `${appUrl}/api/approval/respond?token=${token}&action=approve`;
+      const rejectActionUrl = `${appUrl}/api/approval/respond?token=${token}&action=reject`;
+      const contentPreviewHtml = buildContentPreview(data);
+      const itemTypeLabel = data.itemType === 'founder_post' ? 'Founder Post' : data.itemType.charAt(0).toUpperCase() + data.itemType.slice(1);
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Review: ${escHtml(data.itemTitle)} — B2P</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #08080c;
+      color: #e2e8f0;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .top-bar {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .top-bar img { height: 32px; }
+    .top-bar .badge {
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+    .header-section {
+      margin-bottom: 32px;
+    }
+    .header-section h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #f8fafc;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+    .header-section .meta {
+      font-size: 14px;
+      color: #94a3b8;
+    }
+    .header-section .meta strong { color: #c4b5fd; }
+    .countdown-bar {
+      background: #12121a;
+      border: 1px solid #27273a;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .countdown-bar .label {
+      font-size: 14px;
+      color: #94a3b8;
+    }
+    .countdown-bar .label strong { color: #fbbf24; }
+    .countdown-timer {
+      display: flex;
+      gap: 8px;
+    }
+    .countdown-timer .unit {
+      background: #1e1e2e;
+      border: 1px solid #27273a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      text-align: center;
+      min-width: 56px;
+    }
+    .countdown-timer .unit .num {
+      font-size: 24px;
+      font-weight: 800;
+      color: #fbbf24;
+      font-variant-numeric: tabular-nums;
+    }
+    .countdown-timer .unit .lbl {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+    .content-card {
+      background: #12121a;
+      border: 1px solid #27273a;
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 32px;
+    }
+    .content-card .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #27273a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .content-card .card-header .type-badge {
+      background: #7c3aed;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+    }
+    .content-card .card-header .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .content-card .card-body {
+      padding: 24px;
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #7c3aed;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+    }
+    .section-value {
+      font-size: 15px;
+      color: #cbd5e1;
+      line-height: 1.7;
+      margin-bottom: 20px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .section-value:last-child { margin-bottom: 0; }
+    .daily-post {
+      background: #1a1a2e;
+      border: 1px solid #27273a;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+    }
+    .daily-post:last-child { margin-bottom: 0; }
+    .daily-post .day-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #a78bfa;
+      margin-bottom: 4px;
+    }
+    .daily-post .platform-tag {
+      display: inline-block;
+      background: #27273a;
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+    .daily-post .post-copy {
+      font-size: 14px;
+      color: #cbd5e1;
+      line-height: 1.6;
+      margin-top: 8px;
+      white-space: pre-wrap;
+    }
+    .blog-content {
+      font-size: 15px;
+      color: #cbd5e1;
+      line-height: 1.8;
+    }
+    .blog-content h1, .blog-content h2, .blog-content h3 {
+      color: #f8fafc;
+      margin: 20px 0 10px;
+    }
+    .blog-content p { margin-bottom: 12px; }
+    .action-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(8, 8, 12, 0.95);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid #27273a;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 100;
+    }
+    .action-bar .btn {
+      padding: 14px 36px;
+      font-weight: 700;
+      font-size: 15px;
+      font-family: inherit;
+      border: none;
+      border-radius: 9999px;
+      cursor: pointer;
+      text-decoration: none;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .action-bar .btn:hover { transform: translateY(-1px); }
+    .action-bar .btn:active { transform: translateY(0); }
+    .btn-approve {
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+    }
+    .btn-reject {
+      background: #ef4444;
+      box-shadow: 0 4px 16px rgba(239, 68, 68, 0.25);
+    }
+    .action-bar .btn.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    .processing-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 8, 12, 0.92);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .processing-overlay.visible { display: flex; }
+    .processing-overlay .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #27273a;
+      border-top-color: #7c3aed;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .processing-overlay .proc-text {
+      font-size: 16px;
+      color: #f8fafc;
+      font-weight: 600;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 20px 16px 100px; }
+      .header-section h1 { font-size: 22px; }
+      .countdown-bar { flex-direction: column; align-items: flex-start; }
+      .action-bar { gap: 10px; }
+      .action-bar .btn { padding: 12px 24px; font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <img src="${appUrl}/B2PLOGO.png" alt="B2P">
+    <span class="badge">${escHtml(itemTypeLabel)} Review</span>
+  </div>
+
+  <div class="container">
+    <div class="header-section">
+      <h1>${escHtml(data.itemTitle)}</h1>
+      <p class="meta">
+        Generated for <strong>${escHtml(data.productName || 'your brand')}</strong>
+        on ${new Date(data.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+      </p>
+    </div>
+
+    <div class="countdown-bar">
+      <div class="label">
+        ⏱️ <strong>Auto-upload</strong> if no action taken:
+      </div>
+      <div class="countdown-timer" id="countdown">
+        <div class="unit"><div class="num" id="cd-hours">--</div><div class="lbl">Hours</div></div>
+        <div class="unit"><div class="num" id="cd-mins">--</div><div class="lbl">Mins</div></div>
+        <div class="unit"><div class="num" id="cd-secs">--</div><div class="lbl">Secs</div></div>
+      </div>
+    </div>
+
+    ${contentPreviewHtml}
+  </div>
+
+  <div class="action-bar" id="action-bar">
+    <a class="btn btn-approve" id="btn-approve" href="${approveActionUrl}">✅ Approve & Publish</a>
+    <a class="btn btn-reject" id="btn-reject" href="${rejectActionUrl}">❌ Reject & Discard</a>
+  </div>
+
+  <div class="processing-overlay" id="processing-overlay">
+    <div class="spinner"></div>
+    <div class="proc-text" id="proc-text">Processing...</div>
+  </div>
+
+  <script>
+    // Live Countdown Timer
+    const expiresAt = new Date("${data.expiresAt}").getTime();
+    const hoursEl = document.getElementById('cd-hours');
+    const minsEl = document.getElementById('cd-mins');
+    const secsEl = document.getElementById('cd-secs');
+
+    function updateCountdown() {
+      const now = Date.now();
+      const diff = expiresAt - now;
+      if (diff <= 0) {
+        hoursEl.textContent = '00';
+        minsEl.textContent = '00';
+        secsEl.textContent = '00';
+        document.querySelector('.countdown-bar .label').innerHTML = '⏱️ <strong style="color: #ef4444;">Timer expired</strong> — content will auto-publish shortly';
+        return;
+      }
+      const h = Math.floor(diff / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diff % (1000 * 60)) / 1000);
+      hoursEl.textContent = String(h).padStart(2, '0');
+      minsEl.textContent = String(m).padStart(2, '0');
+      secsEl.textContent = String(s).padStart(2, '0');
+    }
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+
+    // Action Button Handlers — show processing overlay, prevent double-clicks
+    document.getElementById('btn-approve').addEventListener('click', function(e) {
+      document.getElementById('proc-text').textContent = 'Approving & Publishing...';
+      document.getElementById('processing-overlay').classList.add('visible');
+      document.getElementById('btn-approve').classList.add('disabled');
+      document.getElementById('btn-reject').classList.add('disabled');
+    });
+    document.getElementById('btn-reject').addEventListener('click', function(e) {
+      document.getElementById('proc-text').textContent = 'Rejecting...';
+      document.getElementById('processing-overlay').classList.add('visible');
+      document.getElementById('btn-approve').classList.add('disabled');
+      document.getElementById('btn-reject').classList.add('disabled');
+    });
+  </script>
+</body>
+</html>`;
+
+      res.send(html);
+    } catch (err: any) {
+      console.error('[api/approval/review Error]:', err);
+      res.status(500).send(buildApprovalStatusPage({
+        appUrl,
+        emoji: '💥',
+        title: 'Server Error',
+        message: `An unexpected error occurred: ${escHtml(err.message)}`,
+        borderColor: '#ef4444'
+      }));
+    }
+  });
+
+  // Public Approval Response Handler (for link clicks in emails)
+  app.get('/api/approval/respond', async (req, res) => {
+    const token = req.query.token as string;
+    const action = req.query.action as string; // 'approve' | 'reject'
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+
+    if (!token || !action) {
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Invalid Request</title></head>
+        <body style="font-family: system-ui, sans-serif; background: #08080c; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+          <div style="background: #12121a; border: 1px solid #27273a; padding: 40px; border-radius: 16px; text-align: center; max-width: 480px;">
+            <h2 style="color: #ef4444; margin-top: 0;">⚠️ Invalid Approval Request</h2>
+            <p style="color: #94a3b8;">Missing required approval parameters. Please check your email link.</p>
+            <a href="${appUrl}" style="background: #7c3aed; color: white; padding: 10px 20px; border-radius: 9999px; text-decoration: none; display: inline-block; margin-top: 16px;">Go to Dashboard</a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    if (!db) {
+      return res.status(500).send('Database connection unavailable.');
+    }
+
+    try {
+      const snap = await db.collection('approval_requests').where('token', '==', token).limit(1).get();
+      if (snap.empty) {
+        return res.status(404).send(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>Request Not Found</title></head>
+          <body style="font-family: system-ui, sans-serif; background: #08080c; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+            <div style="background: #12121a; border: 1px solid #27273a; padding: 40px; border-radius: 16px; text-align: center; max-width: 480px;">
+              <h2 style="color: #f59e0b; margin-top: 0;">🔍 Request Expired or Invalid</h2>
+              <p style="color: #94a3b8;">This approval link is invalid or has expired.</p>
+              <a href="${appUrl}" style="background: #7c3aed; color: white; padding: 10px 20px; border-radius: 9999px; text-decoration: none; display: inline-block; margin-top: 16px;">Go to Dashboard</a>
+            </div>
+          </body>
+          </html>
+        `);
+      }
+
+      const docSnap = snap.docs[0];
+      const data = docSnap.data();
+      const nowIso = new Date().toISOString();
+
+      if (data.status !== 'pending') {
+        const isApproved = data.status === 'approved' || data.status === 'auto_approved';
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>Already Processed</title></head>
+          <body style="font-family: system-ui, sans-serif; background: #08080c; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+            <div style="background: #12121a; border: 1px solid #27273a; padding: 40px; border-radius: 16px; text-align: center; max-width: 520px;">
+              <div style="font-size: 48px; margin-bottom: 16px;">${isApproved ? '✅' : '❌'}</div>
+              <h2 style="color: #f8fafc; margin-top: 0;">Request Already Processed</h2>
+              <p style="color: #94a3b8; line-height: 1.5;">This <strong>${data.itemType}</strong> titled <strong>"${data.itemTitle}"</strong> was previously processed with status: <span style="color: ${isApproved ? '#10b981' : '#ef4444'}; font-weight: 700;">${data.status.toUpperCase()}</span>.</p>
+              <a href="${appUrl}/dashboard" style="background: #7c3aed; color: white; padding: 12px 24px; border-radius: 9999px; text-decoration: none; display: inline-block; margin-top: 20px; font-weight: 600;">Go to Dashboard</a>
+            </div>
+          </body>
+          </html>
+        `);
+      }
+
+      if (action === 'approve') {
+        await db.collection('approval_requests').doc(docSnap.id).update({
+          status: 'approved',
+          processedAt: nowIso
+        });
+
+        await publishItemInstantly(data.itemType, data.itemData, data.productId);
+
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>Approved & Published</title></head>
+          <body style="font-family: system-ui, sans-serif; background: #08080c; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+            <div style="background: #12121a; border: 1px solid #10b981; padding: 44px; border-radius: 20px; text-align: center; max-width: 540px; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.15);">
+              <div style="font-size: 56px; margin-bottom: 16px;">🎉</div>
+              <h2 style="color: #10b981; margin-top: 0; font-size: 26px;">Approved & Published Instantly!</h2>
+              <p style="color: #cbd5e1; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                Your <strong>${data.itemType.toUpperCase()}</strong> titled <strong>"${data.itemTitle}"</strong> has been approved and published to your channels.
+              </p>
+              <a href="${appUrl}/dashboard" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 14px 32px; border-radius: 9999px; text-decoration: none; display: inline-block; font-weight: 700; font-size: 15px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">View Live in Dashboard →</a>
+            </div>
+          </body>
+          </html>
+        `);
+      } else if (action === 'reject') {
+        await db.collection('approval_requests').doc(docSnap.id).update({
+          status: 'rejected',
+          processedAt: nowIso
+        });
+
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>Request Rejected</title></head>
+          <body style="font-family: system-ui, sans-serif; background: #08080c; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0;">
+            <div style="background: #12121a; border: 1px solid #ef4444; padding: 44px; border-radius: 20px; text-align: center; max-width: 540px; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.15);">
+              <div style="font-size: 56px; margin-bottom: 16px;">❌</div>
+              <h2 style="color: #ef4444; margin-top: 0; font-size: 26px;">Generation Rejected</h2>
+              <p style="color: #cbd5e1; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                Your <strong>${data.itemType.toUpperCase()}</strong> titled <strong>"${data.itemTitle}"</strong> was rejected. It will NOT be uploaded or published.
+              </p>
+              <a href="${appUrl}/dashboard" style="background: #334155; color: white; padding: 14px 32px; border-radius: 9999px; text-decoration: none; display: inline-block; font-weight: 600; font-size: 15px;">Return to Dashboard</a>
+            </div>
+          </body>
+          </html>
+        `);
+      } else {
+        return res.status(400).send('Invalid action parameter.');
+      }
+    } catch (err: any) {
+      console.error('[api/approval/respond Error]:', err);
+      res.status(500).send(`Server error: ${err.message}`);
+    }
+  });
+
+  // Authenticated Approval Trigger Endpoint
+  app.post('/api/approval/trigger', requireAuth, async (req, res) => {
+    try {
+      const { productId, productName, itemType, itemTitle, itemPreview, itemData } = req.body;
+      const userEmail = (req as any).user?.email;
+      const userId = (req as any).user?.uid;
+
+      if (!productId || !itemType || !itemTitle || !userEmail) {
+        return res.status(400).json({ error: 'productId, itemType, itemTitle, and user email are required' });
+      }
+
+      const result = await createAndSendApprovalRequest({
+        userId,
+        productId,
+        productName,
+        userEmail,
+        itemType,
+        itemTitle,
+        itemPreview,
+        itemData
+      });
+
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error('[api/approval/trigger Error]:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/proxy-image', async (req, res) => {
     const { url } = req.query;
     if (!url || typeof url !== 'string') {
@@ -7171,6 +8801,606 @@ However, if they ask to make a campaign or send a product photo, and they have n
     }
   });
 
+  // ============================================================================
+  // 4. Grounding Research Utility API Route — v2
+  // Gemini (2-phase: grounded research -> structured JSON) -> 100 Layout Blueprints
+  // ============================================================================
+  const PLATFORMS = ["linkedin", "x", "instagram", "reddit"] as const;
+  type ResearchPlatform = (typeof PLATFORMS)[number];
+
+  const ITEMS_PER_PLATFORM = 25; // 4 x 25 = 100
+  const PRIMARY_MODEL = "gemini-3.1-pro-preview";
+  const FALLBACK_MODEL = "gemini-2.5-pro";
+
+  const PLATFORM_RESEARCH_FOCUS: Record<ResearchPlatform, string> = {
+    linkedin:
+      "square multi-page document carousels, data-led single-image infographic frames, and exec-quote visual overlays",
+    x: "1:1 text-image pairings, quote-card mechanics, single-stat layout containers, and product screenshot wrappers that feel application-native",
+    instagram:
+      "micro-copy slide frameworks (15-20 words max per slide), edge-bleed panoramic canvas transitions, and minimal-premium hierarchies restricted to 1:1 boxes",
+    reddit:
+      "subreddit-native formatting mechanics, system-font mimicking layouts, and raw conversational containers that reject visual polish",
+  };
+
+  const blueprintItemSchema = {
+    type: Type.OBJECT,
+    properties: {
+      blueprint_id: { type: Type.STRING },
+      platform: { type: Type.STRING, enum: [...PLATFORMS] },
+      content_intent: { type: Type.STRING },
+      ideal_text_length: { type: Type.STRING, enum: ["short", "medium", "long"] },
+      composition_archetype: { type: Type.STRING },
+      grid_layout_axis: { type: Type.STRING },
+      negative_space_description: { type: Type.STRING },
+      typography_rules: {
+        type: Type.OBJECT,
+        properties: {
+          heading_font_size: { type: Type.STRING },
+          heading_line_height: { type: Type.STRING },
+          heading_font_weight: { type: Type.STRING },
+        },
+        required: ["heading_font_size", "heading_line_height", "heading_font_weight"],
+      },
+      cultural_justification: { type: Type.STRING },
+    },
+    required: [
+      "blueprint_id",
+      "platform",
+      "content_intent",
+      "ideal_text_length",
+      "composition_archetype",
+      "grid_layout_axis",
+      "negative_space_description",
+      "typography_rules",
+      "cultural_justification",
+    ],
+  };
+
+  function descriptorOf(item: any): string {
+    return `${item.composition_archetype} | ${item.grid_layout_axis}`;
+  }
+
+  async function researchPlatform(ai: any, platform: ResearchPlatform): Promise<string> {
+    const prompt = `
+Using live Google Search, research how real, verified corporate/brand B2B and SMB
+accounts on ${platform.toUpperCase()} have visually structured their posts in the
+last 60-90 days.
+
+Focus areas: ${PLATFORM_RESEARCH_FOCUS[platform]}.
+
+Bypass Canva template packs, Envato/Creative Market, stock marketplaces, and
+generic SEO listicles ("use white space", "bold typography") as low-value
+signal -- if a search surfaces these, redirect toward real brand post
+teardowns, performance audits, or design breakdowns instead. Focus on
+corporate/brand-authored accounts, not personal founder or influencer accounts.
+
+Find at least ${ITEMS_PER_PLATFORM} examples that are each STRUCTURALLY
+DISTINCT from one another -- different grid ratios, different padding /
+negative-space logic, different typographic weight or size choices, different
+text-length strategies. Prioritize structural diversity over hitting a round
+number; it's fine to describe fewer examples in more structural depth.
+
+For each example, write 2-4 sentences of plain prose covering:
+- the specific real pattern you found (describe the mechanic itself if the
+  source doesn't name a specific brand)
+- the exact structural mechanic (grid ratio, padding %, alignment, approx.
+  text length in words)
+- typography choices (approximate size / weight / line-height if inferable)
+- why this mechanic performs well on ${platform} specifically
+
+Write this as a numbered list of research notes in plain prose. Do NOT format
+as JSON.
+`.trim();
+
+    const call = (model: string) =>
+      ai.models.generateContent({
+        model,
+        contents: [{ text: prompt }],
+        config: {
+          tools: [{ googleSearch: {} }],
+          temperature: 1.0,
+          maxOutputTokens: 8192,
+        },
+      });
+
+    let response;
+    try {
+      response = await call(PRIMARY_MODEL);
+    } catch (err: any) {
+      console.warn(`[Research][${platform}] ${PRIMARY_MODEL} failed, falling back to ${FALLBACK_MODEL}:`, err.message);
+      response = await call(FALLBACK_MODEL);
+    }
+
+    const grounding = (response as any)?.candidates?.[0]?.groundingMetadata;
+    const queryCount = grounding?.webSearchQueries?.length ?? 0;
+    console.log(`[Grounding Research][Phase A][${platform}] executed ${queryCount} live search queries.`);
+    if (queryCount === 0) {
+      console.warn(`[Grounding Research][Phase A][${platform}] WARNING: zero search queries detected -- this platform's notes may not be grounded.`);
+    }
+
+    return response.text || "";
+  }
+
+  async function structurePlatform(
+    ai: any,
+    platform: ResearchPlatform,
+    researchNotes: string,
+    alreadyUsedDescriptors: string[],
+    startIndex: number
+  ): Promise<any[]> {
+    if (!researchNotes || !researchNotes.trim()) {
+      console.warn(`[Structure][${platform}] Research notes empty, returning empty array.`);
+      return [];
+    }
+
+    const avoidBlock = alreadyUsedDescriptors.length
+      ? `\nThese composition_archetype / grid_layout_axis combinations are ALREADY USED elsewhere in this dataset. Do not repeat them -- use genuinely different mechanics:\n${alreadyUsedDescriptors
+          .slice(-30)
+          .map((d) => `- ${d}`)
+          .join("\n")}\n`
+      : "";
+
+    const prompt = `
+Convert the following real, grounded research notes into structured layout
+blueprint records for platform "${platform}".
+
+RESEARCH NOTES:
+"""
+${researchNotes}
+"""
+${avoidBlock}
+Produce exactly ${ITEMS_PER_PLATFORM} objects. Each object must be grounded in
+a DIFFERENT note above -- do not invent generic filler beyond what the notes
+support, and do not let two objects share the same composition_archetype,
+grid_layout_axis, or typography_rules combination.
+
+blueprint_id must run from "blueprint_${String(startIndex).padStart(3, "0")}"
+through "blueprint_${String(startIndex + ITEMS_PER_PLATFORM - 1).padStart(3, "0")}".
+
+cultural_justification must reflect the actual reasoning present in the notes
+above, not generic marketing language.
+`.trim();
+
+    const call = (model: string) =>
+      ai.models.generateContent({
+        model,
+        contents: [{ text: prompt }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: { type: Type.ARRAY, items: blueprintItemSchema },
+          temperature: 0.95,
+          maxOutputTokens: 8192,
+        },
+      });
+
+    let response: any;
+    try {
+      response = await call(PRIMARY_MODEL);
+    } catch (err: any) {
+      console.warn(`[Structure][${platform}] ${PRIMARY_MODEL} failed, falling back to ${FALLBACK_MODEL}:`, err.message);
+      try {
+        response = await call(FALLBACK_MODEL);
+      } catch (fallbackErr: any) {
+        console.error(`[Structure][${platform}] Fallback model also failed:`, fallbackErr.message);
+        throw new Error(`Structure platform '${platform}' failed on both models: ${fallbackErr.message}`);
+      }
+    }
+
+    const rawText = response?.text || "";
+    const cleaned = rawText.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+    
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && Array.isArray(parsed.blueprints)) return parsed.blueprints;
+      return [parsed];
+    } catch (parseErr: any) {
+      console.error(`[Structure][${platform}] JSON.parse failed. Raw text length: ${rawText.length}`);
+      const match = rawText.match(/\[[\s\S]*\]/);
+      if (match) {
+        try {
+          return JSON.parse(match[0]);
+        } catch (innerErr) {
+          console.error(`[Structure][${platform}] Regex JSON parse also failed.`);
+        }
+      }
+      throw new Error(`Failed to parse JSON response for platform '${platform}': ${parseErr.message}`);
+    }
+  }
+
+  // GET endpoint to retrieve saved channel templates (LinkedIn, Instagram, X, Reddit)
+  app.get('/api/research-channel-templates', async (req: express.Request, res: express.Response) => {
+    try {
+      const channel = (req.query.channel as string) || 'linkedin';
+      const outputDir = path.join(process.cwd(), 'output_templates');
+      
+      const fileNames = [
+        `${channel}_templates_60.json`,
+        `${channel}_templates_20.json`,
+        `${channel}_templates.json`,
+        'master_templates_60.json',
+        'master_templates.json'
+      ];
+
+      for (const fileName of fileNames) {
+        const filePath = path.join(outputDir, fileName);
+        try {
+          const fileData = await fs.readFile(filePath, 'utf-8');
+          const templates = JSON.parse(fileData);
+          if (Array.isArray(templates) && templates.length > 0) {
+            return res.json({ success: true, channel, count: templates.length, templates });
+          }
+        } catch (e) {}
+      }
+
+      if (db) {
+        try {
+          const snapshot = await db.collection(`${channel}_templates`).get();
+          const templates = snapshot.docs.map(doc => doc.data());
+          if (templates.length > 0) {
+            return res.json({ success: true, channel, count: templates.length, templates });
+          }
+        } catch (e) {}
+      }
+
+      return res.json({ success: true, channel, count: 0, templates: [] });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/research-channel-templates', async (req: express.Request, res: express.Response) => {
+    try {
+      const { channel = 'linkedin', count = 8, niche = 'B2B SaaS & Tech Leadership' } = req.body || {};
+      console.log(`[Channel Research] Initiating live template discovery for channel "${channel.toUpperCase()}" (${count} templates)...`);
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "GEMINI_API_KEY environment variable is not configured." });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const currentDate = new Date().toISOString().split('T')[0];
+
+      // Phase 1: Live Grounded Search on Channel Trends
+      let groundingNotes = "";
+      try {
+        const searchRes = await ai.models.generateContent({
+          model: 'gemini-3.1-pro-preview',
+          contents: [{
+            text: `Today's date is ${currentDate}. Perform live web searches for top-performing corporate B2B and SMB post visual layouts on ${channel.toUpperCase()} in the niche: "${niche}".
+Focus areas for ${channel.toUpperCase()}:
+- Carousels, multi-slide document covers, infographic frames, quote cards, data billboard callouts, and product teardowns.
+- Bypass Canva generic listicles, Envato stock placeholders, and personal founder selfies.
+- Identify 4-6 distinct, high-converting visual layout structures used by verified business accounts.`
+          }],
+          config: {
+            tools: [{ googleSearch: {} }]
+          }
+        });
+        groundingNotes = searchRes.text || "";
+      } catch (err: any) {
+        console.warn(`[Channel Research][${channel}] Grounded search notice:`, err.message);
+        groundingNotes = `High-contrast B2B corporate cards, split pane infographics, executive quote frames, and dark-mode data billboards.`;
+      }
+
+      // Phase 2: HTML/CSS Template Code Synthesis
+      const timestamp = Date.now();
+      const synthesisPrompt = `You are a world-class senior brand visual director and HTML/CSS template architect.
+Today's date is ${currentDate}.
+
+Grounded Market Insights for ${channel.toUpperCase()}:
+${groundingNotes}
+
+Synthesize EXACTLY ${count} COMPLETELY DISTINCT, HIGH-AESTHETIC visual post templates for ${channel.toUpperCase()}.
+Each template MUST have a unique ID using format "template-${channel}-${timestamp}-1", "template-${channel}-${timestamp}-2", etc.
+
+CRITICAL DESIGN & CODE REQUIREMENTS:
+1. "rawHtml" MUST contain full 1080x1080px HTML/CSS code using INLINE STYLES.
+2. Must use these EXACT placeholders inside the HTML code:
+   - {{HEADLINE}}
+   - {{SUBTEXT}}
+   - {{IMAGE_URL}}
+   - {{LOGO_URL}}
+   - {{PRIMARY_COLOR}}
+   - {{SECONDARY_COLOR}}
+   - {{ACCENT_COLOR}}
+   - {{FONT_FAMILY}}
+3. MUST USE {{SECONDARY_COLOR}} for main canvas background-color (or {{PRIMARY_COLOR}} for hero/billboard cards). Use {{ACCENT_COLOR}} for vibrant highlights, badges, and contrasting visual elements. NEVER hardcode background hex codes like #08080C or #0F172A. All template colors MUST be driven dynamically by {{PRIMARY_COLOR}}, {{SECONDARY_COLOR}}, and {{ACCENT_COLOR}}.
+4. Flexible flexbox / grid layout. Text MUST NEVER overlap. Safe line-heights (1.2+). Word wrap enabled.
+5. High-end $10k/mo designer aesthetic: sleek borders, subtle gradients, clean typography hierarchy. No cheap sparkle icons or low-quality stock mockups.
+`;
+
+      const channelTemplateSchema = {
+        type: Type.OBJECT,
+        properties: {
+          channel: { type: Type.STRING },
+          summary: { type: Type.STRING },
+          templates: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                name: { type: Type.STRING },
+                channel: { type: Type.STRING },
+                archetype: { type: Type.STRING },
+                viralityScore: { type: Type.STRING },
+                sourceTrend: { type: Type.STRING },
+                whyViral: { type: Type.STRING },
+                primaryColor: { type: Type.STRING },
+                secondaryColor: { type: Type.STRING },
+                rawHtml: { type: Type.STRING }
+              },
+              required: ["id", "name", "archetype", "whyViral", "rawHtml"]
+            }
+          }
+        },
+        required: ["summary", "templates"]
+      };
+
+      const synthRes = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: [{ text: synthesisPrompt }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: channelTemplateSchema,
+          temperature: 0.95,
+          maxOutputTokens: 65536
+        }
+      });
+
+      const rawText = synthRes.text || "{}";
+      const cleaned = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      const parsedData = JSON.parse(cleaned);
+
+      const templates = parsedData.templates || [];
+
+      // Save Hook 1: Local File System (Combined JSON + Individual HTML Files)
+      const outputDir = path.join(process.cwd(), 'output_templates');
+      await fs.mkdir(outputDir, { recursive: true });
+
+      const jsonFileName = `${channel}_templates_${templates.length}.json`;
+      const localFilePath = path.join(outputDir, jsonFileName);
+      await fs.writeFile(localFilePath, JSON.stringify(templates, null, 2), 'utf-8');
+      
+      // Also overwrite main channel json
+      await fs.writeFile(path.join(outputDir, `${channel}_templates.json`), JSON.stringify(templates, null, 2), 'utf-8');
+
+      // Write individual HTML files (e.g., linkedin_template_01.html ... linkedin_template_20.html)
+      for (let idx = 0; idx < templates.length; idx++) {
+        const item = templates[idx];
+        const numStr = String(idx + 1).padStart(2, '0');
+        const htmlFileName = `${channel}_template_${numStr}.html`;
+        const htmlFilePath = path.join(outputDir, htmlFileName);
+        await fs.writeFile(htmlFilePath, item.rawHtml || '', 'utf-8');
+      }
+      console.log(`[Channel Research] Saved ${templates.length} ${channel} templates to ${localFilePath} and individual HTML files.`);
+
+      // Save Hook 2: Firestore Database Integration (with 4s timeout protection)
+      let dbSavedCount = 0;
+      if (db) {
+        try {
+          const commitPromise = (async () => {
+            const batch = db.batch();
+            for (let idx = 0; idx < templates.length; idx++) {
+              const t = templates[idx];
+              const numStr = String(idx + 1).padStart(2, '0');
+              const docId = `${channel}_template_${numStr}`;
+              const docRef = db.collection('campaign_visual_templates').doc(docId);
+              batch.set(docRef, { ...t, id: docId, channel, updatedAt: new Date().toISOString() }, { merge: true });
+
+              const channelDocRef = db.collection(`${channel}_templates`).doc(docId);
+              batch.set(channelDocRef, { ...t, id: docId, channel, updatedAt: new Date().toISOString() }, { merge: true });
+            }
+            await batch.commit();
+            return templates.length;
+          })();
+
+          const timeoutPromise = new Promise<number>((_, reject) =>
+            setTimeout(() => reject(new Error("Firestore commit timeout (4s limit reached).")), 4000)
+          );
+
+          dbSavedCount = await Promise.race([commitPromise, timeoutPromise]);
+          console.log(`[Channel Research] Successfully upserted ${dbSavedCount} templates to Firestore.`);
+        } catch (dbErr: any) {
+          console.warn(`[Channel Research] Firestore DB save skipped/timed out (${dbErr.message}). Local files saved successfully.`);
+        }
+      }
+
+      return res.json({
+        success: true,
+        channel,
+        summary: parsedData.summary || `Extracted ${templates.length} live ${channel} templates.`,
+        count: templates.length,
+        localPath: `./output_templates/${jsonFileName}`,
+        dbCollection: "campaign_visual_templates",
+        dbSavedCount,
+        templates
+      });
+
+    } catch (error: any) {
+      console.error("[Channel Research Error]", error);
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
+  // GET endpoint to retrieve saved research blueprints
+  app.get('/api/research-blueprints', async (req: express.Request, res: express.Response) => {
+    try {
+      const localFilePath = path.join(process.cwd(), 'output_templates', 'researched_blueprints_100.json');
+      try {
+        const fileData = await fs.readFile(localFilePath, 'utf-8');
+        const blueprints = JSON.parse(fileData);
+        return res.json({ success: true, count: blueprints.length, blueprints });
+      } catch (fileErr) {
+        if (db) {
+          const snapshot = await db.collection('layout_blueprints').get();
+          const blueprints = snapshot.docs.map(doc => doc.data());
+          if (blueprints.length > 0) {
+            return res.json({ success: true, count: blueprints.length, blueprints });
+          }
+        }
+        return res.json({ success: true, count: 0, blueprints: [] });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/research-blueprints', async (req: express.Request, res: express.Response) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "GEMINI_API_KEY environment variable is not configured." });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const { platform, action, allBlueprints, usedDescriptors = [] } = req.body || {};
+
+      // 1. SAVE ALL ACTION (Final twin direct persistence hook)
+      if (action === 'save_all' || Array.isArray(allBlueprints)) {
+        const blueprintsToSave = Array.isArray(allBlueprints) ? allBlueprints : [];
+        console.log(`[Grounding Research] Persisting ${blueprintsToSave.length} total blueprints...`);
+
+        // Post-hoc duplicate check
+        const seen = new Set<string>();
+        const duplicateIds: string[] = [];
+        for (const item of blueprintsToSave) {
+          const key = descriptorOf(item).toLowerCase();
+          if (seen.has(key)) duplicateIds.push(item.blueprint_id);
+          seen.add(key);
+        }
+
+        // Local File System Hook
+        const outputDir = path.join(process.cwd(), 'output_templates');
+        await fs.mkdir(outputDir, { recursive: true });
+        const localFilePath = path.join(outputDir, 'researched_blueprints_100.json');
+        await fs.writeFile(localFilePath, JSON.stringify(blueprintsToSave, null, 2), 'utf-8');
+        console.log(`[Grounding Research] Local File Saved: ${localFilePath}`);
+
+        // Database Hook (Firestore)
+        let dbSavedCount = 0;
+        if (db) {
+          try {
+            const batchSize = 50;
+            for (let i = 0; i < blueprintsToSave.length; i += batchSize) {
+              const chunk = blueprintsToSave.slice(i, i + batchSize);
+              const batch = db.batch();
+              for (let j = 0; j < chunk.length; j++) {
+                const item = chunk[j];
+                const docId = item.blueprint_id || `blueprint_${String(i + j + 1).padStart(3, '0')}`;
+                const docRef = db.collection('layout_blueprints').doc(docId);
+                batch.set(docRef, {
+                  ...item,
+                  blueprint_id: docId,
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              }
+              await batch.commit();
+              dbSavedCount += chunk.length;
+            }
+          } catch (dbErr: any) {
+            console.error("[Grounding Research] DB save error:", dbErr);
+          }
+        }
+
+        return res.json({
+          success: true,
+          count: blueprintsToSave.length,
+          duplicatesDetected: duplicateIds.length,
+          localPath: "./output_templates/researched_blueprints_100.json",
+          dbCollection: "layout_blueprints",
+          dbSavedCount,
+          blueprints: blueprintsToSave
+        });
+      }
+
+      // 2. PER-PLATFORM BATCH EXTRACTION (Single platform: linkedin, x, instagram, or reddit)
+      if (platform && PLATFORMS.includes(platform as ResearchPlatform)) {
+        const platformKey = platform as ResearchPlatform;
+        const startIndexMap: Record<ResearchPlatform, number> = {
+          linkedin: 1,
+          x: 26,
+          instagram: 51,
+          reddit: 76
+        };
+        const startIndex = startIndexMap[platformKey] || 1;
+
+        console.log(`[Grounding Research Batch] Phase A: Researching ${platformKey}...`);
+        const researchNotes = await researchPlatform(ai, platformKey);
+
+        console.log(`[Grounding Research Batch] Phase B: Structuring 25 blueprints for ${platformKey}...`);
+        const items = await structurePlatform(ai, platformKey, researchNotes, usedDescriptors, startIndex);
+
+        return res.json({
+          success: true,
+          platform: platformKey,
+          count: items.length,
+          blueprints: items
+        });
+      }
+
+      // 3. FALLBACK FULL RUN (Runs all 4 platforms if no platform body param supplied)
+      console.log("[Grounding Research] Starting full multi-channel blueprint research operation...");
+      const researchNotesByPlatform = await Promise.all(
+        PLATFORMS.map((p) => researchPlatform(ai, p))
+      );
+
+      let blueprints: any[] = [];
+      let accumulatedDescriptors: string[] = [];
+      let cursor = 1;
+
+      for (let i = 0; i < PLATFORMS.length; i++) {
+        const p = PLATFORMS[i];
+        const items = await structurePlatform(ai, p, researchNotesByPlatform[i], accumulatedDescriptors, cursor);
+        blueprints = blueprints.concat(items);
+        accumulatedDescriptors = accumulatedDescriptors.concat(items.map(descriptorOf));
+        cursor += ITEMS_PER_PLATFORM;
+      }
+
+      // Local File System
+      const outputDir = path.join(process.cwd(), 'output_templates');
+      await fs.mkdir(outputDir, { recursive: true });
+      const localFilePath = path.join(outputDir, 'researched_blueprints_100.json');
+      await fs.writeFile(localFilePath, JSON.stringify(blueprints, null, 2), 'utf-8');
+
+      // Firestore
+      let dbSavedCount = 0;
+      if (db) {
+        try {
+          const batchSize = 50;
+          for (let i = 0; i < blueprints.length; i += batchSize) {
+            const chunk = blueprints.slice(i, i + batchSize);
+            const batch = db.batch();
+            for (let j = 0; j < chunk.length; j++) {
+              const item = chunk[j];
+              const docId = item.blueprint_id || `blueprint_${String(i + j + 1).padStart(3, '0')}`;
+              const docRef = db.collection('layout_blueprints').doc(docId);
+              batch.set(docRef, { ...item, blueprint_id: docId, updatedAt: new Date().toISOString() }, { merge: true });
+            }
+            await batch.commit();
+            dbSavedCount += chunk.length;
+          }
+        } catch (e) {}
+      }
+
+      return res.json({
+        success: true,
+        count: blueprints.length,
+        duplicatesDetected: 0,
+        localPath: "./output_templates/researched_blueprints_100.json",
+        dbCollection: "layout_blueprints",
+        dbSavedCount,
+        blueprints
+      });
+
+    } catch (error: any) {
+      console.error("[Grounding Research Error]", error);
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import('vite');
@@ -7217,7 +9447,13 @@ async function publishPostToLinkedIn(token: string, text: string, imageUrl?: str
     }
   };
 
-  if (imageUrl) {
+  let validImageUrl = imageUrl;
+  if (typeof validImageUrl === 'string' && validImageUrl.startsWith('data:image/svg+xml')) {
+    console.warn('[publishPostToLinkedIn] Received SVG data URL which is unsupported by LinkedIn feedshare-image API. Bypassing SVG media attachment.');
+    validImageUrl = null;
+  }
+
+  if (validImageUrl) {
     // Register upload
     const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
       method: 'POST',
@@ -7252,16 +9488,16 @@ async function publishPostToLinkedIn(token: string, text: string, imageUrl?: str
     let imageBuffer: Buffer | ArrayBuffer;
     let contentType = 'image/jpeg';
     
-    if (imageUrl.startsWith('data:')) {
-      const matches = imageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (validImageUrl.startsWith('data:')) {
+      const matches = validImageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
       if (matches && matches.length === 3) {
         contentType = matches[1];
         imageBuffer = Buffer.from(matches[2], 'base64');
       } else {
         throw new Error('Invalid base64 image data');
       }
-    } else if (imageUrl.startsWith('/api/whatsapp/images/')) {
-      const match = imageUrl.match(/\/api\/whatsapp\/images\/([^/.]+)/);
+    } else if (validImageUrl.startsWith('/api/whatsapp/images/')) {
+      const match = validImageUrl.match(/\/api\/whatsapp\/images\/([^/.]+)/);
       if (match) {
         const imageId = match[1];
         const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
@@ -7285,8 +9521,8 @@ async function publishPostToLinkedIn(token: string, text: string, imageUrl?: str
         throw new Error('Invalid local image URL format');
       }
     } else {
-      const imgRes = await fetch(imageUrl);
-      if (!imgRes.ok) throw new Error(`Failed to fetch image from URL: ${imageUrl}`);
+      const imgRes = await fetch(validImageUrl);
+      if (!imgRes.ok) throw new Error(`Failed to fetch image from URL: ${validImageUrl}`);
       imageBuffer = await imgRes.arrayBuffer();
       contentType = imgRes.headers.get('content-type') || 'image/jpeg';
     }

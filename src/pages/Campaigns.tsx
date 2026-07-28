@@ -1,12 +1,11 @@
 import { createPortal } from "react-dom";
 import { VideoLoader } from "../components/VideoLoader";
 import { useState, useEffect } from "react";
-import { WeeklyCampaign, ProductDNA, PlatformPost, Feedback } from "../types";
+import { WeeklyCampaign, ProductDNA, PlatformPost } from "../types";
 import {
   generateFieldSuggestions,
   generateCampaign,
   researchFocus,
-  regeneratePostWithFeedback,
   regenerateBlogCoverImage,
 } from "../services/geminiService";
 import {
@@ -243,10 +242,8 @@ export function Campaigns() {
 
   const [generateImages, setGenerateImages] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [modalStep, setModalStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
-  const [imageAspectRatio, setImageAspectRatio] = useState<
-    "1:1" | "9:16" | "4:5"
-  >("1:1");
+  // 1 = focus form, 4 = generating, 5 = review draft
+  const [modalStep, setModalStep] = useState<1 | 4 | 5>(1);
   const [fieldSuggestions, setFieldSuggestions] = useState<{
     industry: string[];
     subcategory: string[];
@@ -288,7 +285,6 @@ export function Campaigns() {
   const [draftCampaign, setDraftCampaign] = useState<WeeklyCampaign | null>(
     null,
   );
-  const [feedback, setFeedback] = useState("");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([
     "LinkedIn",
     "X",
@@ -301,8 +297,6 @@ export function Campaigns() {
   const [copied, setCopied] = useState(false);
   const [copiedState, setCopiedState] = useState<Record<string, boolean>>({});
   const [selectedStartDate, setSelectedStartDate] = useState<string>("");
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
-  const [shareDuration, setShareDuration] = useState<number | "">("");
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(
     null,
   );
@@ -582,13 +576,107 @@ export function Campaigns() {
     }, 2000);
   };
 
+  const [downloadingKeys, setDownloadingKeys] = useState<Record<string, boolean>>({});
+
+  const handleDownloadImageBlob = async (url: string, filename: string) => {
+    try {
+      if (url.startsWith("data:")) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch (e) {
+      console.warn("Direct blob download failed, falling back to direct link", e);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   const handleDownloadImage = (url: string, filename: string) => {
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    handleDownloadImageBlob(url, filename);
+  };
+
+  const handleDownloadVisualCard = async (
+    publishKey: string,
+    pv: any,
+    dp?: any,
+    fallbackFilename?: string
+  ) => {
+    setDownloadingKeys((prev) => ({ ...prev, [publishKey]: true }));
+    try {
+      const rawVisual = (pv as any)?.visualData || (typeof dp !== "undefined" ? dp?.visualData : undefined);
+      const visualData =
+        generatedVisualData[publishKey] ||
+        getVisualDataWithImages(rawVisual, campaignImages) ||
+        rawVisual;
+
+      const filename = fallbackFilename || `post_visual_${pv?.platform || 'card'}.png`;
+
+      // 1. FIRST Priority: If V3 visual template exists (renderedHtml / customHtml), render full 1080x1080 visual card
+      if (visualData?.renderedHtml || visualData?.customHtml) {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : "";
+        const res = await fetch("/api/render-visual", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            visualType: "custom-overlay",
+            visualData: {
+              ...visualData,
+              renderedHtml: visualData.renderedHtml || visualData.customHtml
+            },
+            imageUrl: visualData?.imageUrl || pv?.imageUrl || dp?.imageUrl || "",
+            dna: activeProduct,
+            fallbackText: activeProduct?.name || "",
+          }),
+        });
+        const data = await res.json();
+        if (data.url) {
+          await handleDownloadImageBlob(data.url, filename);
+          return;
+        }
+      }
+
+      // 2. Second Priority: Pre-rendered flattened image URL or image asset
+      const existingUrl =
+        generatedVisuals[publishKey] ||
+        pv?.imageUrl ||
+        (pv?.imageId ? campaignImages[pv.imageId] : undefined) ||
+        (dp?.imageUrl) ||
+        (dp?.imageId ? campaignImages[dp.imageId] : undefined);
+
+      if (existingUrl) {
+        await handleDownloadImageBlob(existingUrl, filename);
+      } else {
+        alert("No visual asset found to download.");
+      }
+    } catch (err: any) {
+      console.error("Failed to download visual card:", err);
+      alert("Download failed. Please try again.");
+    } finally {
+      setDownloadingKeys((prev) => ({ ...prev, [publishKey]: false }));
+    }
   };
 
   // Derived state for all unique tags
@@ -693,23 +781,15 @@ export function Campaigns() {
     setIsSharing(true);
     try {
       const isNowShared = !selectedCampaign.isShared;
-      const updatedCampaign = {
+      const updatedCampaign: WeeklyCampaign = {
         ...selectedCampaign,
         isShared: isNowShared,
+        sharedAt: isNowShared ? (selectedCampaign.sharedAt || new Date().toISOString()) : undefined
       };
+      delete (updatedCampaign as any).feedbackExpiresAt;
+      delete (updatedCampaign as any).feedbackProcessed;
 
-      if (isNowShared) {
-        updatedCampaign.sharedAt =
-          selectedCampaign.sharedAt || new Date().toISOString();
-        const expires = new Date(updatedCampaign.sharedAt);
-        expires.setMinutes(expires.getMinutes() + Number(shareDuration));
-        updatedCampaign.feedbackExpiresAt = expires.toISOString();
-      } else {
-        delete updatedCampaign.sharedAt;
-        delete updatedCampaign.feedbackExpiresAt;
-      }
-
-      // Remove any other undefined fields to prevent Firestore errors
+      // Remove any undefined fields to prevent Firestore errors
       Object.keys(updatedCampaign).forEach((key) => {
         if (
           updatedCampaign[key as keyof typeof updatedCampaign] === undefined
@@ -748,140 +828,44 @@ export function Campaigns() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleEmailLink = () => {
-    if (!selectedCampaign) return;
-    const subject = encodeURIComponent(
-      `Review Campaign: ${selectedCampaign.theme}`,
-    );
-    const body = encodeURIComponent(
-      `I'd like you to review this campaign:\n\n${selectedCampaign.theme}\n\nView it here: ${shareUrl}`,
-    );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  };
+  const handleEmailLink = async () => {
+    if (!selectedCampaign || !activeProduct) return;
+    try {
+      // 1. Generate & download the campaign PDF report
+      const { generateCampaignPDF } = await import("../lib/pdfGenerator");
+      const pdf = await generateCampaignPDF(
+        selectedCampaign,
+        activeProduct!
+      );
+      const filename = `${(selectedCampaign.theme || "campaign").replace(/[^a-z0-9]/gi, "_").toLowerCase()}_report.pdf`;
+      pdf.save(filename);
 
-  // Auto-process feedbacks when timer expires
-  useEffect(() => {
-    if (
-      !selectedCampaign ||
-      !selectedCampaign.isShared ||
-      !selectedCampaign.feedbackExpiresAt ||
-      selectedCampaign.feedbackProcessed
-    )
-      return;
+      // 2. Draft email subject and body
+      const subject = encodeURIComponent(
+        `Campaign Overview: ${selectedCampaign.theme || 'BrandToPost Campaign'}`
+      );
+      const body = encodeURIComponent(
+        `Hi,\n\nI wanted to share the latest marketing campaign created for ${activeProduct.name}:\n\n` +
+        `📌 Theme: ${selectedCampaign.theme || 'N/A'}\n` +
+        `🎯 Core Message: ${selectedCampaign.coreMessage || 'N/A'}\n` +
+        `🔗 View Online Campaign: ${shareUrl}\n\n` +
+        `📎 Note: The complete PDF Campaign Report (${filename}) has been generated and downloaded to your computer so you can easily attach it to this email!\n\n` +
+        `Best regards,`
+      );
 
-    const checkExpiration = async () => {
-      const expiresAt = new Date(selectedCampaign.feedbackExpiresAt!).getTime();
-      const now = new Date().getTime();
-
-      if (now > expiresAt && !isGenerating) {
-        setIsGenerating(true);
-        try {
-          if (feedbacks.length === 0) {
-            // No feedbacks to process, just mark as processed
-            const updatedCampaign = {
-              ...selectedCampaign,
-              feedbackProcessed: true,
-            };
-            await setDoc(
-              doc(db, "campaigns", selectedCampaign.id),
-              updatedCampaign,
-            );
-            setSelectedCampaign(updatedCampaign);
-            setCampaigns((prev) =>
-              prev.map((c) =>
-                c.id === updatedCampaign.id ? updatedCampaign : c,
-              ),
-            );
-            return;
-          }
-
-          // Group feedbacks by postId
-          const feedbacksByPost: Record<string, string[]> = {};
-          feedbacks.forEach((f) => {
-            if (!feedbacksByPost[f.postId]) feedbacksByPost[f.postId] = [];
-            feedbacksByPost[f.postId].push(`${f.reviewerName}: ${f.content}`);
-          });
-
-          // Deep copy the campaign
-          const updatedCampaign = JSON.parse(
-            JSON.stringify(selectedCampaign),
-          ) as WeeklyCampaign;
-
-          // Process daily posts
-          if (updatedCampaign.dailyPosts) {
-            for (
-              let dIdx = 0;
-              dIdx < updatedCampaign.dailyPosts.length;
-              dIdx++
-            ) {
-              const day = updatedCampaign.dailyPosts[dIdx];
-              for (let pIdx = 0; pIdx < day.platformVersions.length; pIdx++) {
-                const post = day.platformVersions[pIdx];
-                const postId = `daily-${dIdx}-${pIdx}`;
-                if (feedbacksByPost[postId]) {
-                  const newCopy = await regeneratePostWithFeedback(
-                    post.copy,
-                    feedbacksByPost[postId],
-                    updatedCampaign.theme,
-                    updatedCampaign.coreMessage,
-                    user?.uid,
-                  );
-                  post.copy = newCopy;
-                  post.improvedViaFeedback = true;
-                }
-              }
-            }
-          }
-
-          // Process platform versions (legacy/fallback)
-          if (updatedCampaign.platformVersions) {
-            for (
-              let pIdx = 0;
-              pIdx < updatedCampaign.platformVersions.length;
-              pIdx++
-            ) {
-              const post = updatedCampaign.platformVersions[pIdx];
-              const postId = `platform-${pIdx}`;
-              if (feedbacksByPost[postId]) {
-                const newCopy = await regeneratePostWithFeedback(
-                  post.copy,
-                  feedbacksByPost[postId],
-                  updatedCampaign.theme,
-                  updatedCampaign.coreMessage,
-                  user?.uid,
-                );
-                post.copy = newCopy;
-                post.improvedViaFeedback = true;
-              }
-            }
-          }
-
-          updatedCampaign.feedbackProcessed = true;
-          await setDoc(
-            doc(db, "campaigns", selectedCampaign.id),
-            updatedCampaign,
-          );
-          setSelectedCampaign(updatedCampaign);
-          setCampaigns((prev) =>
-            prev.map((c) =>
-              c.id === updatedCampaign.id ? updatedCampaign : c,
-            ),
-          );
-        } catch (err) {
-          logSilentError(err as Error, {
-            context: "autoProcessFeedbacks",
-            campaignId: selectedCampaign.id,
-          });
-        } finally {
-          setIsGenerating(false);
-        }
+      // 3. Open Gmail compose window in a new tab (or fallback to mailto:)
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=${subject}&body=${body}`;
+      const win = window.open(gmailUrl, "_blank");
+      if (!win) {
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
       }
-    };
-
-    checkExpiration();
-    const interval = setInterval(checkExpiration, 60000); // Check every minute
-    return () => clearInterval(interval);
-  }, [selectedCampaign, feedbacks, isGenerating, user]);
+    } catch (err) {
+      logSilentError(err as Error, {
+        context: "handleEmailLink",
+        campaignId: selectedCampaign.id,
+      });
+    }
+  };
 
   // Cleaned up redundant network fetching on mount to allow 0ms page rendering transition
 
@@ -1026,35 +1010,6 @@ export function Campaigns() {
     };
 
     fetchImages();
-
-    // Listen to feedbacks
-    const feedbacksRef = collection(
-      db,
-      `campaigns/${selectedCampaign.id}/feedbacks`,
-    );
-    const unsubscribeFeedbacks = onSnapshot(
-      feedbacksRef,
-      (snapshot) => {
-        const newFeedbacks: Feedback[] = [];
-        snapshot.forEach((doc) => {
-          newFeedbacks.push({ id: doc.id, ...doc.data() } as Feedback);
-        });
-        // Sort by timestamp
-        newFeedbacks.sort(
-          (a, b) =>
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-        );
-        setFeedbacks(newFeedbacks);
-      },
-      (err) => {
-        logSilentError(err as Error, {
-          context: "fetchCampaignFeedbacks",
-          campaignId: selectedCampaign.id,
-        });
-      },
-    );
-
-    return () => unsubscribeFeedbacks();
   }, [selectedCampaign?.id, user]);
 
   const handleStartGeneration = () => {
@@ -1068,18 +1023,9 @@ export function Campaigns() {
     setFocus("");
     setInsights([]);
     setDraftCampaign(null);
-    setFeedback("");
     setSelectedStartDate(formatDate(nextMonday));
     setModalStep(1);
     setShowModal(true);
-  };
-
-  const handleProceedToNextStep = () => {
-    if (generateImages) {
-      setModalStep(2);
-    } else {
-      handleResearchFocus();
-    }
   };
 
   const handleResearchFocus = async () => {
@@ -1132,13 +1078,10 @@ export function Campaigns() {
         finalFocus,
         result,
         generateImages,
-        undefined,
-        undefined,
         selectedChannels,
         campaignTheme,
         subCategory,
         user?.uid,
-        imageAspectRatio,
         (step, total, msg) => {
           setGenerationStep(step + 1);
           setGenerationTotal(total + 1);
@@ -1181,9 +1124,30 @@ export function Campaigns() {
         campaignThemeInput: campaignTheme,
       };
 
+      // Save directly to Firestore for direct presentation (No approval step friction)
+      if (user && db) {
+        try {
+          const campaignToSave = JSON.parse(
+            JSON.stringify({
+              ...newCampaign,
+              userId: user.uid,
+              productName: activeProduct!.name,
+              productLogoUrl:
+                activeProduct!.logoUrl ||
+                activeProduct!.logoDarkUrl ||
+                activeProduct!.logoLightUrl ||
+                null,
+            })
+          );
+          await setDoc(doc(db, "campaigns", newCampaign.id), campaignToSave);
+        } catch (fsErr) {
+          logSilentError(fsErr as Error, { context: "directSaveCampaign" });
+        }
+      }
+
       playSuccessChime();
-      setDraftCampaign(newCampaign);
-      setModalStep(5);
+      setSelectedCampaign(newCampaign);
+      setShowModal(false);
     } catch (err: any) {
       logSilentError(err as Error, { context: "handleResearchFocus" });
       setError(err.message || "Failed to generate campaign. Please try again.");
@@ -1193,101 +1157,6 @@ export function Campaigns() {
     }
   };
 
-  const handleGenerate = async (isRegenerating = false) => {
-    setModalStep(4);
-    setIsGenerating(true);
-    setError(null);
-    setGenerationStep(1);
-    setGenerationStatus(
-      isRegenerating
-        ? "Tror is analyzing your feedback..."
-        : "Tror is reviewing your Brand DNA...",
-    );
-
-    // Extract recent layout history from existing campaigns of this product to rotation-safeguard
-    const recentLayoutHistory: string[] = [];
-    if (campaigns) {
-      const productCampaigns = campaigns
-        .filter((c: any) => c.productId === activeProduct?.id)
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-      for (const camp of productCampaigns) {
-        if (camp.dailyPosts) {
-          for (const dp of camp.dailyPosts) {
-            const lid = dp.layoutId || dp.visualData?.layoutId || dp.visualData?.layout?.layoutId;
-            if (lid) recentLayoutHistory.push(lid);
-          }
-        }
-        if (recentLayoutHistory.length >= 12) break;
-      }
-    }
-
-    try {
-      const newCampaignData = await generateCampaign(
-        activeProduct!,
-        focus,
-        insights,
-        generateImages,
-        isRegenerating ? feedback : undefined,
-        isRegenerating && draftCampaign ? draftCampaign : undefined,
-        selectedChannels,
-        campaignTheme,
-        subCategory,
-        user?.uid,
-        imageAspectRatio,
-        (step, total, msg) => {
-          setGenerationStep(step);
-          setGenerationTotal(total);
-          setGenerationStatus(msg);
-        },
-        undefined,
-        recentLayoutHistory
-      );
-
-      const dayOffsets: Record<string, number> = {
-        Monday: 0,
-        Tuesday: 1,
-        Wednesday: 2,
-        Thursday: 3,
-        Friday: 4,
-        Saturday: 5,
-        Sunday: 6,
-      };
-
-      if (newCampaignData.dailyPosts) {
-        newCampaignData.dailyPosts = newCampaignData.dailyPosts.map((dp) => {
-          const offset = dayOffsets[dp.day] || 0;
-          const postDate = new Date(selectedStartDate + "T12:00:00Z");
-          postDate.setDate(postDate.getDate() + offset);
-          return { ...dp, date: formatDate(postDate) };
-        });
-      }
-
-      const newCampaign: WeeklyCampaign = {
-        ...newCampaignData,
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : Math.random().toString(36).substring(2) + Date.now().toString(36),
-        productId: activeProduct!.id,
-        createdAt: new Date().toISOString(),
-        startDate: selectedStartDate,
-        focus: focus,
-        subCategory: subCategory,
-        campaignThemeInput: campaignTheme,
-      };
-
-      playSuccessChime();
-      setDraftCampaign(newCampaign);
-      setModalStep(5);
-    } catch (err: any) {
-      logSilentError(err as Error, { context: "handleGenerateCampaign" });
-      setError(err.message || "Failed to generate campaign. Please try again.");
-      setModalStep(isRegenerating ? 6 : 1);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   const handleApprove = async () => {
     if (!draftCampaign || !user || isApproving) return;
@@ -1497,6 +1366,40 @@ export function Campaigns() {
                 pv.imageUrl || (pv.imageId ? newCampaignImages[pv.imageId] : undefined),
               );
             }
+          }
+
+          // Trigger Interactive Email Approval for the Campaign / Blog / Post
+          try {
+            const token = await auth.currentUser?.getIdToken();
+            const itemType = campaignToSave.isBlog ? 'blog' : (campaignToSave.isOneDay ? 'post' : 'campaign');
+            const itemTitle = campaignToSave.blogTitle || campaignToSave.theme || "Generated Campaign";
+            const itemPreview = campaignToSave.blogContent || campaignToSave.coreMessage || campaignToSave.hook || "";
+
+            const approvalRes = await fetch("/api/approval/trigger", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({
+                productId: activeProduct!.id,
+                productName: activeProduct!.name,
+                itemType,
+                itemTitle,
+                itemPreview,
+                itemData: campaignToSave,
+              }),
+            });
+            if (approvalRes.ok) {
+              const apprData = await approvalRes.json();
+              if (apprData.approvedInstantly) {
+                console.log("Content approved & published instantly based on product settings.");
+              } else {
+                console.log("Approval email sent to user. Waiting for approval or 12h timeout.");
+              }
+            }
+          } catch (apprErr) {
+            console.warn("Failed to trigger email approval request:", apprErr);
           }
 
           // Send PDF to email
@@ -2925,25 +2828,22 @@ export function Campaigns() {
                                             campaignImages[dp.imageId])) && (
                                           <button
                                             onClick={() =>
-                                              handleDownloadImage(
-                                                generatedVisuals[publishKey] ||
-                                                  pv.imageUrl ||
-                                                  (pv.imageId
-                                                    ? campaignImages[pv.imageId]
-                                                    : typeof dp !==
-                                                          "undefined" &&
-                                                        dp.imageId
-                                                      ? campaignImages[
-                                                          dp.imageId
-                                                        ]
-                                                      : ""),
-                                                `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${pv.platform}.png`,
+                                              handleDownloadVisualCard(
+                                                publishKey,
+                                                pv,
+                                                dp,
+                                                `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${pv.platform}.png`
                                               )
                                             }
+                                            disabled={downloadingKeys[publishKey]}
                                             className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-sm shrink-0"
-                                            title="Download image"
+                                            title="Download 1080x1080 visual graphic"
                                           >
-                                            <Download className="h-3.5 w-3.5" />
+                                            {downloadingKeys[publishKey] ? (
+                                              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-600" />
+                                            ) : (
+                                              <Download className="h-3.5 w-3.5" />
+                                            )}
                                           </button>
                                         )}
                                       </div>
@@ -3000,52 +2900,6 @@ export function Campaigns() {
                                           )
                                         }
                                       />
-
-                                      {feedbacks.filter(
-                                        (f) =>
-                                          f.postId === `daily-${dayIdx}-${idx}`,
-                                      ).length > 0 && (
-                                        <div className="w-full mt-6 pt-4 border-t border-[#7C3AED]/20/50">
-                                          <h5 className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
-                                            <MessageSquare className="h-3.5 w-3.5" />
-                                            Feedback Received
-                                          </h5>
-                                          <div className="space-y-2">
-                                            {feedbacks
-                                              .filter(
-                                                (f) =>
-                                                  f.postId ===
-                                                  `daily-${dayIdx}-${idx}`,
-                                              )
-                                              .map((feedback) => (
-                                                <div
-                                                  key={feedback.id}
-                                                  className="bg-[#1C1C22]/50 border-[#7C3AED]/20 rounded p-2.5 text-xs border border-[#7C3AED]/20"
-                                                >
-                                                  <div className="flex items-center justify-between mb-1">
-                                                    <span className="font-medium text-white">
-                                                      {feedback.reviewerName}
-                                                    </span>
-                                                    <span className="text-gray-400">
-                                                      {new Date(
-                                                        feedback.timestamp,
-                                                      ).toLocaleDateString(
-                                                        undefined,
-                                                        {
-                                                          month: "short",
-                                                          day: "numeric",
-                                                        },
-                                                      )}
-                                                    </span>
-                                                  </div>
-                                                  <p className="text-gray-300 whitespace-pre-wrap">
-                                                    {feedback.content}
-                                                  </p>
-                                                </div>
-                                              ))}
-                                          </div>
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
                                 );
@@ -3063,6 +2917,7 @@ export function Campaigns() {
                             platformFilter.toLowerCase(),
                       )
                       .map((pv, idx) => {
+                        const matchingDp = selectedCampaign.dailyPosts ? selectedCampaign.dailyPosts[idx % selectedCampaign.dailyPosts.length] : undefined;
                         const isLinkedin =
                           pv.platform.toLowerCase() === "linkedin";
                         const publishKey = `${selectedCampaign.id}-${pv.platform}`;
@@ -3232,10 +3087,10 @@ export function Campaigns() {
                                   generatedVisuals[publishKey]) && (
                                   <button
                                     onClick={() =>
-                                      handleDownloadImage(
-                                        generatedVisuals[publishKey] ||
-                                          pv.imageUrl ||
-                                          campaignImages[pv.imageId!],
+                                      handleDownloadVisualCard(
+                                        publishKey,
+                                        pv,
+                                        matchingDp,
                                         `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${pv.platform}.png`,
                                       )
                                     }
@@ -3257,18 +3112,19 @@ export function Campaigns() {
                                   pv.imageUrl ||
                                   (pv.imageId
                                     ? campaignImages[pv.imageId]
-                                    : undefined)
+                                    : matchingDp?.imageUrl ||
+                                      (matchingDp?.imageId ? campaignImages[matchingDp.imageId] : undefined))
                                 }
-                                visualType={(pv as any).visualType}
+                                visualType={(pv as any).visualType || matchingDp?.visualType}
                                 visualData={
                                   generatedVisualData[publishKey] ||
                                   getVisualDataWithImages(
-                                    (pv as any).visualData,
+                                    (pv as any).visualData || matchingDp?.visualData,
                                     campaignImages,
                                   )
                                 }
                                 dna={activeProduct!}
-                                isLoadingVisual={isFetchingImages && !(generatedVisuals[publishKey] || pv.imageUrl || (pv.imageId ? campaignImages[pv.imageId] : undefined))}
+                                isLoadingVisual={isFetchingImages && !(generatedVisuals[publishKey] || pv.imageUrl || matchingDp?.imageUrl || (pv.imageId ? campaignImages[pv.imageId] : undefined))}
                                 productName={activeProduct?.name || ""}
                                 productLogo={activeProduct?.logoUrl || ""}
                                 isFlattened={(pv as any).isFlattened}
@@ -3283,46 +3139,6 @@ export function Campaigns() {
                                   )
                                 }
                               />
-
-                              {feedbacks.filter(
-                                (f) => f.postId === `platform-${idx}`,
-                              ).length > 0 && (
-                                <div className="w-full mt-6 pt-4 border-t border-[#7C3AED]/20/50">
-                                  <h5 className="text-xs font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
-                                    <MessageSquare className="h-3.5 w-3.5" />
-                                    Feedback Received
-                                  </h5>
-                                  <div className="space-y-2">
-                                    {feedbacks
-                                      .filter(
-                                        (f) => f.postId === `platform-${idx}`,
-                                      )
-                                      .map((feedback) => (
-                                        <div
-                                          key={feedback.id}
-                                          className="bg-[#1C1C22]/50 border-[#7C3AED]/20 rounded p-2.5 text-xs border border-[#7C3AED]/20"
-                                        >
-                                          <div className="flex items-center justify-between mb-1">
-                                            <span className="font-medium text-white">
-                                              {feedback.reviewerName}
-                                            </span>
-                                            <span className="text-gray-400">
-                                              {new Date(
-                                                feedback.timestamp,
-                                              ).toLocaleDateString(undefined, {
-                                                month: "short",
-                                                day: "numeric",
-                                              })}
-                                            </span>
-                                          </div>
-                                          <p className="text-gray-300 whitespace-pre-wrap">
-                                            {feedback.content}
-                                          </p>
-                                        </div>
-                                      ))}
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           </div>
                         );
@@ -3345,10 +3161,8 @@ export function Campaigns() {
                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
                 <h2 className="text-lg font-bold text-slate-800 font-display">
                   {modalStep === 1 && "Campaign Focus"}
-                  {modalStep === 2 && "Image Settings"}
                   {modalStep === 4 && "Campaign Boardroom"}
                   {modalStep === 5 && "Review Campaign"}
-                  {modalStep === 6 && "Improve Campaign"}
                 </h2>
                 <button
                   onClick={() => setShowModal(false)}
@@ -3668,92 +3482,6 @@ export function Campaigns() {
                       </p>
                     </div>
                   </div>
-                )}                 {modalStep === 2 && (
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="block text-base font-bold text-slate-800 font-display">
-                        Choose Image Formats
-                      </label>
-                      <p className="text-xs text-slate-500 font-light">
-                        Select the aspect ratio for the generated images.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {[
-                        {
-                          id: "1:1",
-                          label: "Square",
-                          ratio: "1:1",
-                          desc: "Best for Instagram / LinkedIn Feed",
-                          mockupClass: "aspect-square",
-                        },
-                        {
-                          id: "4:5",
-                          label: "Portrait",
-                          ratio: "4:5",
-                          desc: "Best for Instagram / Facebook Feed",
-                          mockupClass: "aspect-[4/5]",
-                        },
-                        {
-                          id: "9:16",
-                          label: "Story",
-                          ratio: "9:16",
-                          desc: "Best for Stories / Reels / TikTok",
-                          mockupClass: "aspect-[9/16]",
-                        },
-                      ].map((option) => (
-                        <label
-                          key={option.id}
-                          className={cn(
-                            "relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all",
-                            imageAspectRatio === option.id
-                              ? "border-[#7C3AED] bg-[#7C3AED]/5 shadow-sm"
-                              : "border-slate-200 bg-white hover:border-[#7C3AED]/30",
-                          )}
-                        >
-                          <div className="flex items-start justify-between mb-3">
-                            <span
-                              className={cn(
-                                "text-base font-bold",
-                                imageAspectRatio === option.id
-                                  ? "text-[#7C3AED]"
-                                  : "text-slate-700",
-                              )}
-                            >
-                              {option.label}
-                            </span>
-                            <input
-                              type="radio"
-                              name="aspectRatio"
-                              value={option.id}
-                              checked={imageAspectRatio === option.id}
-                              onChange={(e) =>
-                                setImageAspectRatio(e.target.value as any)
-                              }
-                              className="text-[#7C3AED] focus:ring-[#7C3AED] h-4 w-4 mt-0.5"
-                            />
-                          </div>
-                          <div className="flex-1 flex flex-col items-center justify-center py-4">
-                            <div
-                              className={cn(
-                                "w-16 border-2 border-dashed rounded-md flex items-center justify-center font-mono text-xs",
-                                option.mockupClass,
-                                imageAspectRatio === option.id
-                                  ? "border-[#7C3AED]/40 bg-[#7C3AED]/10 text-[#7C3AED]"
-                                  : "border-slate-200 bg-slate-50 text-slate-500",
-                              )}
-                            >
-                              {option.ratio}
-                            </div>
-                          </div>
-                          <span className="text-xs text-slate-500 font-light text-center mt-2 leading-relaxed">
-                            {option.desc}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
                 )}
 
                 {modalStep === 4 && (
@@ -3956,24 +3684,6 @@ export function Campaigns() {
                     </div>
                   </div>
                 )}
-
-                {modalStep === 6 && (
-                  <div className="space-y-4">
-                    <label className="block text-base font-bold text-slate-800 font-display">
-                      What would you like to improve?
-                    </label>
-                    <p className="text-xs text-slate-500 font-light">
-                      Provide specific feedback to guide the regeneration.
-                    </p>
-                    <textarea
-                      value={feedback}
-                      onChange={(e) => setFeedback(e.target.value)}
-                      placeholder="e.g., Make the tone more professional, focus more on feature X..."
-                      rows={4}
-                      className="glass-input block w-full py-3 px-4 bg-white border border-slate-200 text-slate-800 placeholder:text-slate-400 sm:text-sm rounded-xl outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20 shadow-sm"
-                    />
-                  </div>
-                )}
               </div>
 
               <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
@@ -3985,70 +3695,28 @@ export function Campaigns() {
                 </button>
                 {modalStep === 1 && (
                   <button
-                    onClick={handleProceedToNextStep}
+                    onClick={handleResearchFocus}
                     disabled={selectedChannels.length === 0}
                     className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl px-6 py-2.5 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shadow-md shadow-[#7C3AED]/10 hover:shadow-[#7C3AED]/20 transition-all active:scale-[0.98]"
                   >
-                    {generateImages ? "Next step" : "Generate Campaign"}{" "}
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    Generate Campaign <ArrowRight className="ml-2 h-4 w-4" />
                   </button>
                 )}
-                {modalStep === 2 && (
-                  <>
-                    <button
-                      onClick={() => setModalStep(1)}
-                      className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100/60 rounded-xl transition-all"
-                    >
-                      Back
-                    </button>
-                    <button
-                      onClick={handleResearchFocus}
-                      className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl px-6 py-2.5 text-sm font-semibold inline-flex items-center justify-center shadow-md shadow-[#7C3AED]/10 hover:shadow-[#7C3AED]/20 transition-all active:scale-[0.98]"
-                    >
-                      Generate Campaign <ArrowRight className="ml-2 h-4 w-4" />
-                    </button>
-                  </>
-                )}
                 {modalStep === 5 && (
-                  <>
-                    <button
-                      onClick={() => setModalStep(6)}
-                      disabled={isApproving}
-                      className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50/60 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Reject & Improve
-                    </button>
-                    <button
-                      onClick={handleApprove}
-                      disabled={isApproving}
-                      className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl px-6 py-2.5 text-sm font-semibold inline-flex items-center justify-center shadow-md shadow-[#7C3AED]/10 hover:shadow-[#7C3AED]/20 transition-all active:scale-[0.98] disabled:opacity-75 disabled:cursor-not-allowed"
-                    >
-                      {isApproving ? (
-                        <>
-                          <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                          Approving...
-                        </>
-                      ) : (
-                        "Approve & Schedule"
-                      )}
-                    </button>
-                  </>
-                )}
-                {modalStep === 6 && (
-                   <>
-                    <button
-                      onClick={() => setModalStep(5)}
-                      className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100/60 rounded-xl transition-all"
-                    >
-                      Back to Review
-                    </button>
-                    <button
-                      onClick={() => handleGenerate(true)}
-                      className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl px-6 py-2.5 text-sm font-semibold inline-flex items-center justify-center shadow-md shadow-[#7C3AED]/10 hover:shadow-[#7C3AED]/20 transition-all active:scale-[0.98]"
-                    >
-                      Regenerate
-                    </button>
-                  </>
+                  <button
+                    onClick={handleApprove}
+                    disabled={isApproving}
+                    className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl px-6 py-2.5 text-sm font-semibold inline-flex items-center justify-center shadow-md shadow-[#7C3AED]/10 hover:shadow-[#7C3AED]/20 transition-all active:scale-[0.98] disabled:opacity-75 disabled:cursor-not-allowed"
+                  >
+                    {isApproving ? (
+                      <>
+                        <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                        Approving...
+                      </>
+                    ) : (
+                      "Approve & Schedule"
+                    )}
+                  </button>
                 )}
               </div>
             </div>
@@ -4107,134 +3775,131 @@ export function Campaigns() {
       {isShareModalOpen &&
         selectedCampaign &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
-            <div className="bg-white max-w-md w-full overflow-hidden flex flex-col rounded-[22px] border border-slate-200/80 shadow-[0_20px_60px_rgba(15,23,42,0.15)] animate-in fade-in zoom-in-95 duration-200">
-              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 className="text-lg font-bold font-display text-slate-800 flex items-center gap-2">
-                  <Share2 className="h-5 w-5 text-[#7C3AED]" />
-                  Share Campaign
-                </h3>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
+            <div className="bg-white max-w-lg w-full overflow-hidden flex flex-col rounded-3xl border border-slate-200/80 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+              
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-[#7C3AED]/10 text-[#7C3AED] border border-[#7C3AED]/20">
+                    <Share2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold font-display text-slate-900">
+                      Share Campaign
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Export, generate public links, or email this campaign report
+                    </p>
+                  </div>
+                </div>
                 <button
                   onClick={() => setIsShareModalOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-full transition-colors"
+                  className="text-slate-400 hover:text-slate-700 p-2 hover:bg-slate-200/60 rounded-full transition-colors"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
-              <div className="p-6 space-y-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-700">
-                      Enable Public Link
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Anyone with the link can view this campaign.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleToggleShare}
-                    disabled={
-                      isSharing ||
-                      (!selectedCampaign.isShared && shareDuration === "")
-                    }
-                    className={cn(
-                      "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#7C3AED] focus:ring-offset-2",
-                      selectedCampaign.isShared
-                        ? "bg-[#7C3AED]"
-                        : "bg-slate-200",
-                      (isSharing ||
-                        (!selectedCampaign.isShared && shareDuration === "")) &&
-                        "opacity-50 cursor-not-allowed",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                        selectedCampaign.isShared
-                          ? "translate-x-5"
-                          : "translate-x-0",
-                      )}
-                    />
-                  </button>
-                </div>
 
-                {!selectedCampaign.isShared && (
-                  <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-                      Feedback Window Duration
-                    </label>
-                    <select
-                      value={shareDuration}
-                      onChange={(e) =>
-                        setShareDuration(
-                          e.target.value === "" ? "" : Number(e.target.value),
-                        )
-                      }
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-[#7C3AED] shadow-sm font-semibold"
-                    >
-                      <option value="" disabled>
-                        Select duration...
-                      </option>
-                      <option value={10}>10 Minutes (Testing)</option>
-                      <option value={1440}>1 Day</option>
-                      <option value={4320}>3 Days</option>
-                      <option value={10080}>7 Days</option>
-                      <option value={20160}>14 Days</option>
-                    </select>
-                    <p className="text-[10px] text-slate-400">
-                      Reviewers can leave feedback until this window closes.
-                    </p>
-                  </div>
-                )}
-
-                {selectedCampaign.isShared && (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex items-start gap-2.5">
-                      <Clock className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-bold text-orange-700">
-                          Feedback Window Active
-                        </p>
-                        <p className="text-[10px] text-orange-600/80 mt-0.5 font-medium">
-                          {selectedCampaign.feedbackExpiresAt
-                            ? `Closes on ${new Date(selectedCampaign.feedbackExpiresAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
-                            : `Closes 3 days after sharing`}
-                        </p>
+              {/* Content */}
+              <div className="p-6 space-y-6">
+                
+                {/* Public Link Toggle Card */}
+                <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Enable Public Share Link
+                        </h4>
+                        {selectedCampaign.isShared && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Live
+                          </span>
+                        )}
                       </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Allow anyone with the unique link to view this campaign.
+                      </p>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-                        Public Link
+                    <button
+                      onClick={handleToggleShare}
+                      disabled={isSharing}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#7C3AED]",
+                        selectedCampaign.isShared ? "bg-[#7C3AED]" : "bg-slate-300",
+                        isSharing && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out",
+                          selectedCampaign.isShared ? "translate-x-5" : "translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Share Link Field when active */}
+                  {selectedCampaign.isShared && (
+                    <div className="space-y-1.5 pt-3 border-t border-slate-200/60 animate-in fade-in duration-200">
+                      <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
+                        Public Access URL
                       </label>
                       <div className="flex gap-2">
                         <input
                           type="text"
                           readOnly
                           value={shareUrl}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-sm text-slate-600 outline-none font-mono"
+                          className="flex-1 bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-700 outline-none font-mono selection:bg-[#7C3AED]/20 shadow-inner"
                         />
                         <button
                           onClick={handleCopyLink}
-                          className="inline-flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-3.5 py-2 transition-colors shadow-sm"
+                          className="inline-flex items-center justify-center rounded-xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 px-4 py-2 text-xs font-semibold transition-all shadow-sm active:scale-95 cursor-pointer gap-1.5"
                           title="Copy link"
                         >
                           {copied ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 animate-in zoom-in-50" />
+                            <>
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                              <span>Copied!</span>
+                            </>
                           ) : (
-                            <Copy className="h-4 w-4" />
+                            <>
+                              <Copy className="h-3.5 w-3.5" />
+                              <span>Copy</span>
+                            </>
                           )}
                         </button>
                       </div>
                     </div>
-                    <button
-                      onClick={handleEmailLink}
-                      className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl px-6 py-3 text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 shadow-md shadow-[#7C3AED]/15 hover:shadow-[#7C3AED]/25"
-                    >
-                      <Mail className="h-4 w-4" />
-                      Share via Email
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                {/* Sharing Options Action Bar */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={handleEmailLink}
+                    className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-2xl px-4 py-3.5 text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md shadow-[#7C3AED]/15 hover:shadow-[#7C3AED]/25 active:scale-95 cursor-pointer"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Share via Email (Draft & PDF)
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      if (!selectedCampaign || !activeProduct) return;
+                      const { generateCampaignPDF } = await import("../lib/pdfGenerator");
+                      const pdf = await generateCampaignPDF(selectedCampaign, activeProduct);
+                      pdf.save(`${(selectedCampaign.theme || "campaign").replace(/[^a-z0-9]/gi, "_").toLowerCase()}_report.pdf`);
+                    }}
+                    className="w-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-2xl px-4 py-3.5 text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 cursor-pointer"
+                  >
+                    <Download className="h-4 w-4 text-slate-600" />
+                    Download PDF Report
+                  </button>
+                </div>
+
               </div>
             </div>
           </div>,

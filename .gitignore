@@ -10,3 +10,14 @@ coverage/
 .cache/
 scripts/*.json
 .htaccess
+
+# Generated output templates & temporary test files
+output_templates/*.html
+scratch-sanitize-check.ts
+public/whatsapp_images/*.png
+
+# Markdown research & prompt files
+docs/weekly-campaign-*.md
+public/gemini-*.md
+
+

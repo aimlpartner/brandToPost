@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { X, ArrowRight, MessageSquare, Loader2, Zap, CheckCircle2 } from 'lucide-react';
+import { X, ArrowRight, MessageSquare, Loader2, Zap, CheckCircle2, Crown } from 'lucide-react';
 
 export function PublicLayout({ children, transparentNavbar = false }: { children: React.ReactNode; transparentNavbar?: boolean }) {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isDarkNavbar, setIsDarkNavbar] = useState(!transparentNavbar ? false : true);
   const [whatsappUrl, setWhatsappUrl] = useState("/whatsapp/login");
   const [isDefaultWhatsAppUrl, setIsDefaultWhatsAppUrl] = useState(true);
   const [showSetupModal, setShowSetupModal] = useState(false);
@@ -15,8 +16,22 @@ export function PublicLayout({ children, transparentNavbar = false }: { children
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 30);
+
+      const navCheckY = 60;
+      const sections = document.querySelectorAll('[data-nav-theme]');
+      let foundTheme = transparentNavbar ? 'dark' : 'light';
+
+      sections.forEach((sec) => {
+        const rect = sec.getBoundingClientRect();
+        if (rect.top <= navCheckY && rect.bottom >= navCheckY) {
+          foundTheme = sec.getAttribute('data-nav-theme') || foundTheme;
+        }
+      });
+
+      setIsDarkNavbar(foundTheme === 'dark');
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
     
     fetch('/api/whatsapp/public-link')
       .then(res => res.json())
@@ -27,7 +42,7 @@ export function PublicLayout({ children, transparentNavbar = false }: { children
       .catch(err => console.error("Failed to load WhatsApp link", err));
 
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [transparentNavbar]);
 
   const handleQuickSetupInput = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,12 +85,12 @@ export function PublicLayout({ children, transparentNavbar = false }: { children
   };
 
   const navbarBgClass = isScrolled
-    ? 'bg-transparent border-b border-slate-900/10 py-3.5 backdrop-blur-md shadow-sm'
+    ? (isDarkNavbar 
+        ? 'bg-transparent border-b border-white/10 py-3.5 backdrop-blur-md text-white'
+        : 'bg-transparent border-b border-slate-900/10 py-3.5 backdrop-blur-md text-slate-900')
     : transparentNavbar
-      ? 'bg-transparent py-5 border-b border-transparent'
-      : 'bg-[#FAF9F6] py-5 border-b border-transparent';
-
-  const isLight = isScrolled || !transparentNavbar;
+      ? 'bg-transparent py-5 border-b border-transparent text-white'
+      : 'bg-[#FAF9F6] py-5 border-b border-transparent text-slate-800';
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-slate-800 font-sans selection:bg-[#7C3AED]/30 selection:text-[#7C3AED] overflow-x-hidden relative flex flex-col justify-between">
@@ -85,17 +100,26 @@ export function PublicLayout({ children, transparentNavbar = false }: { children
           <div className="flex justify-between items-center">
             <Link to="/" className="flex items-center gap-3 group shrink-0">
               <img src="/B2PLOGO.png" alt="Logo" className="w-8 h-8 object-contain" />
-              <span className={`text-xl tracking-tight font-display font-bold transition-colors duration-300 ${isLight ? 'text-slate-900' : 'text-white'}`}>BrandToPost</span>
+              <span className={`text-xl tracking-tight font-display font-bold transition-colors duration-300 ${isDarkNavbar ? 'text-white' : 'text-slate-900'}`}>BrandToPost</span>
             </Link>
             
-            <div className="flex items-center gap-4 sm:gap-6">
-              <Link to="/blog" className={`text-sm font-semibold transition-colors duration-300 ${isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-350 hover:text-white'}`}>Blog</Link>
-              <Link to="/whatsapp/login" className="text-sm font-semibold text-emerald-450 hover:text-emerald-350 transition-colors flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span> WhatsApp Bot
+            <div className="flex items-center gap-3 sm:gap-5">
+              {/* Clean Corporate Founder Mode Link */}
+              <Link 
+                to="/master-founder" 
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all shrink-0 ${
+                  isDarkNavbar 
+                    ? 'bg-white/5 border border-white/20 text-slate-200 hover:bg-white/10'
+                    : 'bg-slate-100 border border-slate-300 text-slate-900 hover:bg-slate-200'
+                }`}
+              >
+                <Crown className={`w-3.5 h-3.5 ${isDarkNavbar ? 'text-slate-300' : 'text-slate-700'}`} />
+                <span>Founder Mode</span>
               </Link>
-              <Link to="/login" className={`text-sm font-semibold transition-colors hidden md:block duration-300 ${isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-300 hover:text-white'}`}>Sign In</Link>
-              <Link to="/login?mode=signup" className="px-5 py-2.5 rounded-xl text-xs font-semibold tracking-wide uppercase transition-all hover:scale-105 active:scale-95 bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-md whitespace-nowrap">
-                Start Free Trial
+              <Link to="/blog" className={`text-sm font-semibold transition-colors duration-300 ${isDarkNavbar ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-950'}`}>Blog</Link>
+              <Link to="/login" className={`text-sm font-semibold transition-colors hidden md:block duration-300 ${isDarkNavbar ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-950'}`}>Sign In</Link>
+              <Link to="/login?mode=signup" className="px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-sm whitespace-nowrap">
+                Start free trial
               </Link>
             </div>
           </div>

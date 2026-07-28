@@ -90,7 +90,7 @@ export interface ProductDNA {
     contentPillars?: string[];
   };
 
-  // Founder Agent Automation
+  // Founder Agent Automation & Approval Settings
   automationAgentEnabled?: boolean;
   automateDailyPosts?: boolean;
   automateDailyBlogs?: boolean;
@@ -98,6 +98,8 @@ export interface ProductDNA {
   automationTimeUtc?: string;
   automationWeeklyDay?: string;
   automationLogs?: Array<{ timestamp: string, type: string, theme: string, focus: string, status: string }>;
+  requireEmailApproval?: boolean;
+  autoUploadDelayHours?: number;
 
   // Script Studio persistent configuration
   narrativeVibe?: string;
@@ -227,3 +229,21 @@ export interface Blog {
   targetAudience?: string;
   cta?: string;
 }
+
+export interface ApprovalRequest {
+  id: string;
+  token: string;
+  userId?: string;
+  productId: string;
+  productName?: string;
+  userEmail: string;
+  itemType: 'campaign' | 'post' | 'blog' | 'founder_post';
+  itemTitle: string;
+  itemPreview?: string;
+  itemData: any;
+  status: 'pending' | 'approved' | 'rejected' | 'auto_approved';
+  createdAt: string;
+  expiresAt: string;
+  processedAt?: string;
+}
+

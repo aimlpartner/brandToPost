@@ -4,6 +4,7 @@ import { X, Heart, MessageCircle, Share2, Repeat2, MoreHorizontal, ThumbsUp, Sen
 import { VisualEditorModal } from './VisualEditorModal';
 import { VisualEngine } from './VisualEngine';
 import { ProductDNA } from '../types';
+import { cn } from '../lib/utils';
 
 interface PostPreviewModalProps {
   platform: string;
@@ -23,8 +24,81 @@ interface PostPreviewModalProps {
   isFlattened?: boolean;
 }
 
+function enforceHtmlContrast(html: string): string {
+  if (!html) return '';
+
+  let sanitized = html;
+
+  // Detect if root container has dark background
+  const isDarkCanvas = /background(-color)?:\s*(#08080[cC]|#000000|#000\b|#0[fF]172[aA]|#111827|#090[aA]0[fF]|#1e293b|#0b0c10|#121212|#1a1a1a)/i.test(sanitized)
+    || !(/background(-color)?:\s*(#faf9f6|#ffffff|#fff\b|#f8fafc|#f1f5f9)/i.test(sanitized));
+
+  if (isDarkCanvas) {
+    // Canvas background is DARK -> Force all dark text to bright white & light slate
+    sanitized = sanitized.replace(/color:\s*#08080[cC]\b/gi, 'color: #FFFFFF');
+    sanitized = sanitized.replace(/color:\s*#000000\b/gi, 'color: #FFFFFF');
+    sanitized = sanitized.replace(/color:\s*#000\b/gi, 'color: #FFFFFF');
+    sanitized = sanitized.replace(/color:\s*#0[fF]172[aA]\b/gi, 'color: #FFFFFF');
+    sanitized = sanitized.replace(/color:\s*#1[eE]29[bB]3\b/gi, 'color: #FFFFFF');
+    sanitized = sanitized.replace(/color:\s*#1e293b\b/gi, 'color: #FFFFFF');
+    sanitized = sanitized.replace(/color:\s*#334155\b/gi, 'color: #CBD5E1');
+    sanitized = sanitized.replace(/color:\s*#475569\b/gi, 'color: #CBD5E1');
+    sanitized = sanitized.replace(/color:\s*rgba\(8,\s*8,\s*12/gi, 'color: rgba(255, 255, 255');
+    sanitized = sanitized.replace(/color:\s*rgba\(15,\s*23,\s*42/gi, 'color: rgba(255, 255, 255');
+  } else {
+    // Canvas background is LIGHT -> Force invisible white text on canvas to dark slate
+    sanitized = sanitized.replace(/color:\s*#FFFFFF\b/gi, 'color: #0F172A');
+    sanitized = sanitized.replace(/color:\s*#FFF\b/gi, 'color: #0F172A');
+  }
+
+  return sanitized;
+}
+
+function TemplatePreviewFrame({ htmlContent, originalUrl, onEdit }: { htmlContent: string; originalUrl?: string; onEdit?: () => void }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.42);
+
+  const contrastHtml = React.useMemo(() => enforceHtmlContrast(htmlContent), [htmlContent]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateScale = () => {
+      if (containerRef.current) {
+        const w = containerRef.current.clientWidth;
+        if (w > 0) setScale(w / 1080);
+      }
+    };
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className="w-full relative group aspect-square rounded-xl overflow-hidden shadow-sm border border-slate-200 bg-slate-900">
+      <iframe
+        srcDoc={contrastHtml}
+        title="Post Visual Template"
+        scrolling="no"
+        className="w-[1080px] h-[1080px] origin-top-left pointer-events-none border-none absolute top-0 left-0"
+        style={{ transform: `scale(${scale})` }}
+      />
+      {originalUrl && onEdit && (
+        <button 
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="absolute top-3 right-3 bg-black/70 hover:bg-black/90 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-xl z-20"
+        >
+           <Edit className="w-3.5 h-3.5" /> Edit Visual
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualData, dna, productName, productLogo, onClose, inline, onImageGenerated, onUpdateVisual, isLoadingVisual, isFlattened }: PostPreviewModalProps) {
   const [isVisualEditorOpen, setIsVisualEditorOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     if (!inline) {
@@ -70,6 +144,18 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
         </div>
       );
     }
+    // V3 Master Template Engine — render hydrated template directly with responsive scale
+    if (visualData?.renderedHtml || visualData?.customHtml) {
+      const htmlContent = visualData.renderedHtml || visualData.customHtml;
+      return (
+        <TemplatePreviewFrame
+          htmlContent={htmlContent}
+          originalUrl={originalUrl}
+          onEdit={() => setIsVisualEditorOpen(true)}
+        />
+      );
+    }
+
     if (!currentImageUrl) return null;
 
     // If the image is already flattened (has overlays baked in), show it as a static image.
@@ -143,173 +229,366 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
  };
 
  const formattedCopy = copy.split('\n').map((line, i) => (
- <React.Fragment key={i}>
- {parseText(line)}
- {i < copy.split('\n').length - 1 && <br />}
- </React.Fragment>
+   <React.Fragment key={i}>
+     {parseText(line)}
+     {i < copy.split('\n').length - 1 && <br />}
+   </React.Fragment>
  ));
 
- const renderTwitterPreview = () => (
- <div className="bg-white border border-gray-100 rounded-xl overflow-hidden max-w-[600px] w-full mx-auto font-sans text-[15px] text-[#0f1419]">
- <div className="flex p-4">
- <div className="mr-3 shrink-0">
- <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
- {productLogo ? <img src={productLogo || undefined} className="w-full h-full object-cover" /> : <div className="text-gray-400 font-bold">{productName.charAt(0)}</div>}
- </div>
- </div>
- <div className="flex-1 min-w-0">
- <div className="flex items-center justify-between mb-1">
- <div className="flex items-center truncate">
- <span className="font-bold hover:underline truncate">{productName}</span>
- <span className="text-[#536471] ml-1 truncate">@{productName.replace(/\s+/g, '').toLowerCase()}</span>
- <span className="text-[#536471] mx-1">·</span>
- <span className="text-[#536471] hover:underline">1h</span>
- </div>
- <MoreHorizontal className="h-5 w-5 text-[#536471]" />
- </div>
- <div className="whitespace-pre-wrap word-break break-words mb-3">
- {formattedCopy}
- </div>
- {hasVisual && (
-  <div className="rounded-2xl border border-gray-200 overflow-hidden mb-3 bg-black">
-    {renderVisual()}
-  </div>
-  )}
- <div className="flex items-center justify-between text-[#536471] max-w-md">
- <div className="flex items-center hover:text-blue-500 transition-colors cursor-pointer group">
- <div className="p-2 group-hover:bg-[#2583EB]/10 rounded-full"><MessageCircle className="h-[18px] w-[18px]" /></div>
- <span className="text-[13px] px-1">12</span>
- </div>
- <div className="flex items-center hover:text-green-500 transition-colors cursor-pointer group">
- <div className="p-2 group-hover:bg-[#18F07A]/10 rounded-full"><Repeat2 className="h-[18px] w-[18px]" /></div>
- <span className="text-[13px] px-1">4</span>
- </div>
- <div className="flex items-center hover:text-pink-500 transition-colors cursor-pointer group">
- <div className="p-2 group-hover:bg-pink-50 rounded-full"><Heart className="h-[18px] w-[18px]" /></div>
- <span className="text-[13px] px-1">48</span>
- </div>
- <div className="flex items-center hover:text-blue-500 transition-colors cursor-pointer group">
- <div className="p-2 group-hover:bg-[#2583EB]/10 rounded-full"><Share2 className="h-[18px] w-[18px]" /></div>
- </div>
- </div>
- </div>
- </div>
- </div>
- );
+ const renderTwitterPreview = () => {
+   const isTwitterLong = copy.length > 280 || copy.split('\n').length > 4 || copy.trim().split(/\s+/).length > 45;
 
-  const renderLinkedInPreview = () => (
-  <div className="bg-white border-y sm:border sm:border-gray-200 sm:rounded-xl overflow-hidden max-w-[552px] w-full mx-auto font-sans text-[14px] text-gray-900">
-  <div className="flex p-4 pb-0">
-  <div className="mr-2 shrink-0">
-  <div className="w-12 h-12 flex items-center justify-center bg-gray-100 overflow-hidden border border-gray-200">
-  {productLogo ? <img src={productLogo || undefined} className="w-full h-full object-cover" /> : <div className="text-gray-400 font-bold">{productName.charAt(0)}</div>}
-  </div>
-  </div>
-  <div className="flex-1 min-w-0">
-  <div className="flex items-start justify-between">
-  <div className="flex flex-col">
-  <span className="font-semibold text-black hover:text-[#2583EB] hover:underline">{productName}</span>
-  <span className="text-[12px] text-gray-450 truncate">SaaS Platform • Daily Strategy</span>
-  <span className="text-[12px] text-gray-450">1h • 🌐</span>
-  </div>
-  <MoreHorizontal className="h-5 w-5 text-gray-400" />
-  </div>
-  </div>
-  </div>
-  <div className="px-4 py-3 text-[14px] text-gray-900 whitespace-pre-wrap">
-  {formattedCopy}
-  </div>
-  {hasVisual && (
-   <div className="bg-[#f9fafb] border-t border-b border-gray-200">
-     {renderVisual()}
-   </div>
-   )}
- <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between text-[12px] text-gray-400">
- <div className="flex items-center">
- <div className="bg-[#2583EB]/100 rounded-full w-4 h-4 flex items-center justify-center -mr-1 z-10 p-[2px]">
- <ThumbsUp className="h-2 w-2 text-white" />
- </div>
- <span className="ml-2 text-gray-400 hover:text-[#2583EB] hover:underline cursor-pointer">You and 84 others</span>
- </div>
- <div className="flex items-center gap-2">
- <span className="hover:text-[#2583EB] hover:underline cursor-pointer">12 comments</span>
- <span>•</span>
- <span className="hover:text-[#2583EB] hover:underline cursor-pointer">2 reposts</span>
- </div>
- </div>
- <div className="px-2 py-1 flex items-center justify-between">
- <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-3 rounded-md flex-1 justify-center transition-colors">
- <ThumbsUp className="h-5 w-5" /> <span>Like</span>
- </button>
- <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-3 rounded-md flex-1 justify-center transition-colors">
- <MessageCircle className="h-5 w-5" /> <span>Comment</span>
- </button>
- <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-3 rounded-md flex-1 justify-center transition-colors">
- <Repeat2 className="h-5 w-5" /> <span>Repost</span>
- </button>
- <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-3 rounded-md flex-1 justify-center transition-colors">
- <Send className="h-5 w-5" /> <span>Send</span>
- </button>
- </div>
- </div>
- );
- 
- const renderInstagramPreview = () => (
- <div className="bg-white border border-gray-200 rounded-[3px] overflow-hidden max-w-[470px] w-full mx-auto font-sans text-[14px]">
- <div className="flex items-center justify-between p-3 border-b border-gray-100">
- <div className="flex items-center">
- <div className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center p-[2px]">
- <div className="w-full h-full rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
- {productLogo ? <img src={productLogo || undefined} className="w-full h-full object-cover" /> : <div className="text-gray-400 font-bold text-xs">{productName.charAt(0)}</div>}
- </div>
- </div>
- <span className="ml-3 font-semibold text-[14px] text-gray-900">{productName.toLowerCase().replace(/\s+/g, '')}</span>
- </div>
- <MoreHorizontal className="h-5 w-5 text-gray-900" />
- </div>
- 
- {hasVisual ? (
- <div className="w-full bg-black flex items-center justify-center">
- {renderVisual()}
- </div>
- ) : (
- <div className="w-full bg-[#E1306C] aspect-square flex items-center justify-center p-8 text-center text-white text-xl font-semibold overflow-y-auto">
- {formattedCopy}
- </div>
- )}
- 
- <div className="p-3 pb-4">
- <div className="flex items-center justify-between mb-3 text-gray-900">
- <div className="flex items-center gap-4">
- <Heart className="h-6 w-6 hover:text-gray-500 cursor-pointer transition-colors" />
- <MessageCircle className="h-6 w-6 hover:text-gray-500 cursor-pointer transition-colors" />
- <Send className="h-6 w-6 hover:text-gray-500 cursor-pointer transition-colors" />
- </div>
- <Bookmark className="h-6 w-6 hover:text-gray-500 cursor-pointer transition-colors" />
- </div>
- <div className="font-semibold text-[14px] mb-1 text-gray-900">1,024 likes</div>
- <div className="text-[14px] text-gray-900">
- <span className="font-semibold mr-2">{productName.toLowerCase().replace(/\s+/g, '')}</span>
- <span className="whitespace-pre-wrap text-gray-800">{formattedCopy}</span>
- </div>
- <div className="text-[12px] text-gray-500 uppercase mt-2">1 hour ago</div>
- </div>
- </div>
- );
+   return (
+     <div className="bg-white border border-gray-100 rounded-xl overflow-hidden max-w-[600px] w-full mx-auto font-sans text-[15px] text-[#0f1419]">
+       <div className="flex p-4">
+         <div className="mr-3 shrink-0">
+           <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
+             {productLogo ? <img src={productLogo || undefined} className="w-full h-full object-cover" /> : <div className="text-gray-400 font-bold">{productName.charAt(0)}</div>}
+           </div>
+         </div>
+         <div className="flex-1 min-w-0">
+           <div className="flex items-center justify-between mb-1">
+             <div className="flex items-center truncate">
+               <span className="font-bold hover:underline truncate">{productName}</span>
+               <span className="text-[#536471] ml-1 truncate">@{productName.replace(/\s+/g, '').toLowerCase()}</span>
+               <span className="text-[#536471] mx-1">·</span>
+               <span className="text-[#536471] hover:underline">1h</span>
+             </div>
+             <MoreHorizontal className="h-5 w-5 text-[#536471]" />
+           </div>
+           <div className="whitespace-pre-wrap word-break break-words mb-3">
+             <div className={!isExpanded && isTwitterLong ? "line-clamp-4" : ""}>
+               {formattedCopy}
+             </div>
+             {!isExpanded && isTwitterLong && (
+               <button 
+                 onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }} 
+                 className="text-[#1d9bf0] hover:underline font-normal text-[15px] mt-1 block"
+               >
+                 Show more
+               </button>
+             )}
+             {isExpanded && isTwitterLong && (
+               <button 
+                 onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }} 
+                 className="text-[#1d9bf0] hover:underline font-normal text-[15px] mt-1 block"
+               >
+                 Show less
+               </button>
+             )}
+           </div>
+           {hasVisual && (
+             <div className="rounded-2xl border border-gray-200 overflow-hidden mb-3 bg-black">
+               {renderVisual()}
+             </div>
+           )}
+           <div className="flex items-center justify-between text-[#536471] max-w-md">
+             <div className="flex items-center hover:text-blue-500 transition-colors cursor-pointer group">
+               <div className="p-2 group-hover:bg-[#2583EB]/10 rounded-full"><MessageCircle className="h-[18px] w-[18px]" /></div>
+               <span className="text-[13px] px-1">12</span>
+             </div>
+             <div className="flex items-center hover:text-green-500 transition-colors cursor-pointer group">
+               <div className="p-2 group-hover:bg-[#18F07A]/10 rounded-full"><Repeat2 className="h-[18px] w-[18px]" /></div>
+               <span className="text-[13px] px-1">4</span>
+             </div>
+             <div className="flex items-center hover:text-pink-500 transition-colors cursor-pointer group">
+               <div className="p-2 group-hover:bg-pink-50 rounded-full"><Heart className="h-[18px] w-[18px]" /></div>
+               <span className="text-[13px] px-1">48</span>
+             </div>
+             <div className="flex items-center hover:text-blue-500 transition-colors cursor-pointer group">
+               <div className="p-2 group-hover:bg-[#2583EB]/10 rounded-full"><Share2 className="h-[18px] w-[18px]" /></div>
+             </div>
+           </div>
+         </div>
+       </div>
+     </div>
+   );
+ };
+
+ const renderLinkedInPreview = () => {
+   const isLinkedInLong = copy.length > 210 || copy.split('\n').length > 3 || copy.trim().split(/\s+/).length > 35;
+
+   return (
+     <div className="bg-white border-y sm:border sm:border-gray-200 sm:rounded-xl overflow-hidden max-w-[552px] w-full mx-auto font-sans text-[14px] text-gray-900 text-left">
+       <div className="flex p-4 pb-0">
+         <div className="mr-2 shrink-0">
+           <div className="w-12 h-12 flex items-center justify-center bg-gray-100 overflow-hidden border border-gray-200">
+             {productLogo ? <img src={productLogo || undefined} className="w-full h-full object-cover" /> : <div className="text-gray-400 font-bold">{productName.charAt(0)}</div>}
+           </div>
+         </div>
+         <div className="flex-1 min-w-0">
+           <div className="flex items-start justify-between">
+             <div className="flex flex-col">
+               <span className="font-semibold text-black hover:text-[#2583EB] hover:underline">{productName}</span>
+               <span className="text-[12px] text-gray-450 truncate">SaaS Platform • Daily Strategy</span>
+               <span className="text-[12px] text-gray-450">1h • 🌐</span>
+             </div>
+             <MoreHorizontal className="h-5 w-5 text-gray-400" />
+           </div>
+         </div>
+       </div>
+       <div className="px-4 py-3 text-[14px] text-gray-900 whitespace-pre-wrap">
+         <div className={!isExpanded && isLinkedInLong ? "line-clamp-3" : ""}>
+           {formattedCopy}
+         </div>
+         {!isExpanded && isLinkedInLong && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }} 
+             className="text-gray-500 hover:text-blue-600 hover:underline text-[14px] font-semibold mt-1"
+           >
+             ...see more
+           </button>
+         )}
+         {isExpanded && isLinkedInLong && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }} 
+             className="text-gray-500 hover:text-blue-600 hover:underline text-[14px] font-semibold mt-1 block"
+           >
+             see less
+           </button>
+         )}
+       </div>
+       {hasVisual && (
+         <div className="bg-[#f9fafb] border-t border-b border-gray-200">
+           {renderVisual()}
+         </div>
+       )}
+       <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between text-[12px] text-gray-400">
+         <div className="flex items-center">
+           <div className="bg-[#2583EB]/100 rounded-full w-4 h-4 flex items-center justify-center -mr-1 z-10 p-[2px]">
+             <ThumbsUp className="h-2 w-2 text-white" />
+           </div>
+           <span className="ml-2 text-gray-400 hover:text-[#2583EB] hover:underline cursor-pointer">You and 84 others</span>
+         </div>
+         <div className="flex items-center gap-2">
+           <span className="hover:text-[#2583EB] hover:underline cursor-pointer">12 comments</span>
+           <span>•</span>
+           <span className="hover:text-[#2583EB] hover:underline cursor-pointer">2 reposts</span>
+         </div>
+       </div>
+       <div className="px-2 py-1 flex items-center justify-between">
+         <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-3 rounded-md flex-1 justify-center transition-colors">
+           <ThumbsUp className="h-5 w-5" /> <span>Like</span>
+         </button>
+         <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-3 rounded-md flex-1 justify-center transition-colors">
+           <MessageCircle className="h-5 w-5" /> <span>Comment</span>
+         </button>
+         <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-3 rounded-md flex-1 justify-center transition-colors">
+           <Repeat2 className="h-5 w-5" /> <span>Repost</span>
+         </button>
+         <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-3 rounded-md flex-1 justify-center transition-colors">
+           <Send className="h-5 w-5" /> <span>Send</span>
+         </button>
+       </div>
+     </div>
+   );
+ };
+
+ const renderInstagramPreview = () => {
+   const isInstagramLong = copy.length > 125 || copy.split('\n').length > 2 || copy.trim().split(/\s+/).length > 20;
+
+   return (
+     <div className="bg-white border border-gray-200 rounded-[3px] overflow-hidden max-w-[470px] w-full mx-auto font-sans text-[14px]">
+       <div className="flex items-center justify-between p-3 border-b border-gray-100">
+         <div className="flex items-center">
+           <div className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center p-[2px]">
+             <div className="w-full h-full rounded-full bg-gray-100 overflow-hidden flex items-center justify-center">
+               {productLogo ? <img src={productLogo || undefined} className="w-full h-full object-cover" /> : <div className="text-gray-400 font-bold text-xs">{productName.charAt(0)}</div>}
+             </div>
+           </div>
+           <span className="ml-3 font-semibold text-[14px] text-gray-900">{productName.toLowerCase().replace(/\s+/g, '')}</span>
+         </div>
+         <MoreHorizontal className="h-5 w-5 text-gray-900" />
+       </div>
+       
+       {hasVisual ? (
+         <div className="w-full bg-black flex items-center justify-center">
+           {renderVisual()}
+         </div>
+       ) : (
+         <div className="w-full bg-[#E1306C] aspect-square flex items-center justify-center p-8 text-center text-white text-xl font-semibold overflow-y-auto">
+           {formattedCopy}
+         </div>
+       )}
+       
+       <div className="p-3 pb-4">
+         <div className="flex items-center justify-between mb-3 text-gray-900">
+           <div className="flex items-center gap-4">
+             <Heart className="h-6 w-6 hover:text-gray-500 cursor-pointer transition-colors" />
+             <MessageCircle className="h-6 w-6 hover:text-gray-500 cursor-pointer transition-colors" />
+             <Send className="h-6 w-6 hover:text-gray-500 cursor-pointer transition-colors" />
+           </div>
+           <Bookmark className="h-6 w-6 hover:text-gray-500 cursor-pointer transition-colors" />
+         </div>
+         <div className="font-semibold text-[14px] mb-1 text-gray-900">1,024 likes</div>
+         <div className="text-[14px] text-gray-900">
+           <span className="font-semibold mr-2">{productName.toLowerCase().replace(/\s+/g, '')}</span>
+           <span className={cn("whitespace-pre-wrap text-gray-800", !isExpanded && isInstagramLong ? "line-clamp-2" : "")}>
+             {formattedCopy}
+           </span>
+           {!isExpanded && isInstagramLong && (
+             <button 
+               onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }} 
+               className="text-gray-500 hover:text-gray-700 text-[14px] font-normal ml-1 inline-block"
+             >
+               ... more
+             </button>
+           )}
+           {isExpanded && isInstagramLong && (
+             <button 
+               onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }} 
+               className="text-gray-500 hover:text-gray-700 text-[14px] font-normal block mt-1"
+             >
+               less
+             </button>
+           )}
+         </div>
+         <div className="text-[12px] text-gray-500 uppercase mt-2">1 hour ago</div>
+       </div>
+     </div>
+   );
+ };
+
+ const renderFacebookPreview = () => {
+   const isFacebookLong = copy.length > 250 || copy.split('\n').length > 3 || copy.trim().split(/\s+/).length > 40;
+
+   return (
+     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden max-w-[500px] w-full mx-auto font-sans text-[14px] text-gray-900 text-left shadow-sm">
+       <div className="flex p-3 items-center justify-between">
+         <div className="flex items-center gap-2">
+           <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center border border-gray-100">
+             {productLogo ? <img src={productLogo || undefined} className="w-full h-full object-cover" /> : <div className="text-gray-500 font-bold">{productName.charAt(0)}</div>}
+           </div>
+           <div>
+             <div className="font-semibold text-[15px] leading-tight text-gray-900">{productName}</div>
+             <div className="text-[12px] text-gray-500 flex items-center gap-1">
+               <span>1h</span> • <span className="text-[10px]">🌐</span>
+             </div>
+           </div>
+         </div>
+         <MoreHorizontal className="h-5 w-5 text-gray-500" />
+       </div>
+       <div className="px-3 py-2 text-[14px] text-gray-900 whitespace-pre-wrap">
+         <div className={!isExpanded && isFacebookLong ? "line-clamp-3" : ""}>
+           {formattedCopy}
+         </div>
+         {!isExpanded && isFacebookLong && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }} 
+             className="text-gray-600 hover:underline font-semibold text-[14px] mt-1 block"
+           >
+             See more
+           </button>
+         )}
+         {isExpanded && isFacebookLong && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }} 
+             className="text-gray-600 hover:underline font-semibold text-[14px] mt-1 block"
+           >
+             See less
+           </button>
+         )}
+       </div>
+       {hasVisual && (
+         <div className="bg-[#f0f2f5] border-t border-b border-gray-200">
+           {renderVisual()}
+         </div>
+       )}
+       <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between text-[13px] text-gray-500">
+         <div className="flex items-center gap-1">
+           <div className="bg-[#1877F2] rounded-full p-1"><ThumbsUp className="h-2.5 w-2.5 text-white" /></div>
+           <span>142</span>
+         </div>
+         <div className="flex items-center gap-3">
+           <span>18 comments</span>
+           <span>5 shares</span>
+         </div>
+       </div>
+       <div className="px-2 py-1 flex items-center justify-between">
+         <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-2 rounded-md flex-1 justify-center transition-colors text-[13px]">
+           <ThumbsUp className="h-4 w-4" /> <span>Like</span>
+         </button>
+         <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-2 rounded-md flex-1 justify-center transition-colors text-[13px]">
+           <MessageCircle className="h-4 w-4" /> <span>Comment</span>
+         </button>
+         <button className="flex items-center gap-2 text-gray-600 font-semibold hover:bg-gray-100 px-3 py-2 rounded-md flex-1 justify-center transition-colors text-[13px]">
+           <Share2 className="h-4 w-4" /> <span>Share</span>
+         </button>
+       </div>
+     </div>
+   );
+ };
+
+ const renderRedditPreview = () => {
+   const isRedditLong = copy.length > 300 || copy.split('\n').length > 4 || copy.trim().split(/\s+/).length > 50;
+
+   return (
+     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden max-w-[550px] w-full mx-auto font-sans text-[14px] text-slate-900 text-left shadow-sm">
+       <div className="p-3 pb-2 flex items-center gap-2 text-[12px] text-gray-500 border-b border-gray-100">
+         <div className="w-5 h-5 rounded-full bg-[#FF4500] text-white flex items-center justify-center font-bold text-[10px]">r/</div>
+         <span className="font-bold text-gray-900 hover:underline">r/{productName.toLowerCase().replace(/\s+/g, '')}</span>
+         <span>• Posted by u/{productName.toLowerCase().replace(/\s+/g, '')} 2h ago</span>
+       </div>
+       <div className="px-4 py-3 text-[14px] text-gray-900 whitespace-pre-wrap">
+         <div className={!isExpanded && isRedditLong ? "line-clamp-4" : ""}>
+           {formattedCopy}
+         </div>
+         {!isExpanded && isRedditLong && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }} 
+             className="text-[#0079D3] hover:underline text-[13px] font-medium mt-1 block"
+           >
+             ... see more
+           </button>
+         )}
+         {isExpanded && isRedditLong && (
+           <button 
+             onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }} 
+             className="text-[#0079D3] hover:underline text-[13px] font-medium mt-1 block"
+           >
+             see less
+           </button>
+         )}
+       </div>
+       {hasVisual && (
+         <div className="bg-slate-900 border-t border-b border-gray-200">
+           {renderVisual()}
+         </div>
+       )}
+       <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 flex items-center gap-4 text-[12px] font-bold text-gray-500">
+         <div className="flex items-center gap-1 bg-gray-200/60 rounded-full px-2.5 py-1">
+           <ThumbsUp className="h-3.5 w-3.5" />
+           <span>248</span>
+         </div>
+         <div className="flex items-center gap-1 bg-gray-200/60 rounded-full px-2.5 py-1">
+           <MessageCircle className="h-3.5 w-3.5" />
+           <span>34 Comments</span>
+         </div>
+         <div className="flex items-center gap-1 bg-gray-200/60 rounded-full px-2.5 py-1">
+           <Share2 className="h-3.5 w-3.5" />
+           <span>Share</span>
+         </div>
+       </div>
+     </div>
+   );
+ };
 
  const getPreview = () => {
- switch (platform.toLowerCase()) {
- case 'x':
- case 'twitter':
- return renderTwitterPreview();
- case 'linkedin':
- return renderLinkedInPreview();
- case 'instagram':
- return renderInstagramPreview();
- default:
- // Generic fallback
- return renderLinkedInPreview();
- }
+   switch (platform.toLowerCase()) {
+     case 'x':
+     case 'twitter':
+       return renderTwitterPreview();
+     case 'linkedin':
+       return renderLinkedInPreview();
+     case 'instagram':
+       return renderInstagramPreview();
+     case 'facebook':
+       return renderFacebookPreview();
+     case 'reddit':
+       return renderRedditPreview();
+     default:
+       return renderLinkedInPreview();
+   }
  };
 
  if (inline) {

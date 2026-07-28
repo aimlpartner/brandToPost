@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  LogIn, Sparkles, ShieldCheck, Zap, Mail, Lock, ArrowRight, Loader2, ArrowLeft,
+  LogIn, Sparkles, ShieldCheck, ShieldAlert, Zap, Mail, Lock, ArrowRight, Loader2, ArrowLeft,
   LayoutDashboard, Award, Image, Megaphone, Clapperboard, Calendar, Settings,
   Brain, LogOut, Instagram, Send, Copy, Download, Heart, MessageCircle, Bookmark
 } from 'lucide-react';
@@ -54,6 +54,11 @@ export function Login() {
 
   useEffect(() => {
     if (user && !loading) {
+      if (userProfile?.isLocked) {
+        logout();
+        return;
+      }
+
       const isRedirectReturn = sessionStorage.getItem('oauth_in_progress') === 'true';
       if (isRedirectReturn) {
         hasActioned.current = true;
@@ -271,6 +276,18 @@ export function Login() {
                 <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
                 Back to Sign In
               </button>
+            )}
+
+            {(searchParams.get('locked') === 'true' || searchParams.get('reason')) && (
+              <div className="mb-5 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 shadow-sm text-center">
+                <div className="flex items-center justify-center gap-2 mb-1.5 text-rose-700 font-extrabold text-sm uppercase tracking-wide">
+                  <ShieldAlert className="w-5 h-5 text-rose-600 animate-pulse" />
+                  <span>Testing Phase Completed</span>
+                </div>
+                <div className="text-xs font-semibold text-rose-900 leading-relaxed">
+                  {searchParams.get('reason') ? decodeURIComponent(searchParams.get('reason')!) : 'The testing phase is over. Access to your account has been suspended by administration.'}
+                </div>
+              </div>
             )}
 
             {errorError && (

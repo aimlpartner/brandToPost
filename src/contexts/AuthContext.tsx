@@ -8,6 +8,8 @@ interface AuthProfile {
   name: string;
   role: string;
   onboarded: boolean;
+  isLocked?: boolean;
+  lockReason?: string;
   createdAt?: string;
   founderVoiceDescription?: string;
   founderVoiceFileName?: string;
@@ -85,6 +87,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unsubscribeProfile = onSnapshot(doc(db, 'users', currentUser.uid), async (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
+
+            // Check if account is locked by admin (testing phase ended / disabled)
+            if (data.isLocked) {
+              setUserProfile(data as AuthProfile);
+              try {
+                await signOut(auth);
+              } catch (e) {
+                // Ignore signout errors if already invalidated
+              }
+              setUser(null);
+              setUserProfile(null);
+              localStorage.removeItem('products');
+              localStorage.removeItem('campaigns');
+              if (currentUser) {
+                localStorage.removeItem(`activeProductId_${currentUser.uid}`);
+              }
+              setLoading(false);
+
+              const reasonText = encodeURIComponent(data.lockReason || 'The testing phase is over. Access to your account has been locked.');
+              if (!window.location.pathname.includes('/login')) {
+                window.location.href = `/login?locked=true&reason=${reasonText}`;
+              }
+              return;
+            }
+
             setUserProfile(data as AuthProfile);
             setLoading(false);
 
