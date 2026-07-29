@@ -40,6 +40,16 @@ interface AuthProfile {
   signupEmailSent?: boolean;
   firstCampaignEmailSent?: boolean;
   lastActive?: string;
+  linkedInProfile?: {
+    name?: string;
+    headline?: string;
+    picture?: string;
+    id?: string;
+  };
+  avatarUrl?: string;
+  profilePicture?: string;
+  founderBio?: string;
+  headline?: string;
 }
 
 interface AuthContextType {

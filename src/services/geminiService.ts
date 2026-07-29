@@ -725,6 +725,10 @@ export async function generateCampaign(
 ): Promise<Omit<WeeklyCampaign, 'id' | 'createdAt'>> {
   if (onProgress) onProgress(1, 4, "Researching brand DNA & synthesizing 7-day post copy...");
 
+  const activeChannels = (dna.targetPlatforms && Array.isArray(dna.targetPlatforms) && dna.targetPlatforms.length > 0)
+    ? dna.targetPlatforms
+    : (channels && channels.length > 0 ? channels : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']);
+
   const prompt = `You are a world-class senior B2B content strategist and brand growth director.
 
 Generate a comprehensive 7-DAY MULTI-CHANNEL SOCIAL CAMPAIGN for this brand:
@@ -733,11 +737,11 @@ Value Proposition: "${(dna as any).tagline || dna.positioning || dna.description
 Target Audience: "${dna.audience}"
 Industry: "${(dna as any).industry || dna.positioning}"
 Campaign Focus/Theme: "${focus || campaignTheme || 'B2B Growth & Automation'}"
-Selected Channels: ${channels.join(', ')}
+Selected Channels: ${activeChannels.join(', ')}
 
 REQUIREMENTS:
 1. Generate dailyPosts for all 7 days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
-2. For each day, create platformVersions tailored for: ${channels.join(', ')}.
+2. For each day, create platformVersions tailored for: ${activeChannels.join(', ')}.
 3. For each day, provide a punchy "headline" (10-15 words max) and "subtext" (15-25 words max) inside "visualData" that captures the day's key value hook.
 4. Provide a descriptive, cinematic "cinematicPrompt" inside visualData for generating a background photo.
 `;
@@ -823,9 +827,16 @@ REQUIREMENTS:
 
       const headline = dp.visualData?.headline || dp.contentType || `${dna.name} — ${days[idx]}`;
       const subtext = dp.visualData?.subtext || (dna as any).tagline || dna.description || 'Automated B2B Growth Engine';
-      const imageUrl = (generatedAiImages[idx] && generatedAiImages[idx].startsWith('/api/'))
-        ? generatedAiImages[idx]
-        : defaultImages[idx % defaultImages.length];
+      // Prioritize brand asset images if available over generic stock background images
+      const brandAssets = (dna as any).brandAssets || (dna as any).creatives || [];
+      const brandAssetUrl = brandAssets.length > 0
+        ? (typeof brandAssets[idx % brandAssets.length] === 'string' ? brandAssets[idx % brandAssets.length] : brandAssets[idx % brandAssets.length]?.url)
+        : null;
+
+      const imageUrl = brandAssetUrl
+        || ((generatedAiImages[idx] && generatedAiImages[idx].startsWith('/api/'))
+          ? generatedAiImages[idx]
+          : defaultImages[idx % defaultImages.length]);
 
       const hydratedHtml = hydrateTemplateHtml(template.rawHtml, {
         headline,
@@ -1364,6 +1375,8 @@ Return a JSON object with the following fields:
   let finalImagePrompt = customImagePrompt || result.imagePrompt;
   let chosenLayoutId = "";
 
+  const textOnlyBlueprints = ["x-tweet-card", "notes-app-screenshot", "metrics-breakdown-card", "linkedin-carousel-cover"];
+
   if ((attachmentStyle === "image-only" || attachmentStyle === "image-overlay") && finalImagePrompt) {
     try {
       // Determine blueprint to align backdrop lighting (light mode vs dark mode)
@@ -1377,7 +1390,7 @@ Return a JSON object with the following fields:
       }
       
       const blueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId];
-      if (blueprint) {
+      if (blueprint && !textOnlyBlueprints.includes(blueprint.id)) {
         chosenLayoutId = blueprint.id;
         const isSplitOrFramed = [
           "editorial-left",
@@ -1452,32 +1465,67 @@ Return a JSON object with the following fields:
 
 export async function generateFounderTopicSuggestions(
   founderAgent: any,
-  userId?: string
+  userId?: string,
+  targetProduct?: any
 ): Promise<{ title: string; description: string; prompt: string }[]> {
-  const prompt = `You are a world-class executive strategist and personal branding coach.
+  const isBranded = !!targetProduct;
+
+  let contextPrompt = "";
+  if (isBranded) {
+    contextPrompt = `
+Analyze the following Founder Doppelganger agent profile AND target Brand/Product DNA:
+
+Founder Persona Context:
+- Target Industry: ${founderAgent?.targetIndustry || "B2B SaaS / Tech"}
+- Target Audience: ${founderAgent?.targetAudience || "Executive Decision Makers"}
+- Communication Style: ${founderAgent?.communicationStyle?.join(", ") || ""}
+
+Target Brand Product DNA (${targetProduct.name}):
+- Product Name: ${targetProduct.name}
+- Product Description & Positioning: ${targetProduct.description || targetProduct.positioning || ""}
+- Target Audience: ${targetProduct.audience || ""}
+- Metrics & Proof Points / Traction: ${targetProduct.proofPoints || "Key performance metrics, conversion stats, milestone growth"}
+- Unique Solution Mechanism: ${targetProduct.uniqueMechanism || ""}
+- Customer Problem / Hell State: ${targetProduct.hellState || ""}
+- Outcome / Heaven State: ${targetProduct.heavenState || ""}
+
+Generate 5 highly engaging, strategic social media post ideas/topics tailored specifically for this founder to write about ${targetProduct.name} on their personal LinkedIn/X profile.
+
+CRITICAL rules for Branded Post Topics:
+1. Every topic MUST directly highlight ${targetProduct.name}'s specific product capabilities, customer metrics, growth milestones, or problem-solution storytelling.
+2. Frame each concept as an authentic founder story or breakdown (e.g. "How ${targetProduct.name} reduced churn by 40%", "Why we built ${targetProduct.name}'s core mechanism", "The metric that changed how we serve ${targetProduct.audience || 'customers'}").
+3. Make them punchy, specific, and actionable for B2B decision makers.
+`;
+  } else {
+    contextPrompt = `
 Analyze the following virtual Founder Doppelganger agent profile:
-- Behavioral Traits: ${founderAgent.behavioralTraits?.join(", ") || ""}
-- Core Values: ${founderAgent.coreValues?.join(", ") || ""}
-- Communication Style: ${founderAgent.communicationStyle?.join(", ") || ""}
-- Decision Heuristics: ${founderAgent.decisionHeuristics?.join(", ") || ""}
+- Behavioral Traits: ${founderAgent?.behavioralTraits?.join(", ") || ""}
+- Core Values: ${founderAgent?.coreValues?.join(", ") || ""}
+- Communication Style: ${founderAgent?.communicationStyle?.join(", ") || ""}
+- Decision Heuristics: ${founderAgent?.decisionHeuristics?.join(", ") || ""}
 
 Strategic Context:
-- Target Industry: ${founderAgent.targetIndustry || "General Entrepreneurship"}
-- Target Audience: ${founderAgent.targetAudience || "General Public/Professionals"}
-- Vision: ${founderAgent.vision || ""}
-- Mission: ${founderAgent.mission || ""}
-- Goal: ${founderAgent.goal || ""}
-- Key Content Pillars: ${founderAgent.contentPillars?.join(", ") || ""}
+- Target Industry: ${founderAgent?.targetIndustry || "General Entrepreneurship"}
+- Target Audience: ${founderAgent?.targetAudience || "General Public/Professionals"}
+- Vision: ${founderAgent?.vision || ""}
+- Mission: ${founderAgent?.mission || ""}
+- Goal: ${founderAgent?.goal || ""}
+- Key Content Pillars: ${founderAgent?.contentPillars?.join(", ") || ""}
 
 Generate 5 highly engaging, customized, and distinct social media post ideas/topics tailored for this founder to write on their personal LinkedIn/X profile.
 
-CRITICAL rules:
+CRITICAL rules for Non-Branded General Topics:
 1. Do NOT mention or refer to any specific products, brands, or company names. Keep the topics focused on general insights, industry observations, opinions, personal experiences, or core beliefs.
 2. Ensure the suggestions alternate between the founder's key content pillars.
 3. The topics should feel authentic, organic, and avoid generic clickbait.
+`;
+  }
+
+  const prompt = `You are a world-class executive strategist and personal branding coach.
+${contextPrompt}
 
 Return a JSON array of objects. Each object must have:
-- title: A short title representing the theme (e.g. "Lean Engineering Teams", "The Pre-Seed Trap").
+- title: A short title representing the theme (e.g. "Scaling $0 to $1M ARR", "The Churn Paradox").
 - description: A brief explanation of the unique angle or story from the founder's perspective.
 - prompt: A clear, actionable concept prompt that can be used directly as input to generate the final post.
 `;
@@ -1581,6 +1629,7 @@ CRITICAL rules:
 2. Blend the product's positioning, audience, and narrative elements smoothly into a high-value personal post. Avoid simple sales pitches—the post must offer real value to the reader.
 3. Sound exactly like the founder's profile (behavioral traits, style, values).
 4. CRITICAL: You must write this post using the platform formatting templates, hook styles, layout structure, and trending insights identified in the LinkedIn Platform Research & Trend Insights above.
+5. Include a high-value call-to-action mentioning the official website link of ${product.name}${product.website || product.url || product.domain ? ` (${product.website || product.url || product.domain})` : ""} near the conclusion or footer of the post copy.
 `;
 
   if (referencePosts?.trim()) {
@@ -1633,10 +1682,21 @@ Return a JSON object with the following fields:
   }
 
   const result = JSON.parse(response.text || "{}");
+
+  // Automatically attach brand website URL to post copy for branded posts
+  const websiteLink = product?.website || product?.url || product?.domain;
+  if (result.postCopy && websiteLink) {
+    const formattedLink = websiteLink.startsWith('http') ? websiteLink : `https://${websiteLink}`;
+    if (!result.postCopy.includes(websiteLink) && !result.postCopy.includes(formattedLink)) {
+      result.postCopy = `${result.postCopy.trim()}\n\n🔗 ${formattedLink}`;
+    }
+  }
   
   let imageUrl = "";
   let finalImagePrompt = customImagePrompt || result.imagePrompt;
   let chosenLayoutId = "";
+
+  const textOnlyBlueprints = ["x-tweet-card", "notes-app-screenshot", "metrics-breakdown-card", "linkedin-carousel-cover"];
 
   if ((attachmentStyle === "image-only" || attachmentStyle === "image-overlay") && finalImagePrompt) {
     try {
@@ -1651,7 +1711,7 @@ Return a JSON object with the following fields:
       }
       
       const blueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId];
-      if (blueprint) {
+      if (blueprint && !textOnlyBlueprints.includes(blueprint.id)) {
         chosenLayoutId = blueprint.id;
         const isSplitOrFramed = [
           "editorial-left",
@@ -1862,158 +1922,196 @@ export async function researchVisualTrends(): Promise<VisualTrendReport> {
   console.warn(`[CLIENT researchVisualTrends FALLBACK TRIGGERED] Returning 6 pre-built static fallback templates to prevent UI crash!`);
   console.log(`------------------------------------------------------\n`);
 
-  // Guaranteed fallback template set if server call or network drops
+  // Guaranteed fallback template set (Max 4 curated top viral templates)
   return {
     summary: `Active grounded visual trend analysis for ${focusNiche}`,
     viralPick: {
-      name: "Editorial Left Panel",
-      templateId: "editorial-left",
-      viralityScore: "98/100 Virality Index",
-      whyViral: "Clean split-column composition with pitch black contrast and vibrant accent rule."
+      name: "X (Twitter) Viral Tweet Card",
+      templateId: "x-tweet-card",
+      viralityScore: "99/100 Virality Index",
+      whyViral: "Native tweet screenshot card with verified badge and engagement metrics."
     },
     discoveredTemplates: [
       {
-        id: "editorial-left",
-        name: "Editorial Left Panel",
-        primaryColor: "#F59E0B",
-        secondaryColor: "#08080C",
-        fontFamily: "Inter",
-        sourceTrend: "LinkedIn B2B Founder Editorial",
-        viralityScore: "98/100",
-        whyViral: "High-contrast dark editorial layout with split panel",
-        isLightBg: false,
-        rawHtml: `<div style="width: 1080px; height: 1080px; display: flex; background: {{SECONDARY_COLOR}}; overflow: hidden; font-family: {{FONT_FAMILY}}, system-ui, sans-serif; box-sizing: border-box;">
-          <div style="width: 45%; padding: 60px 40px; display: flex; flex-direction: column; justify-content: space-between; border-right: 2px solid {{PRIMARY_COLOR}}; box-sizing: border-box; background: {{SECONDARY_COLOR}}; position: relative; z-index: 10;">
-            <div style="display: flex; flex-direction: column; gap: 24px; margin-top: 60px;">
-              <div style="width: 50px; height: 6px; background: {{PRIMARY_COLOR}}; border-radius: 3px;"></div>
-              <h2 style="color: #ffffff; font-weight: 800; font-size: 48px; line-height: 1.2; margin: 0; word-break: break-word;">{{HEADLINE}}</h2>
-              <p style="color: #cbd5e1; font-weight: 400; font-size: 20px; line-height: 1.5; margin: 0; word-break: break-word;">{{SUBTEXT}}</p>
-            </div>
-            <div>{{LOGO_URL}}</div>
-          </div>
-          <div style="width: 55%; position: relative; overflow: hidden; height: 100%;">
-            <img src="{{IMAGE_URL}}" style="width: 100%; height: 100%; object-fit: cover;" />
-          </div>
-        </div>`
-      },
-      {
-        id: "contrarian-card",
-        name: "Contrarian Callout Card",
-        primaryColor: "#EC4899",
-        secondaryColor: "#08080C",
-        fontFamily: "Inter",
-        sourceTrend: "Contrarian Hot Take Card",
-        viralityScore: "96/100",
-        whyViral: "High comment velocity floating card badge overlay",
-        isLightBg: false,
-        rawHtml: `<div style="width: 1080px; height: 1080px; position: relative; background: #08080c; overflow: hidden; font-family: {{FONT_FAMILY}}, system-ui, sans-serif; box-sizing: border-box; display: flex; align-items: center; justify-content: center;">
-          <img src="{{IMAGE_URL}}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.35) contrast(1.1); z-index: 1;" />
-          <div style="position: relative; z-index: 10; width: 860px; background: {{SECONDARY_COLOR}}; border: 2px solid rgba(255,255,255,0.15); border-left: 8px solid {{PRIMARY_COLOR}}; border-radius: 24px; padding: 60px; box-shadow: 0 25px 60px rgba(0,0,0,0.7); box-sizing: border-box;">
-            <div style="display: inline-block; background: {{PRIMARY_COLOR}}22; color: {{PRIMARY_COLOR}}; font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; padding: 6px 16px; border-radius: 100px; margin-bottom: 24px; border: 1px solid {{PRIMARY_COLOR}}44;">
-              CONTRARIAN THESIS
-            </div>
-            <h2 style="color: #ffffff; font-weight: 850; font-size: 48px; line-height: 1.2; margin: 0 0 20px 0; word-break: break-word;">{{HEADLINE}}</h2>
-            <p style="color: #94a3b8; font-weight: 500; font-size: 22px; line-height: 1.5; margin: 0;">{{SUBTEXT}}</p>
-            <div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);">{{LOGO_URL}}</div>
-          </div>
-        </div>`
-      },
-      {
-        id: "framed-mockup",
-        name: "Framed Screenshot Mockup",
-        primaryColor: "#7C3AED",
-        secondaryColor: "#0F172A",
-        fontFamily: "Outfit",
-        sourceTrend: "UI / Notes App Mockup Trend",
-        viralityScore: "95/100",
-        whyViral: "Browser frame mockup holding asset image with header title",
-        isLightBg: false,
-        rawHtml: `<div style="width: 1080px; height: 1080px; position: relative; background: #0f172a; overflow: hidden; font-family: {{FONT_FAMILY}}, system-ui, sans-serif; padding: 60px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;">
-          <div style="position: absolute; inset:0; background: radial-gradient(circle at top right, {{PRIMARY_COLOR}}33 0%, transparent 60%); z-index: 1;"></div>
-          <div style="position: relative; z-index: 10; display: flex; justify-content: space-between; align-items: flex-start; max-width: 85%;">
-            <div>
-              <h2 style="color: #ffffff; font-weight: 900; font-size: 44px; line-height: 1.2; margin: 0 0 10px 0;">{{HEADLINE}}</h2>
-              <p style="color: #94a3b8; font-weight: 500; font-size: 20px; margin: 0;">{{SUBTEXT}}</p>
-            </div>
-            <div>{{LOGO_URL}}</div>
-          </div>
-          <div style="position: relative; z-index: 10; width: 100%; height: 720px; background: #1e293b; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; box-shadow: 0 30px 70px rgba(0,0,0,0.5); display: flex; flex-direction: column;">
-            <div style="height: 44px; background: #0f172a; padding: 0 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-              <div style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444;"></div>
-              <div style="width: 12px; height: 12px; border-radius: 50%; background: #f59e0b;"></div>
-              <div style="width: 12px; height: 12px; border-radius: 50%; background: #10b981;"></div>
-              <div style="margin-left: 20px; background: #1e293b; border-radius: 6px; padding: 4px 12px; color: #64748b; font-size: 11px; font-family: monospace;">app.brandtopost.com/insight</div>
-            </div>
-            <div style="flex: 1; overflow: hidden; position: relative;">
-              <img src="{{IMAGE_URL}}" style="width: 100%; height: 100%; object-fit: cover;" />
-            </div>
-          </div>
-        </div>`
-      },
-      {
-        id: "brutalist-hero",
-        name: "Brutalist Typography Hero",
-        primaryColor: "#E11D48",
+        id: "x-tweet-card",
+        name: "X (Twitter) Viral Tweet Card",
+        primaryColor: "#1D9BF0",
         secondaryColor: "#000000",
-        fontFamily: "Clash Display",
-        sourceTrend: "Stark B2B Founder Hot Take",
-        viralityScore: "94/100",
-        whyViral: "Heavy brutalist borders with unfiltered bold typography statement",
+        fontFamily: "Inter",
+        sourceTrend: "Native Social Proof Tweet Card",
+        viralityScore: "99/100",
+        whyViral: "Highest converting social proof layout on LinkedIn & X",
         isLightBg: false,
-        rawHtml: `<div style="width: 1080px; height: 1080px; position: relative; background: #000; overflow: hidden; font-family: {{FONT_FAMILY}}, system-ui, sans-serif; box-sizing: border-box; border: 16px solid {{PRIMARY_COLOR}};">
-          <img src="{{IMAGE_URL}}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.45; filter: grayscale(100%); z-index: 1;" />
-          <div style="position: absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 100%); z-index: 5;"></div>
-          <div style="position: absolute; inset:0; z-index: 10; padding: 80px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
-            <div>{{LOGO_URL}}</div>
-            <div style="display: flex; flex-direction: column; gap: 20px;">
-              <div style="background: {{PRIMARY_COLOR}}; color: #000; font-weight: 900; font-size: 16px; padding: 6px 14px; text-transform: uppercase; width: fit-content; letter-spacing: 0.1em;">UNFILTERED FOUNDER TRUTH</div>
-              <h1 style="color: #ffffff; font-weight: 900; font-size: 68px; line-height: 1.05; text-transform: uppercase; margin: 0; word-break: break-word;">{{HEADLINE}}</h1>
-              <p style="color: #e2e8f0; font-weight: 600; font-size: 24px; line-height: 1.4; margin: 0; max-width: 850px; border-left: 4px solid {{PRIMARY_COLOR}}; padding-left: 20px;">{{SUBTEXT}}</p>
+        rawHtml: `<div style="width: 1080px; height: 1080px; background: #000000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 80px 85px;">
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px;">
+              <div style="display: flex; align-items: center; gap: 20px;">
+                <div style="width: 84px; height: 84px; border-radius: 50%; background: #16181c; border: 1.5px solid #2f3336; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                  {{LOGO_URL}}
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-weight: 800; font-size: 30px; color: #f7f9f9; letter-spacing: -0.01em;">Founder Daily</span>
+                    <svg style="width: 26px; height: 26px; color: #1d9bf0;" viewBox="0 0 24 24" fill="currentColor"><path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.79-4-4-4-.495 0-.965.084-1.4.238C14.55 2.475 13.18 1.6 11.6 1.6c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.21 0-4 1.79-4 4 0 .495.084.965.238 1.4C1.475 9.55.6 10.92.6 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.21 1.79 4 4 4 .495 0 .965-.084 1.4-.238 1.05 1.273 2.42 2.148 4 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.21 0 4-1.79 4-4 0-.495-.084-.965-.238-1.4 1.273-1.05 2.148-2.42 2.148-4zM9.6 17.2L5.4 13l1.4-1.4 2.8 2.8 7.6-7.6 1.4 1.4-9 9z"/></svg>
+                  </div>
+                  <span style="font-size: 22px; color: #71767b; font-weight: 400;">@founder_daily</span>
+                </div>
+              </div>
+              <div style="color: #71767b;">
+                <svg style="width: 36px; height: 36px; fill: currentColor;" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              </div>
+            </div>
+            <div style="font-size: 46px; line-height: 1.38; font-weight: 700; color: #f7f9f9; margin-bottom: 32px; word-break: break-word; letter-spacing: -0.01em;">
+              {{HEADLINE}}
+            </div>
+            <div style="font-size: 26px; line-height: 1.5; color: #71767b; font-weight: 400; margin-bottom: 36px;">
+              {{SUBTEXT}}
+            </div>
+            <div style="font-size: 22px; color: #71767b; border-bottom: 1px solid #2f3336; padding-bottom: 28px; font-weight: 400;">
+              <span>10:42 AM · Jul 29, 2026</span> · <span style="color: #f7f9f9; font-weight: 700;">1.8M</span> Views
+            </div>
+          </div>
+          <div style="border-top: 1px solid #2f3336; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #71767b; font-size: 24px; font-weight: 400;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="width: 28px; height: 28px; fill: currentColor;" viewBox="0 0 24 24"><path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.59-4 7.01v3.23c0 .54-.59.88-1.04.59l-3.69-2.31h-3.765c-4.42 0-8.005-3.58-8.005-8zm8.005-6c-3.317 0-6.005 2.69-6.005 6s2.688 6 6.005 6h4.316c.26 0 .51.07.73.2l2.43 1.52v-1.87c0-.55.45-1 1-1 2.214-1.01 3.549-3.23 3.549-5.72 0-3.39-2.744-6.13-6.129-6.13H9.756z"/></svg>
+              <span>107</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="width: 28px; height: 28px; fill: currentColor;" viewBox="0 0 24 24"><path d="M4.5 3.88l4.42 4.42-1.42 1.42L5.5 7.72V15c0 1.66 1.34 3 3 3h7v2H8.5c-2.76 0-5-2.24-5-5V7.72L1.5 9.72.08 8.3 4.5 3.88zM15.5 20.12l-4.42-4.42 1.42-1.42 2 2V9c0-1.66-1.34-3-3-3h-7V4h7c2.76 0 5 2.24 5 5v7.28l2-2 1.42 1.42-4.42 4.42z"/></svg>
+              <span>12</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="width: 28px; height: 28px; fill: currentColor;" viewBox="0 0 24 24"><path d="M16.697 5.5c-1.222 0-2.365.58-3.102 1.56-.737-.98-1.88-1.56-3.102-1.56C8.433 5.5 6.75 7.18 6.75 9.243c0 3.36 4.3 7.02 6.845 8.957.29.22.69.22.98 0 2.545-1.937 6.845-5.597 6.845-8.957 0-2.063-1.683-3.743-3.723-3.743zm-3.102 11.27C11.53 15.22 8.75 12.06 8.75 9.243c0-1.02.8-1.743 1.723-1.743.83 0 1.62.51 1.95 1.25.17.38.55.62.97.62s.8-.24.97-.62c.33-.74 1.12-1.25 1.95-1.25.923 0 1.723.723 1.723 1.743 0 2.817-2.78 5.977-4.843 7.527z"/></svg>
+              <span>218</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="width: 28px; height: 28px; fill: currentColor;" viewBox="0 0 24 24"><path d="M8.75 21V3h2v18h-2zM3.75 21V11h2v10h-2zM18.75 21V7h2v14h-2zM13.75 21V9h2v12h-2z"/></svg>
+              <span>14K</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="width: 28px; height: 28px; fill: currentColor;" viewBox="0 0 24 24"><path d="M4 4.5C4 3.12 5.12 2 6.5 2h11C18.88 2 20 3.12 20 4.5v16.73c0 .54-.59.88-1.04.59L12 17.52l-6.96 4.3c-.45.29-1.04-.05-1.04-.59V4.5zm2.5-.5c-.28 0-.5.22-.5.5v14.41l5.52-3.41c.29-.18.67-.18.96 0l5.52 3.41V4.5c0-.28-.22-.5-.5-.5h-11z"/></svg>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg style="width: 28px; height: 28px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 2.59l5.71 5.71-1.42 1.42L13 6.41V16h-2V6.41L7.71 9.72 6.29 8.3 12 2.59zM4 15v4c0 .55.45 1 1 1h14c.55 0 1-.45 1-1v-4h2v4c0 1.66-1.34 3-3 3H5c-1.66 0-3-1.34-3-3v-4h2z"/></svg>
             </div>
           </div>
         </div>`
       },
       {
-        id: "quote-spotlight",
-        name: "Spotlight Quote Card",
-        primaryColor: "#F59E0B",
-        secondaryColor: "#09090B",
-        fontFamily: "Playfair Display",
-        sourceTrend: "Spotlight Quote Trend",
-        viralityScore: "93/100",
-        whyViral: "Centered spotlight quote card with golden quotation icon",
-        isLightBg: false,
-        rawHtml: `<div style="width: 1080px; height: 1080px; position: relative; background: #09090b; overflow: hidden; font-family: {{FONT_FAMILY}}, system-ui, sans-serif; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 80px;">
-          <img src="{{IMAGE_URL}}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.25; filter: blur(10px); z-index: 1;" />
-          <div style="position: relative; z-index: 10; width: 100%; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 30px;">
-            <div style="font-size: 120px; line-height: 60px; color: {{PRIMARY_COLOR}}; font-family: Georgia, serif; font-weight: 900; opacity: 0.8;">“</div>
-            <h2 style="color: #ffffff; font-weight: 700; font-size: 52px; line-height: 1.3; margin: 0; max-width: 900px; text-shadow: 0 4px 20px rgba(0,0,0,0.8);">{{HEADLINE}}</h2>
-            <div style="width: 80px; height: 4px; background: {{PRIMARY_COLOR}}; border-radius: 2px;"></div>
-            <p style="color: #a1a1aa; font-weight: 500; font-size: 22px; line-height: 1.5; margin: 0; max-width: 750px;">{{SUBTEXT}}</p>
-            <div style="margin-top: 20px;">{{LOGO_URL}}</div>
+        id: "notes-app-screenshot",
+        name: "Apple Notes Founder Memo",
+        primaryColor: "#E59C00",
+        secondaryColor: "#FBFBFD",
+        fontFamily: "Inter",
+        sourceTrend: "Native Apple Notes Memo Trend",
+        viralityScore: "98/100",
+        whyViral: "Raw iOS Apple Notes screenshot card with highest organic reach on LinkedIn",
+        isLightBg: true,
+        rawHtml: `<div style="width: 1080px; height: 1080px; background: #fbfbfd; color: #1d1d1f; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 75px 80px;">
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 45px; padding-bottom: 28px; border-bottom: 1.5px solid #e5e5ea;">
+              <div style="display: flex; align-items: center; gap: 12px; color: #e59c00; font-size: 30px; font-weight: 600;">
+                <svg style="width: 32px; height: 32px; fill: currentColor;" viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+                <span>Notes</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 20px; color: #e59c00; font-size: 28px; font-weight: 700;">
+                <svg style="width: 34px; height: 34px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <span>Done</span>
+              </div>
+            </div>
+            <div style="font-size: 54px; line-height: 1.28; font-weight: 800; color: #1d1d1f; margin-bottom: 36px; letter-spacing: -0.02em; word-break: break-word;">
+              {{HEADLINE}}
+            </div>
+            <div style="font-size: 30px; line-height: 1.55; color: #424245; font-weight: 400; word-break: break-word;">
+              {{SUBTEXT}}
+            </div>
+          </div>
+          <div style="border-top: 1.5px solid #e5e5ea; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #86868b; font-size: 24px; font-weight: 500;">
+            <span>Today at 9:41 AM</span>
+            <span>142 words</span>
           </div>
         </div>`
       },
       {
-        id: "stat-billboard",
-        name: "Stat & Metric Billboard",
+        id: "metrics-breakdown-card",
+        name: "B2B SaaS Growth & Metric Card",
         primaryColor: "#10B981",
         secondaryColor: "#08080C",
-        fontFamily: "Plus Jakarta Sans",
-        sourceTrend: "Data Billboard Trend",
-        viralityScore: "92/100",
-        whyViral: "Oversized metric header card with high-impact dark panel",
+        fontFamily: "Inter",
+        sourceTrend: "B2B Metric Case Study Trend",
+        viralityScore: "97/100",
+        whyViral: "High-converting stat callout grid with bold growth numbers",
         isLightBg: false,
-        rawHtml: `<div style="width: 1080px; height: 1080px; position: relative; background: #08080c; overflow: hidden; font-family: {{FONT_FAMILY}}, system-ui, sans-serif; box-sizing: border-box; padding: 80px; display: flex; flex-direction: column; justify-content: space-between;">
-          <img src="{{IMAGE_URL}}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.2; z-index: 1;" />
-          <div style="position: relative; z-index: 10; display: flex; justify-content: space-between; align-items: center;">
-            <div style="background: {{PRIMARY_COLOR}}; color: #000; font-weight: 900; font-size: 13px; letter-spacing: 0.15em; padding: 6px 14px; border-radius: 6px; text-transform: uppercase;">METRIC BILLBOARD</div>
-            <div>{{LOGO_URL}}</div>
+        rawHtml: `<div style="width: 1080px; height: 1080px; background: #08080c; color: #ffffff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 75px 80px;">
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 45px;">
+              <div style="display: flex; align-items: center; gap: 14px; background: #161822; border: 1px solid #2a2d3d; padding: 10px 24px; border-radius: 100px;">
+                <div style="width: 14px; height: 14px; border-radius: 50%; background: #10b981; box-shadow: 0 0 12px #10b981;"></div>
+                <span style="font-size: 20px; font-weight: 700; color: #f8fafc; letter-spacing: 0.05em; text-transform: uppercase;">Growth Metric Case Study</span>
+              </div>
+              <span style="color: #64748b; font-size: 22px; font-weight: 600;">#B2BPLAYBOOK</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 50px;">
+              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
+                <div style="font-size: 48px; font-weight: 900; color: #10b981; line-height: 1; margin-bottom: 8px;">+340%</div>
+                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">MRR Growth</div>
+              </div>
+              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
+                <div style="font-size: 48px; font-weight: 900; color: #6366f1; line-height: 1; margin-bottom: 8px;">$1.2M</div>
+                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">ARR Pipeline</div>
+              </div>
+              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
+                <div style="font-size: 48px; font-weight: 900; color: #f59e0b; line-height: 1; margin-bottom: 8px;">&lt; 14 Days</div>
+                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">Payback Period</div>
+              </div>
+            </div>
+            <div style="font-size: 46px; line-height: 1.32; font-weight: 800; color: #ffffff; margin-bottom: 24px; letter-spacing: -0.015em;">
+              {{HEADLINE}}
+            </div>
+            <div style="font-size: 26px; line-height: 1.5; color: #94a3b8; font-weight: 400;">
+              {{SUBTEXT}}
+            </div>
           </div>
-          <div style="position: relative; z-index: 10; display: flex; flex-direction: column; gap: 20px;">
-            <h2 style="color: #ffffff; font-weight: 900; font-size: 64px; line-height: 1.1; margin: 0; text-transform: uppercase; letter-spacing: -0.02em;">{{HEADLINE}}</h2>
-            <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-left: 6px solid {{PRIMARY_COLOR}}; border-radius: 12px; padding: 24px 30px;">
-              <p style="color: #cbd5e1; font-weight: 500; font-size: 22px; line-height: 1.45; margin: 0;">{{SUBTEXT}}</p>
+          <div style="border-top: 1px solid #222638; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #64748b; font-size: 24px; font-weight: 600;">
+            <span style="color: #cbd5e1; font-weight: 700;">Verified B2B Operating Model</span>
+            <span style="color: #6366f1; font-weight: 700;">Read Full Breakdown ↓</span>
+          </div>
+        </div>`
+      },
+      {
+        id: "linkedin-carousel-cover",
+        name: "LinkedIn Viral Carousel Cover",
+        primaryColor: "#6366F1",
+        secondaryColor: "#08080C",
+        fontFamily: "Inter",
+        sourceTrend: "LinkedIn Top 1% Carousel Hook Trend",
+        viralityScore: "96/100",
+        whyViral: "Ultra-clean high-contrast typography cover with SWIPE indicator",
+        isLightBg: false,
+        rawHtml: `<div style="width: 1080px; height: 1080px; background: #08080c; color: #ffffff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 80px 85px; position: relative;">
+          <div style="position: absolute; top: 0; left: 0; right: 0; height: 12px; background: linear-gradient(90deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);"></div>
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 50px;">
+              <span style="background: #1e1b4b; border: 1px solid #4338ca; color: #a5b4fc; font-size: 20px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 12px 28px; border-radius: 100px;">
+                THE FOUNDER PLAYBOOK · SLIDE 1/7
+              </span>
+              <span style="color: #64748b; font-size: 22px; font-weight: 700;">FOUNDER INSIGHT</span>
+            </div>
+            <div style="font-size: 60px; line-height: 1.22; font-weight: 900; color: #ffffff; margin-bottom: 32px; letter-spacing: -0.02em; word-break: break-word;">
+              {{HEADLINE}}
+            </div>
+            <div style="font-size: 30px; line-height: 1.5; color: #94a3b8; font-weight: 400; max-width: 900px;">
+              {{SUBTEXT}}
+            </div>
+          </div>
+          <div style="border-top: 1px solid #1e293b; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #ffffff; font-size: 26px; font-weight: 700;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div style="width: 16px; height: 16px; border-radius: 50%; background: #6366f1;"></div>
+              <span style="color: #cbd5e1; font-weight: 600;">Founder Curation</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; color: #818cf8; font-weight: 800;">
+              <span>SWIPE</span>
+              <svg style="width: 32px; height: 32px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
             </div>
           </div>
         </div>`

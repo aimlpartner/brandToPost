@@ -15,6 +15,7 @@ interface PostPreviewModalProps {
   dna?: ProductDNA;
   productName: string;
   productLogo?: string;
+  productTagline?: string;
   onClose?: () => void;
   inline?: boolean;
   onImageGenerated?: (dataUrl: string) => void;
@@ -96,7 +97,7 @@ function TemplatePreviewFrame({ htmlContent, originalUrl, onEdit }: { htmlConten
   );
 }
 
-export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualData, dna, productName, productLogo, onClose, inline, onImageGenerated, onUpdateVisual, isLoadingVisual, isFlattened }: PostPreviewModalProps) {
+export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualData, dna, productName, productLogo, productTagline, onClose, inline, onImageGenerated, onUpdateVisual, isLoadingVisual, isFlattened }: PostPreviewModalProps) {
   const [isVisualEditorOpen, setIsVisualEditorOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -311,19 +312,24 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
    return (
      <div className="bg-white border-y sm:border sm:border-gray-200 sm:rounded-xl overflow-hidden max-w-[552px] w-full mx-auto font-sans text-[14px] text-gray-900 text-left">
        <div className="flex p-4 pb-0">
-         <div className="mr-2 shrink-0">
-           <div className="w-12 h-12 flex items-center justify-center bg-gray-100 overflow-hidden border border-gray-200">
-             {productLogo ? <img src={productLogo || undefined} className="w-full h-full object-cover" /> : <div className="text-gray-400 font-bold">{productName.charAt(0)}</div>}
+         <div className="mr-2.5 shrink-0">
+           <div className="w-12 h-12 rounded-full flex items-center justify-center bg-violet-100 text-violet-700 font-bold overflow-hidden border border-slate-200 shadow-2xs">
+             {productLogo ? <img src={productLogo || undefined} alt={productName} className="w-full h-full object-cover rounded-full" /> : <div className="text-violet-700 font-extrabold text-base">{productName.charAt(0)}</div>}
            </div>
          </div>
          <div className="flex-1 min-w-0">
            <div className="flex items-start justify-between">
-             <div className="flex flex-col">
-               <span className="font-semibold text-black hover:text-[#2583EB] hover:underline">{productName}</span>
-               <span className="text-[12px] text-gray-450 truncate">SaaS Platform • Daily Strategy</span>
-               <span className="text-[12px] text-gray-450">1h • 🌐</span>
+             <div className="flex flex-col min-w-0 pr-2">
+               <div className="flex items-center gap-1">
+                 <span className="font-semibold text-black hover:text-[#2583EB] hover:underline truncate">{productName}</span>
+                 <span className="text-gray-400 font-normal text-[12px] shrink-0">· 1st</span>
+               </div>
+               <span className="text-[12px] text-gray-500 font-normal truncate max-w-[420px] block leading-tight mt-0.5" title={productTagline}>
+                 {productTagline || "Founder & Executive • Daily Strategy"}
+               </span>
+               <span className="text-[12px] text-gray-400 font-normal mt-0.5">18h · 🌐</span>
              </div>
-             <MoreHorizontal className="h-5 w-5 text-gray-400" />
+             <MoreHorizontal className="h-5 w-5 text-gray-400 shrink-0" />
            </div>
          </div>
        </div>

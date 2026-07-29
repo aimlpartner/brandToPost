@@ -13,7 +13,7 @@ import {
  Loader2, ShieldAlert, Activity, Database, DollarSign, Bug, AlertCircle, Trash2,
  MessageSquare, Plus, Search, Sparkles, RefreshCw, Clock, ShieldCheck, 
  CheckCircle, CheckCircle2, Smartphone, Send, Languages, Zap, Heart, Filter, Laptop,
- Users, FileText, Lock, Unlock
+ Users, FileText, Lock, Unlock, X, ExternalLink, Briefcase, Globe, Target, Volume2, Layers
 } from 'lucide-react';
 import { logSilentError } from '../lib/firestore-error';
 
@@ -59,6 +59,13 @@ const PRICING = {
 
 const USD_TO_INR = 83.50; // Exchange rate for INR conversion
 
+function getInitials(name: string): string {
+  if (!name) return 'U';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export default function AdminDashboard() {
  const { user, loading: authLoading } = useAuth();
  const [activeTab, setActiveTab] = useState<'tokens' | 'errors' | 'whatsapp' | 'users' | 'blogs'>('users');
@@ -75,6 +82,11 @@ export default function AdminDashboard() {
  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
  const [userOnboardingFilter, setUserOnboardingFilter] = useState<'all' | 'onboarded' | 'pending'>('all');
  const [userFetchError, setUserFetchError] = useState<string | null>(null);
+
+ // User Brand DNA Modal State
+ const [allProducts, setAllProducts] = useState<any[]>([]);
+ const [userProductsMap, setUserProductsMap] = useState<Record<string, any[]>>({});
+ const [selectedUserModal, setSelectedUserModal] = useState<any | null>(null);
 
  // WhatsApp System States
  const [leads, setLeads] = useState<any[]>([]);
@@ -340,6 +352,49 @@ export default function AdminDashboard() {
       console.error("Failed to fetch users profiles:", err);
       logSilentError(err as Error, { context: "fetchUsersProfiles" });
       setUserFetchError(err.message || "Failed to fetch users");
+    }
+
+    // 4. Fetch Products / Brands (Server Proxy + Client Fallback)
+    try {
+      let fetchedProducts: any[] = [];
+      let prodMap: Record<string, any[]> = {};
+      let serverFetched = false;
+
+      try {
+        const res = await fetch('/api/admin/products');
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.success && Array.isArray(resData.products)) {
+            fetchedProducts = resData.products;
+            fetchedProducts.forEach(prod => {
+              if (prod.userId) {
+                if (!prodMap[prod.userId]) prodMap[prod.userId] = [];
+                prodMap[prod.userId].push(prod);
+              }
+            });
+            serverFetched = true;
+          }
+        }
+      } catch (serverErr) {
+        // Server route fallback to client SDK
+      }
+
+      if (!serverFetched) {
+        const productsSnapshot = await getDocs(collection(db, 'products'));
+        productsSnapshot.forEach((docSnap) => {
+          const prod: any = { id: docSnap.id, ...docSnap.data() };
+          fetchedProducts.push(prod);
+          if (prod.userId) {
+            if (!prodMap[prod.userId]) prodMap[prod.userId] = [];
+            prodMap[prod.userId].push(prod);
+          }
+        });
+      }
+
+      setAllProducts(fetchedProducts);
+      setUserProductsMap(prodMap);
+    } catch (err: any) {
+      console.warn("Could not fetch products for admin panel (permission restriction):", err?.message);
     }
     
     setLoading(false);
@@ -1038,25 +1093,39 @@ export default function AdminDashboard() {
                         {filteredUsers.map((u) => {
                           const userName = u.displayName || u.name || "Anonymous User";
                           const initials = getInitials(userName);
+                          const userBrands = userProductsMap[u.id] || [];
                           return (
                             <tr key={u.id} className="hover:bg-slate-50/50 transition-colors text-xs font-light">
                               <td className="py-3 px-2">
-                                <div className="flex items-center gap-3">
+                                <div 
+                                  onClick={() => setSelectedUserModal(u)}
+                                  className="flex items-center gap-3 cursor-pointer group hover:opacity-90 transition-all"
+                                  title="Click to view User Profile & Brand DNA"
+                                >
                                   {u.photoURL ? (
                                     <img
                                       src={u.photoURL}
                                       alt={userName}
-                                      className="h-9 w-9 rounded-full object-cover border border-slate-200"
+                                      className="h-9 w-9 rounded-full object-cover border border-slate-200 group-hover:border-[#7C3AED] transition-colors"
                                       referrerPolicy="no-referrer"
                                     />
                                   ) : (
-                                    <div className="h-9 w-9 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs border border-slate-200 select-none">
+                                    <div className="h-9 w-9 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs border border-slate-200 group-hover:border-[#7C3AED] group-hover:bg-purple-50 group-hover:text-[#7C3AED] transition-colors select-none">
                                       {initials}
                                     </div>
                                   )}
                                   <div>
-                                    <div className="font-bold text-slate-800">{userName}</div>
-                                    <div className="text-[10px] text-slate-450 mt-0.5">ID: {u.id.substring(0, 8)}...</div>
+                                    <div className="font-bold text-slate-800 group-hover:text-[#7C3AED] transition-colors flex items-center gap-1.5">
+                                      <span>{userName}</span>
+                                      <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                                        userBrands.length > 0
+                                          ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                          : 'bg-slate-100 text-slate-450 border border-slate-200'
+                                      }`}>
+                                        {userBrands.length} {userBrands.length === 1 ? 'Brand' : 'Brands'}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-450 mt-0.5 font-mono">ID: {u.id.substring(0, 8)}...</div>
                                   </div>
                                 </div>
                               </td>
@@ -2039,6 +2108,183 @@ export default function AdminDashboard() {
           )}
         </div>
       )}
+
+      {/* User Profile & Brand DNA Modal */}
+      {selectedUserModal && (() => {
+        const userModalBrands = userProductsMap[selectedUserModal.id] || allProducts.filter(p => p.userId === selectedUserModal.id);
+        const userName = selectedUserModal.displayName || selectedUserModal.name || "Anonymous User";
+        const initials = getInitials(userName);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+              {/* Modal Header */}
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+                <div className="flex items-center gap-4">
+                  {selectedUserModal.photoURL ? (
+                    <img
+                      src={selectedUserModal.photoURL}
+                      alt={userName}
+                      className="h-12 w-12 rounded-full object-cover border-2 border-purple-200 shadow-sm"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-extrabold text-base border border-purple-200 shadow-sm select-none">
+                      {initials}
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-bold text-slate-800 font-display">{userName}</h3>
+                      {selectedUserModal.isLocked ? (
+                        <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                          <Lock className="w-3 h-3 text-rose-600" /> Account Locked
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                          <Unlock className="w-3 h-3 text-emerald-600" /> Account Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">{selectedUserModal.email || 'No email registered'} • UID: {selectedUserModal.id}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedUserModal(null)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors focus:outline-none"
+                  title="Close Modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Content Scroll Area */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-700">
+                {/* User Quick Stats Bar */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Brands Added</div>
+                    <div className="text-lg font-extrabold text-purple-700 mt-0.5">{userModalBrands.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Onboarding</div>
+                    <div className="text-xs font-bold text-slate-800 mt-1">
+                      {selectedUserModal.onboarded ? 'Completed' : 'Pending'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Role</div>
+                    <div className="text-xs font-bold text-slate-800 mt-1">{selectedUserModal.role || 'User'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Joined / Active</div>
+                    <div className="text-[11px] font-semibold text-slate-600 mt-1">
+                      {selectedUserModal.createdAt ? new Date(selectedUserModal.createdAt).toLocaleDateString() : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Brands DNA Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 font-display">
+                      <Briefcase className="w-4 h-4 text-[#7C3AED]" /> Brands & Product DNA ({userModalBrands.length})
+                    </h4>
+                  </div>
+
+                  {userModalBrands.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      <Briefcase className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs font-medium text-slate-500">No brand profiles have been added by this user yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {userModalBrands.map((b) => (
+                        <div key={b.id} className="p-5 rounded-xl border border-slate-200 bg-white shadow-sm hover:border-purple-200 transition-all space-y-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              {b.logoUrl ? (
+                                <img src={b.logoUrl} alt={b.name} className="w-10 h-10 rounded-lg object-contain border border-slate-100 bg-slate-50 p-1" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-sm select-none">
+                                  {b.name ? b.name.substring(0, 2).toUpperCase() : 'BD'}
+                                </div>
+                              )}
+                              <div>
+                                <h5 className="font-bold text-slate-800 text-base">{b.name}</h5>
+                                {b.website && (
+                                  <a
+                                    href={b.website.startsWith('http') ? b.website : `https://${b.website}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-purple-600 hover:underline inline-flex items-center gap-1 mt-0.5 font-medium"
+                                  >
+                                    <Globe className="w-3 h-3" /> {b.website} <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                            {b.stage && (
+                              <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200">
+                                {b.stage}
+                              </span>
+                            )}
+                          </div>
+
+                          {b.positioning && (
+                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <Target className="w-3 h-3 text-purple-600" /> Positioning & Value Prop
+                              </div>
+                              <p className="text-xs text-slate-700 leading-relaxed font-light">{b.positioning}</p>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            {b.audience && (
+                              <div className="p-3 bg-slate-50/60 rounded-lg border border-slate-100">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Audience</div>
+                                <p className="text-slate-650 text-[11px]">{b.audience}</p>
+                              </div>
+                            )}
+
+                            {b.tone && (
+                              <div className="p-3 bg-slate-50/60 rounded-lg border border-slate-100">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                  <Volume2 className="w-3 h-3 text-purple-600" /> Tone of Voice
+                                </div>
+                                <p className="text-slate-650 text-[11px]">{b.tone}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {b.visualStyle && (
+                            <div className="text-[11px] text-slate-500 pt-1 flex items-center gap-1">
+                              <Layers className="w-3 h-3 text-slate-400" /> <span className="font-semibold">Visual Style:</span> {b.visualStyle}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between">
+                <div className="text-xs text-slate-500">
+                  User ID: <span className="font-mono">{selectedUserModal.id}</span>
+                </div>
+                <button
+                  onClick={() => setSelectedUserModal(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
+                >
+                  Close Profile
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

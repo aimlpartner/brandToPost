@@ -11,6 +11,9 @@ export interface LayoutBlueprint {
     primaryColor: string;
     secondaryColor: string;
     fontFamily: string;
+    authorName?: string;
+    authorAvatar?: string;
+    authorBio?: string;
   }) => string;
 }
 
@@ -23,6 +26,79 @@ const calcFontSize = (text: string, base: number = 48, min: number = 22): number
 };
 
 export const LAYOUT_BLUEPRINTS: Record<string, LayoutBlueprint> = {
+  "x-tweet-card": {
+    id: "x-tweet-card",
+    name: "X (Twitter) Viral Tweet Card",
+    family: "geometric",
+    isLightBg: false,
+    buildHtml: ({ headline, subtext, logoUrl, fontFamily, authorName, authorAvatar, authorBio }) => {
+      const displayName = authorName || "Founder Daily";
+      const displayHandle = `@${displayName.toLowerCase().replace(/[^a-z0-9_]/g, '')}`;
+      const avatarSrc = authorAvatar || logoUrl;
+      const avatarMarkup = avatarSrc 
+        ? `<img src="${avatarSrc}" style="width: 100%; height: 100%; object-fit: cover;" />`
+        : `<span style="color: #ffffff; font-weight: 800; font-size: 36px;">${displayName.charAt(0).toUpperCase()}</span>`;
+      
+      const combinedText = `${headline}\n\n${subtext || ""}`.trim();
+      
+      // Calculate font sizes based on text length to fill the card nicely
+      let mainFontSize = 48;
+      let lineHeight = 1.4;
+      if (combinedText.length > 200) {
+        mainFontSize = 38;
+      } else if (combinedText.length > 120) {
+        mainFontSize = 42;
+      }
+      
+      return `
+        <div style="width: 1080px; height: 1080px; background: #000000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; padding: 60px 80px;">
+          <!-- Tweet Container to look like a centered post or full screen -->
+          <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; width: 100%;">
+            
+            <!-- Top X Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px;">
+              <div style="display: flex; align-items: center; gap: 24px;">
+                <div style="width: 90px; height: 90px; border-radius: 50%; background: #16181c; border: 1px solid #2f3336; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                  ${avatarMarkup}
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-weight: 700; font-size: 32px; color: #e7e9ea; letter-spacing: -0.01em;">${displayName}</span>
+                    <svg style="width: 28px; height: 28px; color: #1d9bf0;" viewBox="0 0 24 24" fill="currentColor"><path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.79-4-4-4-.495 0-.965.084-1.4.238C14.55 2.475 13.18 1.6 11.6 1.6c-1.58 0-2.95.875-3.6 2.148-.435-.154-.905-.238-1.4-.238-2.21 0-4 1.79-4 4 0 .495.084.965.238 1.4C1.475 9.55.6 10.92.6 12.5c0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.21 1.79 4 4 4 .495 0 .965-.084 1.4-.238 1.05 1.273 2.42 2.148 4 2.148 1.58 0 2.95-.875 3.6-2.148.435.154.905.238 1.4.238 2.21 0 4-1.79 4-4 0-.495-.084-.965-.238-1.4 1.273-1.05 2.148-2.42 2.148-4zM9.6 17.2L5.4 13l1.4-1.4 2.8 2.8 7.6-7.6 1.4 1.4-9 9z"/></svg>
+                  </div>
+                  <span style="font-size: 26px; color: #71767b; font-weight: 400;">${displayHandle}</span>
+                </div>
+              </div>
+              <div style="color: #e7e9ea;">
+                <svg style="width: 42px; height: 42px; fill: currentColor;" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              </div>
+            </div>
+
+            <!-- Main Tweet Body Copy -->
+            <div style="font-size: ${mainFontSize}px; line-height: ${lineHeight}; font-weight: 400; color: #e7e9ea; margin-bottom: 24px; word-break: break-word; white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">${combinedText}</div>
+            
+            <!-- Bio / Info string as quote if available -->
+            ${authorBio ? `<div style="font-size: 24px; color: #71767b; font-style: italic; margin-bottom: 24px;">— ${authorBio}</div>` : ""}
+
+            <!-- Fake metrics footer at bottom -->
+            <div style="border-top: 1px solid #2f3336; border-bottom: 1px solid #2f3336; padding: 20px 0; margin-top: auto; display: flex; align-items: center; justify-content: space-between; color: #71767b; font-size: 24px; font-weight: 500;">
+              <span style="color: #e7e9ea;">10:42 AM · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <span><span style="color: #e7e9ea; font-weight: 700;">1.8M</span> Views</span>
+            </div>
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 24px; color: #71767b; font-size: 24px;">
+              <div style="display: flex; gap: 12px; align-items: center;"><svg style="width: 32px; height: 32px; fill: currentColor" viewBox="0 0 24 24"><path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.067c-4.49.1-8.183-3.51-8.183-8.01zm8.005-6c-3.317 0-6.005 2.69-6.005 6 0 3.37 2.77 6.08 6.138 6.01l.351-.01h1.761v2.3l5.087-2.81c1.951-1.08 3.163-3.13 3.163-5.36 0-3.39-2.744-6.13-6.129-6.13H9.756z"/></svg> 107</div>
+              <div style="display: flex; gap: 12px; align-items: center;"><svg style="width: 32px; height: 32px; fill: currentColor" viewBox="0 0 24 24"><path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/></svg> 12</div>
+              <div style="display: flex; gap: 12px; align-items: center;"><svg style="width: 32px; height: 32px; fill: currentColor" viewBox="0 0 24 24"><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"/></svg> 218</div>
+              <div style="display: flex; gap: 12px; align-items: center;"><svg style="width: 32px; height: 32px; fill: currentColor" viewBox="0 0 24 24"><path d="M8.75 21V3h2v18h-2zM18 21V8.5h2V21h-2zM4 21l.004-10h2L6 21H4zm9.248 0v-7h2v7h-2z"/></svg> 14K</div>
+              <div style="display: flex; gap: 12px; align-items: center;"><svg style="width: 32px; height: 32px; fill: currentColor" viewBox="0 0 24 24"><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"/></svg></div>
+              <div style="display: flex; gap: 12px; align-items: center;"><svg style="width: 32px; height: 32px; fill: currentColor" viewBox="0 0 24 24"><path d="M12 2.59l5.7 5.7-1.41 1.42L13 6.41V16h-2V6.41l-3.3 3.3-1.41-1.42L12 2.59zM21 15l-.02 3.51c0 1.38-1.12 2.49-2.5 2.49H5.5C4.11 21 3 19.88 3 18.5V15h2v3.5c0 .28.22.5.5.5h12.98c.28 0 .5-.22.5-.5L19 15h2z"/></svg></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  },
   "editorial-left": {
     id: "editorial-left",
     name: "Editorial Left Panel",
@@ -133,22 +209,139 @@ export const LAYOUT_BLUEPRINTS: Record<string, LayoutBlueprint> = {
     }
   },
 
-  "contrarian-card": {
-    id: "contrarian-card",
-    name: "Contrarian Callout Card",
+  "notes-app-screenshot": {
+    id: "notes-app-screenshot",
+    name: "Apple Notes Founder Memo",
+    family: "minimalist",
+    isLightBg: true,
+    buildHtml: ({ headline, subtext }) => {
+      return `
+        <div style="width: 1080px; height: 1080px; background: #fbfbfd; color: #1d1d1f; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 75px 80px;">
+          <div>
+            <!-- Apple Notes Top Navigation Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 45px; padding-bottom: 28px; border-bottom: 1.5px solid #e5e5ea;">
+              <div style="display: flex; align-items: center; gap: 12px; color: #e59c00; font-size: 30px; font-weight: 600;">
+                <svg style="width: 32px; height: 32px; fill: currentColor;" viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+                <span>Notes</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 20px; color: #e59c00; font-size: 28px; font-weight: 700;">
+                <svg style="width: 34px; height: 34px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <span>Done</span>
+              </div>
+            </div>
+
+            <!-- Notes Title Body -->
+            <div style="font-size: 54px; line-height: 1.28; font-weight: 800; color: #1d1d1f; margin-bottom: 36px; letter-spacing: -0.02em; word-break: break-word;">
+              ${headline}
+            </div>
+
+            <div style="font-size: 30px; line-height: 1.55; color: #424245; font-weight: 400; word-break: break-word;">
+              ${subtext || "Hard truth after scaling to $1M ARR: Most features you build are just expensive distractions. Double down on the 1 single workflow that drives 80% of core retention."}
+            </div>
+          </div>
+
+          <!-- Bottom Apple Notes Timestamp Footer Stamp -->
+          <div style="border-top: 1.5px solid #e5e5ea; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #86868b; font-size: 24px; font-weight: 500;">
+            <span>Today at 9:41 AM</span>
+            <span>142 words</span>
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  "metrics-breakdown-card": {
+    id: "metrics-breakdown-card",
+    name: "B2B SaaS Growth & Metric Card",
+    family: "geometric",
+    isLightBg: false,
+    buildHtml: ({ headline, subtext }) => {
+      return `
+        <div style="width: 1080px; height: 1080px; background: #08080c; color: #ffffff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 75px 80px;">
+          <div>
+            <!-- Top Metric Tag Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 45px;">
+              <div style="display: flex; align-items: center; gap: 14px; background: #161822; border: 1px solid #2a2d3d; padding: 10px 24px; border-radius: 100px;">
+                <div style="width: 14px; height: 14px; border-radius: 50%; background: #10b981; box-shadow: 0 0 12px #10b981;"></div>
+                <span style="font-size: 20px; font-weight: 700; color: #f8fafc; letter-spacing: 0.05em; text-transform: uppercase;">Growth Metric Case Study</span>
+              </div>
+              <span style="color: #64748b; font-size: 22px; font-weight: 600;">#B2BPLAYBOOK</span>
+            </div>
+
+            <!-- Big Stat Grid Callouts -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 50px;">
+              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
+                <div style="font-size: 48px; font-weight: 900; color: #10b981; line-height: 1; margin-bottom: 8px;">+340%</div>
+                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">MRR Growth</div>
+              </div>
+              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
+                <div style="font-size: 48px; font-weight: 900; color: #6366f1; line-height: 1; margin-bottom: 8px;">$1.2M</div>
+                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">ARR Pipeline</div>
+              </div>
+              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
+                <div style="font-size: 48px; font-weight: 900; color: #f59e0b; line-height: 1; margin-bottom: 8px;">&lt; 14 Days</div>
+                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">Payback Period</div>
+              </div>
+            </div>
+
+            <!-- Main Headline Thesis -->
+            <div style="font-size: 46px; line-height: 1.32; font-weight: 800; color: #ffffff; margin-bottom: 24px; letter-spacing: -0.015em;">
+              ${headline}
+            </div>
+
+            ${subtext ? `<div style="font-size: 26px; line-height: 1.5; color: #94a3b8; font-weight: 400;">${subtext}</div>` : ""}
+          </div>
+
+          <!-- Bottom Branding Bar -->
+          <div style="border-top: 1px solid #222638; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #64748b; font-size: 24px; font-weight: 600;">
+            <span style="color: #cbd5e1; font-weight: 700;">Verified B2B Operating Model</span>
+            <span style="color: #6366f1; font-weight: 700;">Read Full Breakdown ↓</span>
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  "linkedin-carousel-cover": {
+    id: "linkedin-carousel-cover",
+    name: "LinkedIn Viral Carousel Cover",
     family: "minimalist",
     isLightBg: false,
-    buildHtml: ({ headline, subtext, imageUrl, logoUrl, primaryColor, secondaryColor, fontFamily }) => {
+    buildHtml: ({ headline, subtext }) => {
       return `
-        <div style="width: 1080px; height: 1080px; position: relative; background: #08080c; overflow: hidden; font-family: ${fontFamily}, system-ui, sans-serif; box-sizing: border-box; display: flex; align-items: center; justify-content: center;">
-          <img src="${imageUrl}" style="position: absolute; inset:0; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.4) contrast(1.1); z-index: 1;" />
-          <div style="position: relative; z-index: 10; width: 860px; background: ${secondaryColor || '#08080C'}; border: 2px solid rgba(255,255,255,0.15); border-left: 8px solid ${primaryColor || '#F59E0B'}; border-radius: 24px; padding: 60px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); box-sizing: border-box;">
-            <div style="display: inline-block; background: ${primaryColor || '#F59E0B'}22; color: ${primaryColor || '#F59E0B'}; font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; padding: 6px 16px; border-radius: 100px; margin-bottom: 24px; border: 1px solid ${primaryColor || '#F59E0B'}44;">
-              CONTRARIAN THESIS
+        <div style="width: 1080px; height: 1080px; background: #08080c; color: #ffffff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 80px 85px; position: relative;">
+          <!-- Top Accent Border Rule -->
+          <div style="position: absolute; top: 0; left: 0; right: 0; height: 12px; background: linear-gradient(90deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);"></div>
+
+          <div>
+            <!-- Top Slide Badge -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 50px;">
+              <span style="background: #1e1b4b; border: 1px solid #4338ca; color: #a5b4fc; font-size: 20px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 12px 28px; border-radius: 100px;">
+                THE FOUNDER PLAYBOOK · SLIDE 1/7
+              </span>
+              <span style="color: #64748b; font-size: 22px; font-weight: 700;">FOUNDER INSIGHT</span>
             </div>
-            <h2 style="color: #ffffff; font-weight: 850; font-size: 48px; line-height: 1.2; margin: 0 0 20px 0; word-break: break-word;">${headline}</h2>
-            <p style="color: #94a3b8; font-weight: 500; font-size: 22px; line-height: 1.5; margin: 0;">${subtext}</p>
-            ${logoUrl ? `<div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);"><img src="${logoUrl}" style="max-height: 40px; max-width: 140px; object-fit: contain;" /></div>` : ''}
+
+            <!-- Massive Punchy Hook Headline -->
+            <div style="font-size: 60px; line-height: 1.22; font-weight: 900; color: #ffffff; margin-bottom: 32px; letter-spacing: -0.02em; word-break: break-word;">
+              ${headline}
+            </div>
+
+            <div style="font-size: 30px; line-height: 1.5; color: #94a3b8; font-weight: 400; max-width: 900px;">
+              ${subtext || "Swipe through to see the exact tactical breakdown used to scale organic ARR with zero ad spend."}
+            </div>
+          </div>
+
+          <!-- Bottom Swipe Indicator Bar -->
+          <div style="border-top: 1px solid #1e293b; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #ffffff; font-size: 26px; font-weight: 700;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div style="width: 16px; height: 16px; border-radius: 50%; background: #6366f1;"></div>
+              <span style="color: #cbd5e1; font-weight: 600;">Founder Curation</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; color: #818cf8; font-weight: 800;">
+              <span>SWIPE</span>
+              <svg style="width: 32px; height: 32px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
+            </div>
           </div>
         </div>
       `;

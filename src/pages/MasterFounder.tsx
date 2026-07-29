@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { 
   Brain, Cpu, Upload, Loader2, Sparkles, Save, Target, MessageSquare, 
   Zap, Clock, Globe, FileText, CheckCircle2, ChevronRight, Play, Check,
   Palette, Type, Download, Copy, RefreshCw, FileSignature, Linkedin, Image as ImageIcon, X,
-  LayoutGrid, ListFilter, ChevronLeft, ShieldCheck, Eye
+  LayoutGrid, ListFilter, ChevronLeft, ShieldCheck, Eye, Share2, Sliders
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
@@ -20,10 +21,50 @@ import {
 import { synthesizeFounderAgent, generateGeneralFounderPost, generateFounderTopicSuggestions, generateBrandedFounderPost, researchVisualTrends } from "../services/geminiService";
 import { CustomTimePicker } from "../components/CustomTimePicker";
 import { PostPreviewModal } from "../components/PostPreviewModal";
-import { utcToLocal, localToUtc } from "../lib/utils";
+import { FaLinkedin, FaXTwitter, FaFacebook, FaInstagram, FaReddit } from "react-icons/fa6";
+import { utcToLocal, localToUtc, cn } from "../lib/utils";
 import { VisualEngine } from "../components/VisualEngine";
 import { LAYOUT_BLUEPRINTS } from "../lib/layoutBlueprints";
+
+// Helper component to dynamically scale 1080x1080 iframe template previews to fill container with zero gaps
+function ScaledIframePreview({ htmlToRender, title }: { htmlToRender: string; title: string }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [scale, setScale] = React.useState<number>(0.22);
+
+  React.useLayoutEffect(() => {
+    if (!containerRef.current) return;
+    const updateScale = () => {
+      const width = containerRef.current?.getBoundingClientRect().width || 230;
+      if (width > 0) {
+        setScale(width / 1080);
+      }
+    };
+    updateScale();
+    const ro = new ResizeObserver(updateScale);
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-full aspect-square rounded-lg bg-black overflow-hidden border border-slate-800">
+      <iframe
+        title={title}
+        srcDoc={`<!DOCTYPE html><html><head><style>html,body{margin:0;padding:0;overflow:hidden;background:#000000;width:1080px;height:1080px;}</style></head><body style="margin:0;padding:0;overflow:hidden;">${htmlToRender}</body></html>`}
+        sandbox="allow-same-origin"
+        scrolling="no"
+        className="absolute top-0 left-0 border-none pointer-events-none"
+        style={{
+          width: "1080px",
+          height: "1080px",
+          transform: `scale(${scale})`,
+          transformOrigin: "top left"
+        }}
+      />
+    </div>
+  );
+}
 import { toJpeg, toPng } from "html-to-image";
+import { renderVisualCanvasFallback } from "../lib/offscreenRenderer";
 import { GOOGLE_FONTS, ADOBE_FONTS } from "../lib/fonts";
 
 const STOCK_IMAGES = [
@@ -57,6 +98,9 @@ function renderDiscoveredHtml(rawHtml: string, data: {
   primaryColor: string;
   secondaryColor: string;
   fontFamily: string;
+  authorName?: string;
+  authorAvatar?: string;
+  authorBio?: string;
 }): string {
   if (!rawHtml) return "";
 
@@ -419,6 +463,16 @@ export function MasterFounder() {
     }
   };
 
+function getPlatformLogo(platform: string, className = "h-4 w-4") {
+  const p = (platform || "").toLowerCase();
+  if (p === "linkedin") return <FaLinkedin className={cn("text-[#0A66C2]", className)} />;
+  if (p === "instagram") return <FaInstagram className={cn("text-[#E4405F]", className)} />;
+  if (p === "twitter" || p === "x") return <FaXTwitter className={cn("text-slate-900", className)} />;
+  if (p === "facebook") return <FaFacebook className={cn("text-[#1877F2]", className)} />;
+  if (p === "reddit") return <FaReddit className={cn("text-[#FF4500]", className)} />;
+  return <Globe className={cn("text-slate-500", className)} />;
+}
+
   // Profiler collapsible control & Success Modal states
   const [showProfiler, setShowProfiler] = useState(true);
   const [hasInitializedProfilerState, setHasInitializedProfilerState] = useState(false);
@@ -460,6 +514,32 @@ export function MasterFounder() {
   // Modal state for popup form
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
 
+  // Social Channels Selector Modal state
+  const [channelModalBrand, setChannelModalBrand] = useState<any | null>(null);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']);
+  const [isSavingChannels, setIsSavingChannels] = useState(false);
+
+  const openChannelSelectorModal = (brand: any) => {
+    setChannelModalBrand(brand);
+    setSelectedPlatforms(
+      brand.targetPlatforms && brand.targetPlatforms.length > 0
+        ? brand.targetPlatforms
+        : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']
+    );
+  };
+
+  // Body scroll locking when any modal is active
+  useEffect(() => {
+    if (isTopicModalOpen || channelModalBrand || showSuccessModal) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isTopicModalOpen, channelModalBrand, showSuccessModal]);
+
   // History tab pagination & layout view mode
   const [historyLayout, setHistoryLayout] = useState<"list" | "grid">("list");
   const [historyPage, setHistoryPage] = useState(1);
@@ -482,6 +562,18 @@ export function MasterFounder() {
       if (res.ok) {
         const data = await res.json();
         setIsLinkedinConnected(!!data.connected);
+        if (data.profile) {
+          const userRef = doc(db, "users", user.uid);
+          await setDoc(userRef, {
+            linkedInProfile: {
+              name: data.profile.name || userProfile?.linkedInProfile?.name || "",
+              picture: data.profile.picture || userProfile?.linkedInProfile?.picture || "",
+              headline: data.profile.headline || userProfile?.linkedInProfile?.headline || ""
+            }
+          }, { merge: true });
+        }
+        // Automatically fetch latest photo & bio in background
+        handleAutoFetchLinkedinProfile(true);
       }
     } catch (err) {
       console.error("Failed to fetch LinkedIn connection status:", err);
@@ -533,6 +625,53 @@ export function MasterFounder() {
       setError(err.message || 'Failed to disconnect LinkedIn.');
     }
   };
+
+  const [isAutoFetchingProfile, setIsAutoFetchingProfile] = useState(false);
+
+  const handleAutoFetchLinkedinProfile = async (silent = true) => {
+    if (!user) return;
+    setIsAutoFetchingProfile(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/linkedin/auto-fetch-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+        },
+        body: JSON.stringify({
+          productId: `founder_${user.uid}`,
+          founderName: userProfile?.name || user?.displayName || ""
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.profile) {
+          const userRef = doc(db, "users", user.uid);
+          await setDoc(userRef, {
+            linkedInProfile: data.profile
+          }, { merge: true });
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (!silent) console.warn("Auto-fetch response:", errData);
+      }
+    } catch (err: any) {
+      if (!silent) console.error("Failed to auto-fetch LinkedIn profile:", err);
+    } finally {
+      setIsAutoFetchingProfile(false);
+    }
+  };
+
+  // Automatic Background Profile & Bio Fetcher Trigger
+  useEffect(() => {
+    if (user && !isAutoFetchingProfile) {
+      if (!userProfile?.linkedInProfile?.headline || !userProfile?.linkedInProfile?.picture) {
+        handleAutoFetchLinkedinProfile(true);
+      }
+    }
+  }, [user, userProfile?.linkedInProfile?.headline, userProfile?.linkedInProfile?.picture]);
 
   const handleManualPublish = async (postId: string) => {
     if (!user) return;
@@ -590,8 +729,9 @@ export function MasterFounder() {
   const [generatorLogs, setGeneratorLogs] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
 
-  // Suggestions states
-  const [suggestions, setSuggestions] = useState<{ title: string; description: string; prompt: string }[]>([]);
+  // Suggestions states (Cached separately for general vs per-brand)
+  const [generalSuggestions, setGeneralSuggestions] = useState<{ title: string; description: string; prompt: string }[]>([]);
+  const [brandedSuggestionsMap, setBrandedSuggestionsMap] = useState<Record<string, { title: string; description: string; prompt: string }[]>>({});
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
 
   // Automated posts history states
@@ -605,6 +745,7 @@ export function MasterFounder() {
   const [generatedImageUrl, setGeneratedImageUrl] = useState(STOCK_IMAGES[0].url);
   const [trendReport, setTrendReport] = useState<any | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("editorial-left");
+  const [selectedPrebuiltTemplate, setSelectedPrebuiltTemplate] = useState<string>("auto");
   const [hasGeneratedOutput, setHasGeneratedOutput] = useState(true);
 
   // Template Approval Flow State
@@ -612,16 +753,37 @@ export function MasterFounder() {
   const [isApprovingTemplate, setIsApprovingTemplate] = useState(false);
   const [approvedTemplateImageUrl, setApprovedTemplateImageUrl] = useState<string | null>(null);
 
-  const fetchTopicSuggestions = async () => {
-    if (!userProfile?.founderAgentSynthesized) return;
-    setIsFetchingSuggestions(true);
-    try {
-      const list = await generateFounderTopicSuggestions(userProfile.founderAgentSynthesized, user?.uid);
-      setSuggestions(list || []);
-    } catch (err) {
-      console.error("Failed to fetch topic suggestions:", err);
-    } finally {
-      setIsFetchingSuggestions(false);
+  const fetchTopicSuggestions = async (forceRefresh = false) => {
+    if (!userProfile?.founderAgentSynthesized || isFetchingSuggestions) return;
+
+    if (postScope === "general") {
+      if (!forceRefresh && generalSuggestions.length > 0) return;
+      setIsFetchingSuggestions(true);
+      try {
+        const list = await generateFounderTopicSuggestions(userProfile.founderAgentSynthesized, user?.uid);
+        setGeneralSuggestions(list || []);
+      } catch (err) {
+        console.error("Failed to fetch general topic suggestions:", err);
+      } finally {
+        setIsFetchingSuggestions(false);
+      }
+    } else if (postScope === "branded") {
+      const targetBrandId = selectedManualBrands[0];
+      if (!targetBrandId) return;
+      if (!forceRefresh && brandedSuggestionsMap[targetBrandId]?.length > 0) return;
+
+      const targetProd = products.find((p) => p.id === targetBrandId);
+      if (!targetProd) return;
+
+      setIsFetchingSuggestions(true);
+      try {
+        const list = await generateFounderTopicSuggestions(userProfile.founderAgentSynthesized, user?.uid, targetProd);
+        setBrandedSuggestionsMap((prev) => ({ ...prev, [targetBrandId]: list || [] }));
+      } catch (err) {
+        console.error("Failed to fetch branded topic suggestions:", err);
+      } finally {
+        setIsFetchingSuggestions(false);
+      }
     }
   };
 
@@ -645,70 +807,109 @@ export function MasterFounder() {
     console.log(`[STUDIO STEP 1/5] handleGeneratePostStudio triggered. Topic: "${postTopic}", Scope: "${postScope}" -> PASSED`);
     setIsGeneratingPost(true);
     setGeneratorLogs(["Spawning virtual Founder Brain...", `Topic: "${postTopic}"`]);
-
     try {
       let result: any = null;
       let targetProduct: any = null;
+      let resolvedLayoutId: string = selectedPrebuiltTemplate !== "auto" ? selectedPrebuiltTemplate : "editorial-left";
+      let reportData: any = null;
 
-      if (postScope === "general") {
-        console.log(`[STUDIO STEP 2/5] Calling generateGeneralFounderPost...`);
-        setGeneratorLogs(p => [...p, "Drafting organic social copy & visual hook..."]);
-        result = await generateGeneralFounderPost({
-          topic: postTopic,
-          attachmentStyle: "image-overlay",
-          founderAgent: userProfile.founderAgentSynthesized,
-          userId: user?.uid
-        });
+      // STEP 1: Determine Visual Template FIRST (Before Copy & Image Gen)
+      if (selectedPrebuiltTemplate !== "auto") {
+        console.log(`[STUDIO STEP 1/4] Prebuilt template selected: "${selectedPrebuiltTemplate}". SKIPPING live template research!`);
+        setGeneratorLogs(p => [...p, `⚡ Prebuilt Template selected: [${selectedPrebuiltTemplate}]. Skipping live research to save tokens...`]);
+
+        const prebuiltList = [
+          { id: "x-tweet-card", name: "X (Twitter) Viral Tweet Card", primaryColor: "#1D9BF0", secondaryColor: "#000000", fontFamily: "Inter", isLightBg: false },
+          { id: "contrarian-card", name: "Contrarian Hot Take Card", primaryColor: "#EC4899", secondaryColor: "#08080C", fontFamily: "Inter", isLightBg: false },
+          { id: "editorial-left", name: "Editorial Left Panel", primaryColor: "#F59E0B", secondaryColor: "#08080C", fontFamily: "Inter", isLightBg: false },
+          { id: "framed-mockup", name: "Framed Screenshot Mockup", primaryColor: "#7C3AED", secondaryColor: "#0F172A", fontFamily: "Outfit", isLightBg: false }
+        ];
+        const chosen = prebuiltList.find(t => t.id === selectedPrebuiltTemplate) || prebuiltList[0];
+        reportData = { summary: "Prebuilt Template Selection", viralPick: chosen, discoveredTemplates: prebuiltList };
+        setTrendReport(reportData);
+        setSelectedTemplateId(chosen.id);
+        resolvedLayoutId = chosen.id;
       } else {
-        targetProduct = products.find(p => p.id === selectedManualBrands[0]) || products[0];
-        console.log(`[STUDIO STEP 2/5] Calling generateBrandedFounderPost for brand: "${targetProduct?.name}"...`);
-        setGeneratorLogs(p => [...p, `Drafting branded copy for: ${targetProduct?.name || 'Selected Product'}...`]);
-        result = await generateBrandedFounderPost({
-          topic: postTopic,
-          attachmentStyle: "image-overlay",
-          founderAgent: userProfile.founderAgentSynthesized,
-          product: targetProduct,
-          userId: user?.uid
-        });
-      }
-
-      if (result) {
-        console.log(`[STUDIO STEP 2/5] Copy & backdrop image generation -> PASSED (Headline: "${result.headline}")`);
-        setGeneratorLogs(p => [...p, "✓ Copy and backdrop image generated successfully."]);
-        setGeneratedPostCopy(result.postCopy || "");
-        setGeneratedHeadline(result.headline || "Key Founder Insight");
-        setGeneratedSubtext(result.subtext || "Value-driven lesson");
-        if (result.imageUrl) {
-          setGeneratedImageUrl(result.imageUrl);
-        }
-
-        // Live Trend Research (exact same call as VisualTemplateLibrary)
-        console.log(`[STUDIO STEP 3/5] Querying researchVisualTrends()...`);
+        console.log(`[STUDIO STEP 1/4] Querying researchVisualTrends() FIRST...`);
         setGeneratorLogs(p => [...p, "🔍 Querying live market trend research engine via Gemini 3.1 Pro..."]);
-        let resolvedLayoutId: string = selectedTemplateId || "editorial-left";
         try {
-          const reportData = await researchVisualTrends();
+          reportData = await researchVisualTrends();
           if (reportData?.discoveredTemplates?.length > 0) {
-            // Normalize template IDs — ensure every template has a valid string ID
             reportData.discoveredTemplates = reportData.discoveredTemplates.map((dt: any, idx: number) => ({
               ...dt,
               id: dt.id && typeof dt.id === 'string' ? dt.id : `dynamic-fallback-${Date.now()}-${idx}`
             }));
             setTrendReport(reportData);
             const topId = reportData.discoveredTemplates[0].id;
-            resolvedLayoutId = topId; // Capture locally BEFORE async state update
+            resolvedLayoutId = topId;
             setSelectedTemplateId(topId);
 
-            const isStaticFallback = ["editorial-left", "contrarian-card", "framed-mockup", "brutalist-hero", "quote-spotlight", "stat-billboard"].includes(topId);
-            console.log(`[STUDIO STEP 3/5] Visual Trend Research -> PASSED. Received ${reportData.discoveredTemplates.length} templates. Top template ID: "${topId}"`);
-            console.log(`[STUDIO TEMPLATE TYPE CHECK] Top choice is: ${isStaticFallback ? '⚠️ STATIC PREBUILT FALLBACK TEMPLATE' : '✨ DYNAMIC AI-GENERATED TEMPLATE'} -> ${isStaticFallback ? 'WARNING: FALLBACK ACTIVE' : 'PASSED: DYNAMIC AI ACTIVE'}`);
+            if (user) {
+              for (const dt of reportData.discoveredTemplates) {
+                if (dt.rawHtml && typeof dt.rawHtml === 'string' && dt.rawHtml.trim().length > 30) {
+                  const tplRef = doc(db, "users", user.uid, "saved_templates", dt.id);
+                  setDoc(tplRef, {
+                    ...dt,
+                    savedAt: new Date().toISOString(),
+                    source: "master-founder-research"
+                  }, { merge: true }).catch(err => console.warn("Failed to auto-save template to library:", err));
+                }
+              }
+            }
 
-            setGeneratorLogs(p => [...p, `✓ Synthesized ${reportData.discoveredTemplates.length} visual trends (${isStaticFallback ? 'Static Fallback' : 'Dynamic AI'}). Top choice: [${reportData.discoveredTemplates[0].name}]`]);
-          } else {
-            console.error(`[STUDIO STEP 3/5] Visual Trend Research -> FAILED (No templates in reportData)`);
+            const isStaticFallback = ["editorial-left", "contrarian-card", "framed-mockup", "brutalist-hero", "quote-spotlight", "stat-billboard"].includes(topId);
+            setGeneratorLogs(p => [...p, `✓ Synthesized ${reportData.discoveredTemplates.length} visual trends (${isStaticFallback ? 'Static Fallback' : 'Dynamic AI'}). Saved to Template Library! Top choice: [${reportData.discoveredTemplates[0].name}]`]);
           }
         } catch (resErr: any) {
-          console.error("[STUDIO STEP 3/5] Visual Trend Research -> FAILED with exception:", resErr);
+          console.error("[STUDIO STEP 1/4] Visual Trend Research -> FAILED with exception:", resErr);
+        }
+      }
+
+      // STEP 2: Generate Post Copy & Image with Layout Context
+      if (postScope === "general") {
+        console.log(`[STUDIO STEP 2/4] Calling generateGeneralFounderPost with layout: "${resolvedLayoutId}"...`);
+        setGeneratorLogs(p => [...p, "Drafting organic social copy & visual hook..."]);
+        result = await generateGeneralFounderPost({
+          topic: postTopic,
+          attachmentStyle: "image-overlay",
+          founderAgent: userProfile.founderAgentSynthesized,
+          userId: user?.uid,
+          layoutId: resolvedLayoutId
+        });
+      } else {
+        targetProduct = products.find(p => p.id === selectedManualBrands[0]) || products[0];
+        console.log(`[STUDIO STEP 2/4] Calling generateBrandedFounderPost for brand: "${targetProduct?.name}" with layout: "${resolvedLayoutId}"...`);
+        setGeneratorLogs(p => [...p, `Drafting branded copy for: ${targetProduct?.name || 'Selected Product'}...`]);
+        result = await generateBrandedFounderPost({
+          topic: postTopic,
+          attachmentStyle: "image-overlay",
+          founderAgent: userProfile.founderAgentSynthesized,
+          product: targetProduct,
+          userId: user?.uid,
+          layoutId: resolvedLayoutId
+        });
+      }
+
+      if (result) {
+        console.log(`[STUDIO STEP 3/4] Copy & backdrop image generation -> PASSED (Headline: "${result.headline}")`);
+        setGeneratorLogs(p => [...p, "✓ Copy and backdrop image generated successfully."]);
+        
+        let finalCopy = result.postCopy || "";
+        if (postScope === "branded" && targetProduct) {
+          const website = targetProduct.website || targetProduct.url || targetProduct.domain;
+          if (website) {
+            const formattedLink = website.startsWith('http') ? website : `https://${website}`;
+            if (!finalCopy.includes(website) && !finalCopy.includes(formattedLink)) {
+              finalCopy = `${finalCopy.trim()}\n\n🔗 ${formattedLink}`;
+            }
+          }
+        }
+        
+        setGeneratedPostCopy(finalCopy);
+        setGeneratedHeadline(result.headline || "Key Founder Insight");
+        setGeneratedSubtext(result.subtext || "Value-driven lesson");
+        if (result.imageUrl) {
+          setGeneratedImageUrl(result.imageUrl);
         }
 
         setHasGeneratedOutput(true);
@@ -717,20 +918,19 @@ export function MasterFounder() {
         setApprovedTemplateId(null);
         setApprovedTemplateImageUrl(null);
 
-        // Save post to Firestore history
-        // Use resolvedLayoutId (local variable) instead of selectedTemplateId state (which may not have updated yet)
-        console.log(`[STUDIO STEP 4/5] Saving generated post to Firestore with layoutId: "${resolvedLayoutId}"...`);
+        // STEP 4: Save post to Firestore history
+        console.log(`[STUDIO STEP 4/4] Saving generated post to Firestore with layoutId: "${resolvedLayoutId}"...`);
         const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
         const newPost = {
           id: newPostId,
           userId: user?.uid || null,
-          postCopy: result.postCopy || "",
+          postCopy: finalCopy,
           imageUrl: result.imageUrl || STOCK_IMAGES[0].url,
           headline: result.headline || null,
           subtext: result.subtext || null,
           imagePrompt: result.imagePrompt || null,
-          layoutId: resolvedLayoutId || "editorial-left", // Use local var, never undefined
-          approvedTemplateImage: null, // Will be populated upon template approval
+          layoutId: resolvedLayoutId || "editorial-left",
+          approvedTemplateImage: null,
           createdAt: new Date().toISOString(),
           status: "scheduled",
           topic: result.headline || postTopic || null,
@@ -739,7 +939,7 @@ export function MasterFounder() {
         };
         await setDoc(doc(db, "users", user!.uid, "founder_posts", newPostId), newPost);
         await fetchAutomatedPosts();
-        console.log(`[STUDIO STEP 4/5] Save to Firestore -> PASSED (Post ID: ${newPostId})`);
+        console.log(`[STUDIO STEP 4/4] Save to Firestore -> PASSED (Post ID: ${newPostId})`);
         console.log(`======================================================\n`);
       } else {
         console.error(`[STUDIO STEP 2/5] Copy generation returned null result -> FAILED`);
@@ -786,50 +986,6 @@ export function MasterFounder() {
     });
   };
 
-  // ─── Template Approval Handler ───
-  const handleApproveTemplate = async () => {
-    if (!user || automatedPosts.length === 0) return;
-    setIsApprovingTemplate(true);
-    try {
-      // Wait a tick to ensure the canvas has re-rendered with the selected template
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      const iframe = document.querySelector('iframe[title="Visual Template Preview Renderer"]') as HTMLIFrameElement;
-      if (!iframe || !iframe.contentDocument) throw new Error("Canvas iframe not found");
-
-      const rawDataUrl = await toJpeg(iframe.contentDocument.body, {
-        cacheBust: true,
-        width: 1080,
-        height: 1080,
-        style: { margin: '0' },
-        quality: 0.70,
-        pixelRatio: 1
-      });
-
-      const dataUrl = await compressDataUrl(rawDataUrl, 500000);
-
-      // Update the latest post in Firestore with the approved template composite
-      const latestPost = automatedPosts[0];
-      const postRef = doc(db, "users", user.uid, "founder_posts", latestPost.id);
-      await updateDoc(postRef, {
-        approvedTemplateImage: dataUrl,
-        layoutId: selectedTemplateId
-      });
-
-      setApprovedTemplateId(selectedTemplateId);
-      setApprovedTemplateImageUrl(dataUrl);
-
-      // Refresh the posts list to pick up the change
-      await fetchAutomatedPosts();
-      console.log(`[TEMPLATE APPROVAL] Template "${selectedTemplateId}" approved and composite saved cleanly (${Math.round(dataUrl.length / 1024)} KB).`);
-    } catch (err: any) {
-      console.error("[TEMPLATE APPROVAL] Failed to approve template:", err);
-      setError("Failed to capture template visual. Try again.");
-    } finally {
-      setIsApprovingTemplate(false);
-    }
-  };
-
   // Active product for branded posts
   const activeProduct = postScope === "branded" ? (products.find(p => p.id === selectedManualBrands[0]) || products[0]) : null;
   const activeDiscovered = trendReport?.discoveredTemplates?.find((t: any) => t.id === selectedTemplateId) || trendReport?.discoveredTemplates?.[0];
@@ -837,13 +993,50 @@ export function MasterFounder() {
   const primaryColor = activeProduct?.visualData?.colors?.[0] || (activeProduct as any)?.colors?.[0] || activeDiscovered?.primaryColor || "#7C3AED";
   const secondaryColor = activeProduct?.visualData?.colors?.[1] || (activeProduct as any)?.colors?.[1] || activeDiscovered?.secondaryColor || "#08080C";
   const fontFamily = activeProduct?.visualData?.fonts?.primary || activeDiscovered?.fontFamily || "Inter";
-  const logoUrl = postScope === "branded" ? (activeProduct?.logoDarkUrl || activeProduct?.logoUrl || "/icon.png") : null;
+  // Omit brand logo from graphic visuals per user directive; brand website link is placed in post text copy instead
+  const logoUrl = null;
   const currentImageUrl = generatedImageUrl || STOCK_IMAGES[0].url;
 
-  // Render PURELY from the AI-researched rawHtml template!
-  // If rawHtml is missing/empty (Gemini occasionally omits it), fall back to an editorial template
+  // Personal Founder Identity Resolution (Name, LinkedIn Photo, Role/Headline)
+  const founderAuthorName = userProfile?.linkedInProfile?.name
+    || userProfile?.name
+    || user?.displayName
+    || userProfile?.founderAgentSynthesized?.personaName
+    || "Founder Insight";
+
+  // STRICT LINKEDIN AVATAR: Use LinkedIn picture or custom profile avatar, DO NOT use Google account photo
+  const founderAuthorAvatar = userProfile?.linkedInProfile?.picture
+    || (userProfile as any)?.avatarUrl
+    || (userProfile as any)?.profilePicture
+    || null;
+
+  // STRICT LINKEDIN BIO / HEADLINE: Use LinkedIn headline or user custom founder bio
+  const founderAuthorHeadline = userProfile?.linkedInProfile?.headline
+    || (userProfile as any)?.founderBio
+    || (userProfile as any)?.headline
+    || (userProfile?.role && userProfile?.founderAgentSynthesized?.targetIndustry 
+        ? `${userProfile.role} @ ${userProfile.founderAgentSynthesized.targetIndustry}` 
+        : userProfile?.role 
+          || (userProfile?.founderAgentSynthesized?.targetIndustry 
+              ? `${userProfile.founderAgentSynthesized.targetIndustry} Founder`
+              : "Founder & Executive • Daily Strategy"));
+
+  // Render PURELY from the selected template blueprint or AI-researched rawHtml template!
   let previewHtml = "";
-  if (activeDiscovered?.rawHtml && activeDiscovered.rawHtml.trim().length > 30) {
+  if (selectedTemplateId && LAYOUT_BLUEPRINTS[selectedTemplateId]) {
+    previewHtml = LAYOUT_BLUEPRINTS[selectedTemplateId].buildHtml({
+      headline: generatedHeadline,
+      subtext: generatedSubtext,
+      imageUrl: currentImageUrl,
+      logoUrl,
+      primaryColor,
+      secondaryColor,
+      fontFamily,
+      authorName: founderAuthorName,
+      authorAvatar: founderAuthorAvatar,
+      authorBio: founderAuthorHeadline
+    });
+  } else if (activeDiscovered?.rawHtml && activeDiscovered.rawHtml.trim().length > 30) {
     previewHtml = renderDiscoveredHtml(activeDiscovered.rawHtml, {
       headline: generatedHeadline,
       subtext: generatedSubtext,
@@ -851,7 +1044,10 @@ export function MasterFounder() {
       logoUrl,
       primaryColor,
       secondaryColor,
-      fontFamily
+      fontFamily,
+      authorName: founderAuthorName,
+      authorAvatar: founderAuthorAvatar,
+      authorBio: founderAuthorHeadline
     });
   } else if (hasGeneratedOutput) {
     // Emergency client-side fallback: generate a quality editorial template so the canvas is never blank
@@ -900,6 +1096,105 @@ export function MasterFounder() {
     </html>
   `;
 
+  // ─── Template Capture & Fallback Helper ───
+  const captureTemplateAsJpeg = async (): Promise<string> => {
+    // 1. Try to capture the already-rendered iframe first! (This solves missing SVG xmlns or CSS rendering bugs)
+    try {
+      const iframe = document.getElementById("visual-studio-canvas-preview") as HTMLIFrameElement;
+      if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+        const iframeDataUrl = await toJpeg(iframe.contentDocument.body, {
+          cacheBust: true,
+          width: 1080,
+          height: 1080,
+          style: { margin: "0" },
+          quality: 0.90,
+          pixelRatio: 1
+        });
+        if (iframeDataUrl && iframeDataUrl.startsWith("data:image") && iframeDataUrl.length > 1000) {
+          return iframeDataUrl;
+        }
+      }
+    } catch (iframeErr) {
+      console.warn("[captureTemplateAsJpeg] Iframe capture failed, falling back to hidden offscreen container:", iframeErr);
+    }
+
+    // 2. Fallback to hidden container if iframe capture failed
+    let hiddenContainer: HTMLDivElement | null = null;
+    try {
+      hiddenContainer = document.createElement("div");
+      hiddenContainer.style.position = "fixed";
+      hiddenContainer.style.left = "-9999px";
+      hiddenContainer.style.top = "-9999px";
+      hiddenContainer.style.width = "1080px";
+      hiddenContainer.style.height = "1080px";
+      hiddenContainer.style.overflow = "hidden";
+      hiddenContainer.style.zIndex = "-9999";
+      hiddenContainer.style.backgroundColor = secondaryColor || "#08080C";
+      hiddenContainer.innerHTML = previewHtml || fullHtml;
+      document.body.appendChild(hiddenContainer);
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const dataUrl = await toJpeg(hiddenContainer, {
+        cacheBust: true,
+        width: 1080,
+        height: 1080,
+        style: { margin: "0" },
+        quality: 0.85,
+        pixelRatio: 1
+      });
+
+      if (dataUrl && dataUrl.startsWith("data:image") && dataUrl.length > 1000) {
+        return dataUrl;
+      }
+    } catch (e1) {
+      console.warn("[captureTemplateAsJpeg] Offscreen DOM toJpeg capture warning:", e1);
+    } finally {
+      if (hiddenContainer && hiddenContainer.parentNode) {
+        hiddenContainer.parentNode.removeChild(hiddenContainer);
+      }
+    }
+
+    return await renderVisualCanvasFallback(
+      generatedHeadline || (generatedPostCopy ? generatedPostCopy.slice(0, 60) : "Founder Post"),
+      generatedSubtext || "",
+      currentImageUrl,
+      primaryColor,
+      secondaryColor,
+      logoUrl
+    );
+  };
+
+  // ─── Template Approval Handler ───
+  const handleApproveTemplate = async () => {
+    if (!user || automatedPosts.length === 0) return;
+    setIsApprovingTemplate(true);
+    try {
+      const rawDataUrl = await captureTemplateAsJpeg();
+      const dataUrl = await compressDataUrl(rawDataUrl, 500000);
+
+      // Update the latest post in Firestore with the approved template composite
+      const latestPost = automatedPosts[0];
+      const postRef = doc(db, "users", user.uid, "founder_posts", latestPost.id);
+      await updateDoc(postRef, {
+        approvedTemplateImage: dataUrl,
+        layoutId: selectedTemplateId
+      });
+
+      setApprovedTemplateId(selectedTemplateId);
+      setApprovedTemplateImageUrl(dataUrl);
+
+      // Refresh the posts list to pick up the change
+      await fetchAutomatedPosts();
+      console.log(`[TEMPLATE APPROVAL] Template "${selectedTemplateId}" approved and composite saved cleanly (${Math.round(dataUrl.length / 1024)} KB).`);
+    } catch (err: any) {
+      console.error("[TEMPLATE APPROVAL] Failed to approve template:", err);
+      setError("Failed to capture template visual. Try again.");
+    } finally {
+      setIsApprovingTemplate(false);
+    }
+  };
+
   const fetchAutomatedPosts = async () => {
     if (!user) return;
     setLoadingAutoposts(true);
@@ -943,15 +1238,19 @@ export function MasterFounder() {
   const [optPillars, setOptPillars] = useState("");
 
   useEffect(() => {
-    if (
-      activeTab === "generator" &&
-      suggestions.length === 0 &&
-      userProfile?.founderAgentSynthesized &&
-      !isFetchingSuggestions
-    ) {
-      fetchTopicSuggestions();
+    if (!isTopicModalOpen || !userProfile?.founderAgentSynthesized) return;
+
+    if (postScope === "general") {
+      if (generalSuggestions.length === 0 && !isFetchingSuggestions) {
+        fetchTopicSuggestions(false);
+      }
+    } else if (postScope === "branded") {
+      const targetBrandId = selectedManualBrands[0];
+      if (targetBrandId && !brandedSuggestionsMap[targetBrandId] && !isFetchingSuggestions) {
+        fetchTopicSuggestions(false);
+      }
     }
-  }, [activeTab, userProfile, suggestions.length, isFetchingSuggestions]);
+  }, [isTopicModalOpen, postScope, selectedManualBrands, userProfile]);
 
   useEffect(() => {
     if (userProfile) {
@@ -1852,13 +2151,25 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                           const val = !brand[field];
                           const updates: any = { [field]: val };
                           
+                          // Mutual Exclusion Rule: Weekly Campaigns ON -> Daily Posts OFF, and Vice Versa
+                          if (field === "automateWeeklyCampaigns" && val === true) {
+                            updates.automateDailyPosts = false;
+                          } else if (field === "automateDailyPosts" && val === true) {
+                            updates.automateWeeklyCampaigns = false;
+                          }
+
                           // Auto enable/disable master switch
-                          const finalPosts = field === "automateDailyPosts" ? val : !!brand.automateDailyPosts;
+                          const finalPosts = updates.automateDailyPosts !== undefined ? updates.automateDailyPosts : !!brand.automateDailyPosts;
                           const finalBlogs = field === "automateDailyBlogs" ? val : !!brand.automateDailyBlogs;
-                          const finalWeekly = field === "automateWeeklyCampaigns" ? val : !!brand.automateWeeklyCampaigns;
+                          const finalWeekly = updates.automateWeeklyCampaigns !== undefined ? updates.automateWeeklyCampaigns : !!brand.automateWeeklyCampaigns;
                           updates.automationAgentEnabled = finalPosts || finalBlogs || finalWeekly;
                           
                           await updateProduct(brand.id, updates);
+
+                          // Open Social Channel Selection Modal if enabling Daily Posts or Weekly Campaigns
+                          if ((field === "automateDailyPosts" || field === "automateWeeklyCampaigns") && val === true) {
+                            openChannelSelectorModal(brand);
+                          }
                         };
 
                         return (
@@ -1887,6 +2198,29 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                                   >
                                     {brand.website || "No website"}
                                   </a>
+
+                                  {/* Active Channels Logos */}
+                                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                    {(brand.targetPlatforms && brand.targetPlatforms.length > 0
+                                      ? brand.targetPlatforms
+                                      : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']
+                                    ).map((plat: string) => (
+                                      <div
+                                        key={plat}
+                                        className="h-6 w-6 rounded-full bg-white border border-slate-200 shadow-2xs flex items-center justify-center transition-transform hover:scale-105"
+                                        title={plat === 'twitter' ? 'X (Twitter)' : plat.toUpperCase()}
+                                      >
+                                        {getPlatformLogo(plat, "h-3.5 w-3.5")}
+                                      </div>
+                                    ))}
+                                    <button
+                                      onClick={() => openChannelSelectorModal(brand)}
+                                      className="text-[9px] text-violet-600 hover:text-violet-800 font-bold underline flex items-center gap-0.5 ml-1"
+                                      title="Configure target social media channels"
+                                    >
+                                      <Sliders className="h-2.5 w-2.5" /> Edit
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -2108,42 +2442,114 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
               )}
 
               {/* Personal Socials Connection Area */}
-              <div className="mt-4 pt-4 border-t border-slate-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
-                    Personal Social Connection (LinkedIn Profile)
-                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 font-sans font-bold text-[9px] border border-emerald-500/20">✨ UNLOCKED FOR FOUNDER</span>
-                  </h4>
-                  <p className="text-[10px] text-slate-400 font-light mt-0.5">
-                    Connect your personal LinkedIn account so your virtual founder doppelganger can publish posts directly to your profile.
-                  </p>
-                </div>
+              <div className="mt-4 pt-4 border-t border-slate-100/80 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
+                      Personal Social Connection (LinkedIn Profile)
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 font-sans font-bold text-[9px] border border-emerald-500/20">✨ UNLOCKED FOR FOUNDER</span>
+                    </h4>
+                    <p className="text-[10px] text-slate-400 font-light mt-0.5">
+                      Connect your personal LinkedIn account so your virtual founder doppelganger can publish posts directly to your profile.
+                    </p>
+                  </div>
 
-                <div>
-                  {isLinkedinConnected ? (
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
-                        Connected to Profile
-                      </span>
+                  <div>
+                    {isLinkedinConnected ? (
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                          Connected to Profile
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleDisconnectLinkedin}
+                          className="text-[10px] font-bold text-red-500 hover:text-red-650 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-3 py-1.5 rounded-xl transition cursor-pointer"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         type="button"
-                        onClick={handleDisconnectLinkedin}
-                        className="text-[10px] font-bold text-red-500 hover:text-red-650 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-3 py-1.5 rounded-xl transition"
+                        onClick={handleConnectLinkedin}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold text-white bg-[#0A66C2] hover:bg-[#00509d] transition shadow-sm cursor-pointer"
                       >
-                        Disconnect
+                        <Linkedin className="h-3 w-3" />
+                        Connect Personal Profile
                       </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* LinkedIn Profile Identity & Bio Customizer Box */}
+                <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-violet-100 text-violet-700 font-bold overflow-hidden border border-slate-200 flex items-center justify-center shrink-0 shadow-2xs">
+                        {founderAuthorAvatar ? (
+                          <img src={founderAuthorAvatar} alt="LinkedIn Avatar" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <span className="text-xs font-extrabold">{founderAuthorName.charAt(0)}</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 block leading-tight">{founderAuthorName}</span>
+                        <span className="text-[10px] text-slate-500 font-medium">LinkedIn Author Profile & Bio Persona</span>
+                      </div>
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleConnectLinkedin}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold text-white bg-[#0A66C2] hover:bg-[#00509d] transition shadow-sm cursor-pointer"
-                    >
-                      <Linkedin className="h-3 w-3" />
-                      Connect Personal Profile
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs">
+                        {isAutoFetchingProfile ? (
+                          <>
+                            <Loader2 className="w-3 h-3 text-emerald-600 animate-spin" /> Auto-Syncing Profile...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600 stroke-[3]" /> Auto-Synced LinkedIn Profile & Bio
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!isLinkedinConnected && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-slate-200/50">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                          Founder Profile Bio / Headline
+                        </label>
+                        <input
+                          type="text"
+                          value={userProfile?.linkedInProfile?.headline || (userProfile as any)?.founderBio || ""}
+                          placeholder="e.g. SWE-II @ Google | Ex @Flipkart, @Cisco and @Siemens | 230k+ @LinkedIn"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const updatedProfile = { ...(userProfile?.linkedInProfile || {}), headline: val };
+                            saveProfileData({ linkedInProfile: updatedProfile, founderBio: val });
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-violet-500 transition-colors shadow-2xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                          Founder Profile Picture URL (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={userProfile?.linkedInProfile?.picture || ""}
+                          placeholder="Paste your photo URL or image link"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const updatedProfile = { ...(userProfile?.linkedInProfile || {}), picture: val };
+                            saveProfileData({ linkedInProfile: updatedProfile });
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-violet-500 transition-colors shadow-2xs"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -2167,10 +2573,10 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                 <button
                   type="button"
                   onClick={() => setIsTopicModalOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-violet-600 hover:bg-violet-750 transition shadow-sm cursor-pointer shrink-0"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 transition shadow-sm cursor-pointer shrink-0"
                 >
-                  <Sparkles className="h-4 w-4" />
-                  <span>Configure Post Topic & Scope</span>
+                  <Sparkles className="h-4 w-4 text-white" />
+                  <span>+ New Post</span>
                 </button>
               </div>
 
@@ -2218,7 +2624,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
                         >
                           <Sparkles className="h-3.5 w-3.5" />
-                          <span>Configure Post Topic & Scope</span>
+                          <span>+ New Post</span>
                         </button>
                       </div>
                     )}
@@ -2228,6 +2634,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                         {/* Live Canvas Preview via Iframe Renderer */}
                         <div className="relative w-[360px] h-[360px] rounded-xl border border-slate-200 shadow overflow-hidden bg-slate-950 shrink-0 mx-auto">
                           <iframe
+                            id="visual-studio-canvas-preview"
                             title="Visual Template Preview Renderer"
                             srcDoc={fullHtml}
                             // allow-same-origin (so the parent can read
@@ -2291,23 +2698,17 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                             onClick={async () => {
                               try {
                                 const iframe = document.querySelector('iframe[title="Visual Template Preview Renderer"]') as HTMLIFrameElement;
-                                if (!iframe || !iframe.contentDocument) throw new Error("Iframe not found");
-                                
-                                const dataUrl = await toJpeg(iframe.contentDocument.body, { 
-                                  cacheBust: true,
-                                  width: 1080,
-                                  height: 1080,
-                                  style: { margin: '0' },
-                                  quality: 0.85,
-                                  pixelRatio: 1
-                                });
+                                const iframeBody = iframe?.contentDocument?.body || null;
+
+                                const dataUrl = await captureTemplateAsJpeg();
+
                                 const link = document.createElement('a');
                                 link.download = `founder-visual-${Date.now()}.jpg`;
                                 link.href = dataUrl;
                                 link.click();
                               } catch (err) {
                                 console.error("Failed to download image:", err);
-                                alert("Failed to download visual. If it uses external images, CORS might be blocking it.");
+                                alert("Failed to download visual image.");
                               }
                             }}
                             className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-sm cursor-pointer"
@@ -2587,8 +2988,9 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                                 copy={latestPost.postCopy}
                                 imageUrl={approvedTemplateImageUrl || latestPost.approvedTemplateImage || latestPost.imageUrl || undefined}
                                 isFlattened={true}
-                                productName={latestPost.isBranded ? (products.find(p => p.id === latestPost.productId)?.name || "Branded Product") : "Founder Insight"}
-                                productLogo={latestPost.isBranded ? (products.find(p => p.id === latestPost.productId)?.logoUrl || "") : ""}
+                                productName={founderAuthorName}
+                                productLogo={founderAuthorAvatar || ""}
+                                productTagline={founderAuthorHeadline}
                               />
                               {(approvedTemplateImageUrl || latestPost.approvedTemplateImage) && (
                                 <div className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
@@ -2611,149 +3013,296 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                 </div>
               </div>
 
-              {/* Popup Modal: Configure Post Topic & Visual Scope Form */}
-              {isTopicModalOpen && (
-                <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-                  <div className="bg-white border border-slate-900/10 rounded-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200 shadow-2xl relative my-auto">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                      <SectionTitle icon={FileSignature} title="Configure Post Topic & Visual Scope" iconColor="text-violet-650" />
+              {/* Popup Modal: Configure Post Topic & Visual Scope Form (Equal max-w-5xl width as Campaign Modal) */}
+              {isTopicModalOpen && createPortal(
+                <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-[99999] flex items-center justify-center p-4 md:p-6 overflow-y-auto" onClick={() => setIsTopicModalOpen(false)}>
+                  <div className="bg-white border border-slate-200/90 rounded-[24px] max-w-5xl w-full p-6 md:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200 shadow-[0_25px_70px_rgba(15,23,42,0.25)] relative my-auto max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                      <div>
+                        <SectionTitle icon={FileSignature} title="Create Founder Post" iconColor="text-violet-650" />
+                        <p className="text-xs text-slate-500 font-light mt-0.5">
+                          Set persona scope, post topic, and visual template layout.
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setIsTopicModalOpen(false)}
-                        className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                        className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer"
                       >
-                        <X className="h-4.5 w-4.5" />
+                        <X className="h-5 w-5" />
                       </button>
                     </div>
 
-                    <div className="space-y-5">
-                      {/* Post Scope Selection */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                          Post Persona Branding Scope
-                        </label>
-                        <div className="flex gap-2">
-                          {[
-                            { value: "general", label: "General Post (Non-Branded)" },
-                            { value: "branded", label: "Branded Post (Product Focus)" }
-                          ].map((opt) => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => setPostScope(opt.value as any)}
-                              className={`flex-1 py-2 px-3 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                postScope === opt.value
-                                  ? "bg-violet-600 border-violet-500 text-white shadow-sm"
-                                  : "bg-white border-slate-200 hover:bg-slate-50 text-slate-655"
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Target Brand Selector for Branded Posts */}
-                      {postScope === "branded" && (
-                        <div className="animate-in fade-in duration-200 space-y-2">
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                            Select Target Product / Brand
+                    {/* 2-Column High-End Studio Modal Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      
+                      {/* Left Column (5/12): Scope, Brand & Topic Inputs */}
+                      <div className="lg:col-span-5 space-y-5">
+                        {/* Post Scope Selection */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                            Post Persona Branding Scope
                           </label>
-                          <div className="flex flex-wrap gap-1.5">
-                            {products.map((p) => {
-                              const isChecked = selectedManualBrands.includes(p.id);
-                              return (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedManualBrands([p.id]);
-                                  }}
-                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all cursor-pointer ${
-                                    isChecked
-                                      ? "bg-violet-600 border-violet-500 text-white shadow-sm"
-                                      : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {p.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <p className="text-[9px] text-slate-400 italic">
-                            Selected brand colors & logo will auto-apply to the visual template.
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Post Concept / Topic Field */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                            Active Post Concept / Topic
-                          </label>
-                          <button
-                            type="button"
-                            disabled={isFetchingSuggestions || !userProfile?.founderAgentSynthesized}
-                            onClick={fetchTopicSuggestions}
-                            className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-655 hover:text-[#6D28D9] disabled:opacity-40 cursor-pointer"
-                          >
-                            <RefreshCw className={`h-3 w-3 ${isFetchingSuggestions ? 'animate-spin' : ''}`} />
-                            <span>AI Recommendations</span>
-                          </button>
-                        </div>
-
-                        {/* AI Recommendation Chips */}
-                        {suggestions.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                            {suggestions.map((sug, idx) => (
+                          <div className="flex gap-2">
+                            {[
+                              { value: "general", label: "General (Non-Branded)" },
+                              { value: "branded", label: "Branded (Product Focus)" }
+                            ].map((opt) => (
                               <button
-                                key={idx}
+                                key={opt.value}
                                 type="button"
-                                onClick={() => setPostTopic(sug.prompt)}
-                                title={sug.description}
-                                className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border text-left flex items-center justify-between gap-1 max-w-full cursor-pointer ${
-                                  postTopic === sug.prompt
+                                onClick={() => setPostScope(opt.value as any)}
+                                className={`flex-1 py-2.5 px-3 border rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                  postScope === opt.value
                                     ? "bg-violet-600 border-violet-500 text-white shadow-sm"
-                                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-650"
                                 }`}
                               >
-                                <span className="truncate">{sug.title}</span>
+                                {opt.label}
                               </button>
                             ))}
                           </div>
+                        </div>
+
+                        {/* Target Brand Selector for Branded Posts */}
+                        {postScope === "branded" && (
+                          <div className="animate-in fade-in duration-200 space-y-2">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                              Select Target Product / Brand
+                            </label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {products.map((p) => {
+                                const isChecked = selectedManualBrands.includes(p.id);
+                                return (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedManualBrands([p.id]);
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all cursor-pointer ${
+                                      isChecked
+                                        ? "bg-violet-600 border-violet-500 text-white shadow-sm"
+                                        : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600"
+                                    }`}
+                                  >
+                                    {p.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[9px] text-slate-400 italic">
+                              Selected brand colors & website URL will auto-apply to post copy.
+                            </p>
+                          </div>
                         )}
-                        
-                        <textarea
-                          rows={3}
-                          value={postTopic}
-                          onChange={(e) => setPostTopic(e.target.value)}
-                          placeholder="Click an AI recommendation chip above, or type custom topics here..."
-                          className="w-full bg-slate-50/50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2.5 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors"
-                        />
+
+                        {/* Post Concept / Topic Field */}
+                        <div>
+                          {(() => {
+                            const activeBrandId = selectedManualBrands[0];
+                            const isBrandedScope = postScope === "branded";
+                            const isBrandSelected = isBrandedScope && !!activeBrandId;
+                            const isRecsDisabled = isBrandedScope && !isBrandSelected;
+                            const activeSuggestions = isBrandedScope
+                              ? (activeBrandId ? (brandedSuggestionsMap[activeBrandId] || []) : [])
+                              : generalSuggestions;
+
+                            return (
+                              <>
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                    Active Post Concept / Topic
+                                  </label>
+                                  <button
+                                    type="button"
+                                    disabled={isFetchingSuggestions || !userProfile?.founderAgentSynthesized || isRecsDisabled}
+                                    onClick={() => fetchTopicSuggestions(true)}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-650 hover:text-[#6D28D9] disabled:opacity-40 cursor-pointer"
+                                  >
+                                    <RefreshCw className={`h-3 w-3 ${isFetchingSuggestions ? 'animate-spin' : ''}`} />
+                                    <span>AI Recommendations</span>
+                                  </button>
+                                </div>
+
+                                {/* Helper Notice when Branded Scope is selected but no brand picked yet */}
+                                {isRecsDisabled && (
+                                  <div className="mb-3 p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[10px] text-amber-800 flex items-center gap-2">
+                                    <Sparkles className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                    <span>Select a brand above to generate AI topic recommendations tailored to its metrics & Product DNA.</span>
+                                  </div>
+                                )}
+
+                                {/* AI Recommendation Chips */}
+                                {activeSuggestions.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-h-36 overflow-y-auto">
+                                    {activeSuggestions.map((sug, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => setPostTopic(sug.prompt)}
+                                        title={sug.description}
+                                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border text-left flex items-center justify-between gap-1 max-w-full cursor-pointer ${
+                                          postTopic === sug.prompt
+                                            ? "bg-violet-600 text-white border-violet-500 shadow-2xs"
+                                            : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
+                                        }`}
+                                      >
+                                        <span className="truncate">{sug.prompt}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+
+                          <textarea
+                            rows={4}
+                            value={postTopic}
+                            onChange={(e) => setPostTopic(e.target.value)}
+                            placeholder="Click an AI recommendation chip above, or type custom post topic..."
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl p-3 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors font-light shadow-2xs"
+                          />
+                        </div>
+
+                        {/* Submit Action Button */}
+                        <div className="pt-2">
+                          <button
+                            type="button"
+                            disabled={isGeneratingPost || !postTopic.trim()}
+                            onClick={handleGeneratePost}
+                            className="w-full py-3.5 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 disabled:opacity-50 transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            {isGeneratingPost ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                                <span>Generating Post & Layout...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4 text-white" />
+                                <span>Generate Post</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={handleGeneratePost}
-                        disabled={isGeneratingPost || !postTopic.trim() || !userProfile?.founderAgentSynthesized}
-                        className="w-full bg-violet-600 hover:bg-violet-750 text-white rounded-xl py-3 text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors uppercase cursor-pointer"
-                      >
-                        {isGeneratingPost ? (
-                          <>
-                            <Loader2 className="animate-spin h-4 w-4" />
-                            <span>Generating & Researching Trends...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="h-4 w-4" />
-                            <span>Draft Founder Post</span>
-                          </>
-                        )}
-                      </button>
+                      {/* Right Column (7/12): Live Rendered HD Template Previews Grid */}
+                      <div className="lg:col-span-7 space-y-4 bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                              Visual Template
+                            </label>
+                            <p className="text-[10px] text-slate-400 font-light">
+                              Choose dynamic AI trend research or lock a pixel-perfect prebuilt template.
+                            </p>
+                          </div>
+                          {selectedPrebuiltTemplate !== "auto" && (
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                              ⚡ Research Skipped
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 4 Real Scaled Template Preview Cards Grid */}
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            {
+                              id: "auto",
+                              name: "✨ Dynamic AI Research",
+                              tag: "Grounded Trends",
+                              desc: "Researches live AI visual trends per post"
+                            },
+                            {
+                              id: "x-tweet-card",
+                              name: "𝕏 Viral Tweet Card",
+                              tag: "99/100 Virality",
+                              desc: "Native dark X tweet screenshot"
+                            },
+                            {
+                              id: "notes-app-screenshot",
+                              name: "📝 Apple Notes Memo",
+                              tag: "Organic Reach",
+                              desc: "Native iOS Notes screenshot card"
+                            },
+                            {
+                              id: "metrics-breakdown-card",
+                              name: "📈 B2B SaaS Metric Card",
+                              tag: "Case Study",
+                              desc: "High-converting growth stat grid"
+                            },
+                            {
+                              id: "linkedin-carousel-cover",
+                              name: "🎠 LinkedIn Carousel Cover",
+                              tag: "Hook Slide",
+                              desc: "Top viral slide cover with Swipe"
+                            }
+                          ].map((tpl) => {
+                            const isSelected = selectedPrebuiltTemplate === tpl.id;
+                            
+                            // Sample HTML for live iframe rendering
+                            let htmlToRender = "";
+                            if (tpl.id !== "auto" && LAYOUT_BLUEPRINTS[tpl.id]) {
+                              htmlToRender = LAYOUT_BLUEPRINTS[tpl.id].buildHtml({
+                                headline: tpl.id === "x-tweet-card" ? "Stop Trading Founder Time For Slow Growth" : tpl.id === "notes-app-screenshot" ? "Hard truth after scaling to $1M ARR:" : tpl.id === "metrics-breakdown-card" ? "Why 90% of SaaS AI Features Suffer Zero Retention" : "How We Built a $10M Pipeline Without A Single Sales Rep",
+                                subtext: "The 5 core operating models scaling B2B teams mandate.",
+                                imageUrl: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1080&q=80",
+                                logoUrl: null,
+                                primaryColor: "#6366F1",
+                                secondaryColor: "#08080C",
+                                fontFamily: "Inter"
+                              });
+                            }
+
+                            return (
+                              <button
+                                key={tpl.id}
+                                type="button"
+                                onClick={() => setSelectedPrebuiltTemplate(tpl.id)}
+                                className={`group p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                                  isSelected
+                                    ? "bg-white border-violet-600 ring-2 ring-violet-500/40 shadow-md"
+                                    : "bg-white border-slate-200 hover:bg-slate-150 hover:border-slate-300"
+                                }`}
+                              >
+                                {/* Live Scaled Template Renderer Box with Dynamic ResizeObserver */}
+                                <div className="relative w-full mb-2">
+                                  {tpl.id === "auto" ? (
+                                    <div className="w-full aspect-square rounded-lg bg-gradient-to-br from-violet-900/60 via-slate-950 to-purple-950 p-3 flex flex-col items-center justify-center text-center border border-slate-800">
+                                      <div className="w-8 h-8 rounded-full bg-violet-600/40 border border-violet-400 flex items-center justify-center mb-1 animate-pulse">
+                                        <Sparkles className="w-4 h-4 text-amber-300" />
+                                      </div>
+                                      <span className="text-[10px] font-bold text-white">Dynamic AI Trends</span>
+                                      <span className="text-[8px] text-slate-400">Researched per post</span>
+                                    </div>
+                                  ) : (
+                                    <ScaledIframePreview title={`Preview ${tpl.name}`} htmlToRender={htmlToRender} />
+                                  )}
+                                  {isSelected && (
+                                    <div className="absolute top-1.5 right-1.5 bg-violet-600 text-white p-1 rounded-full shadow-xs z-20">
+                                      <Check className="w-3 h-3 stroke-[3]" />
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                                    <span className="text-[11px] font-bold text-slate-900 truncate">{tpl.name}</span>
+                                  </div>
+                                  <p className="text-[9px] text-slate-500 font-light truncate">{tpl.desc}</p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           </div>
@@ -2906,8 +3455,9 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                                     copy={post.postCopy}
                                     imageUrl={post.approvedTemplateImage || post.imageUrl || undefined}
                                     isFlattened={true}
-                                    productName={post.isBranded ? (products.find(p => p.id === post.productId)?.name || "Branded Product") : "Founder Insight"}
-                                    productLogo={post.isBranded ? (products.find(p => p.id === post.productId)?.logoUrl || "") : ""}
+                                    productName={founderAuthorName}
+                                    productLogo={founderAuthorAvatar || ""}
+                                    productTagline={founderAuthorHeadline}
                                   />
                                 </div>
                               </div>
@@ -2947,8 +3497,9 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                                         copy={post.postCopy}
                                         imageUrl={post.approvedTemplateImage || post.imageUrl || undefined}
                                         isFlattened={true}
-                                        productName={post.isBranded ? (brandObj?.name || "Branded Product") : "Founder Insight"}
-                                        productLogo={post.isBranded ? (brandObj?.logoUrl || "") : ""}
+                                        productName={founderAuthorName}
+                                        productLogo={founderAuthorAvatar || ""}
+                                        productTagline={founderAuthorHeadline}
                                       />
                                     </div>
                                   </div>
@@ -3069,9 +3620,9 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
     </div>
   </div>
 
-      {showSuccessModal && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-900/10 rounded-2xl max-w-md w-full p-6 text-center animate-in fade-in zoom-in-95 duration-200 shadow-xl">
+      {showSuccessModal && createPortal(
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[99999] flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowSuccessModal(false)}>
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 text-center animate-in fade-in zoom-in-95 duration-200 shadow-2xl relative my-auto" onClick={(e) => e.stopPropagation()}>
             {/* Pulsing check circle indicator */}
             <div className="mx-auto h-16 w-16 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full flex items-center justify-center mb-4">
               <CheckCircle2 className="h-8 w-8 animate-pulse text-emerald-500" strokeWidth={2.5} />
@@ -3082,12 +3633,107 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
             </p>
             <button
               onClick={() => setShowSuccessModal(false)}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl py-3 transition shadow-sm"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl py-3 transition shadow-sm cursor-pointer"
             >
               Explore Founder Brain
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {channelModalBrand && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto" onClick={() => setChannelModalBrand(null)}>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150 relative my-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Share2 className="h-5 w-5 text-violet-600" />
+                  Target Social Media Channels
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Select channels for <span className="font-semibold text-slate-800">{channelModalBrand.name}</span>. Content will only be generated for your selected channels.
+                </p>
+              </div>
+              <button
+                onClick={() => setChannelModalBrand(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              {[
+                { id: 'linkedin', label: 'LinkedIn' },
+                { id: 'instagram', label: 'Instagram' },
+                { id: 'twitter', label: 'X (Twitter)' },
+                { id: 'facebook', label: 'Facebook' },
+                { id: 'reddit', label: 'Reddit' },
+              ].map((platform) => {
+                const isSelected = selectedPlatforms.includes(platform.id);
+                return (
+                  <div
+                    key={platform.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        if (selectedPlatforms.length <= 1) {
+                          alert("Please keep at least 1 social channel selected.");
+                          return;
+                        }
+                        setSelectedPlatforms(prev => prev.filter(p => p !== platform.id));
+                      } else {
+                        setSelectedPlatforms(prev => [...prev, platform.id]);
+                      }
+                    }}
+                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                      isSelected ? 'border-violet-600 bg-violet-50/40 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
+                        {getPlatformLogo(platform.id, "h-4.5 w-4.5")}
+                      </div>
+                      <span className="text-xs font-semibold text-slate-800">{platform.label}</span>
+                    </div>
+                    <div className={`h-5 w-5 rounded-md flex items-center justify-center border transition-colors ${
+                      isSelected ? 'bg-violet-600 border-violet-600 text-white' : 'border-slate-300 bg-white'
+                    }`}>
+                      {isSelected && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setChannelModalBrand(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setIsSavingChannels(true);
+                  try {
+                    await updateProduct(channelModalBrand.id, { targetPlatforms: selectedPlatforms });
+                    setChannelModalBrand(null);
+                  } catch (e: any) {
+                    alert("Failed to save channel selection.");
+                  } finally {
+                    setIsSavingChannels(false);
+                  }
+                }}
+                disabled={isSavingChannels}
+                className="px-5 py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                {isSavingChannels ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save Channels'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>

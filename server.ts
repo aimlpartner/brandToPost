@@ -851,11 +851,50 @@ Return the result in a JSON object with the following fields:
     ? crypto.randomUUID()
     : Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-  if (campaignData.dailyPosts) {
-    campaignData.dailyPosts = campaignData.dailyPosts.map((dp: any) => {
-      return { ...dp, day: currentDayName, date: currentDate };
-    });
-  }
+    const activePlatforms = (product.targetPlatforms && Array.isArray(product.targetPlatforms) && product.targetPlatforms.length > 0)
+      ? product.targetPlatforms.map((p: string) => p.toLowerCase())
+      : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit'];
+
+    // Query uploaded Brand Assets from Firestore if available
+    const creativesSnap = await db.collection('creatives')
+      .where('productId', '==', productId)
+      .get();
+
+    const brandAssetUrls: string[] = [];
+    if (!creativesSnap.empty) {
+      creativesSnap.forEach(docSnap => {
+        const cData = docSnap.data();
+        if (cData.url) brandAssetUrls.push(cData.url);
+      });
+    }
+
+    if (campaignData.dailyPosts) {
+      campaignData.dailyPosts = campaignData.dailyPosts.map((dp: any, idx: number) => {
+        let filteredVersions = dp.platformVersions || [];
+        if (activePlatforms.length > 0) {
+          filteredVersions = filteredVersions.filter((pv: any) => {
+            const plat = (pv.platform || '').toLowerCase();
+            return activePlatforms.includes(plat) || (plat === 'x' && activePlatforms.includes('twitter')) || (plat === 'twitter' && activePlatforms.includes('x'));
+          });
+        }
+
+        const chosenAsset = brandAssetUrls.length > 0 ? brandAssetUrls[idx % brandAssetUrls.length] : undefined;
+        if (chosenAsset) {
+          filteredVersions = filteredVersions.map((pv: any) => ({
+            ...pv,
+            imageUrl: chosenAsset
+          }));
+        }
+
+        return {
+          ...dp,
+          day: currentDayName,
+          date: currentDate,
+          imageUrl: chosenAsset || dp.imageUrl,
+          platformVersions: filteredVersions
+        };
+      });
+    }
 
   const newCampaign = {
     ...campaignData,
@@ -3926,6 +3965,25 @@ async function startServer() {
       return res.status(500).json({ error: err.message || "Failed to lock all users" });
     }
   });
+  // --- Admin API: Fetch All Products / Brands ---
+  app.get('/api/admin/products', async (req, res) => {
+    try {
+      if (!db) {
+        return res.status(500).json({ error: "Database connection not active on server" });
+      }
+
+      const productsSnap = await db.collection('products').get();
+      const products: any[] = [];
+      productsSnap.forEach(docSnap => {
+        products.push({ id: docSnap.id, ...docSnap.data() });
+      });
+
+      return res.json({ success: true, products });
+    } catch (err: any) {
+      console.error("[Admin Fetch Products Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to fetch products" });
+    }
+  });
 
   // --- Server Rendering Endpoint with Active Mutex Pool Lock (Caching Removed) ---
   app.post('/api/render-visual', routeRateLimiter(120, 60 * 1000), async (req, res) => {
@@ -4558,6 +4616,40 @@ CRITICAL DESIGN RULES:
 
       if (parsedData.discoveredTemplates?.length > 0) {
         console.log(`[STEP 6/6 SERVER] Schema Validation -> PASSED (${parsedData.discoveredTemplates.length} dynamic AI templates! IDs: ${parsedData.discoveredTemplates.map((t: any) => t.id).join(', ')})`);
+
+        // Automatically persist discovered templates to Firestore global template_library
+        if (db) {
+          try {
+            const batch = db.batch();
+            const nowIso = new Date().toISOString();
+            for (const tpl of parsedData.discoveredTemplates) {
+              const tplId = tpl.id && typeof tpl.id === 'string' && tpl.id.length > 3
+                ? tpl.id 
+                : `tpl_gemini_${Math.random().toString(36).substring(2, 10)}`;
+              tpl.id = tplId;
+              const docRef = db.collection('discovered_template_library').doc(tplId);
+              batch.set(docRef, {
+                id: tplId,
+                name: tpl.name || "Discovered Visual Trend",
+                sourceTrend: tpl.sourceTrend || focusNiche || "Market Research",
+                description: tpl.description || "Synthesized visual trend template",
+                rawHtml: tpl.rawHtml,
+                primaryColor: tpl.primaryColor || "#7C3AED",
+                secondaryColor: tpl.secondaryColor || "#08080C",
+                fontFamily: tpl.fontFamily || "Inter",
+                category: focusNiche || "General B2B",
+                createdAt: nowIso,
+                userId: (req as any).user?.uid || "system",
+                usageCount: 0
+              }, { merge: true });
+            }
+            await batch.commit();
+            console.log(`[Template Library] Auto-saved ${parsedData.discoveredTemplates.length} discovered templates to Firestore 'discovered_template_library'.`);
+          } catch (saveErr) {
+            console.warn("[Template Library Auto-Save Warning]:", saveErr);
+          }
+        }
+
         console.log(`======================================================\n`);
         return res.json(parsedData);
       } else {
@@ -4569,6 +4661,18 @@ CRITICAL DESIGN RULES:
       console.error(`[SERVER /api/ai/research-trends CRITICAL ERROR] -> FAILED: ${error.message}`);
       console.log(`======================================================\n`);
       res.status(500).json({ error: error.message || 'Failed to research trends.' });
+    }
+  });
+
+  // --- Persistent Discovered Template Library API Routes ---
+  app.get('/api/templates/library', requireAuth, async (req, res) => {
+    try {
+      if (!db) return res.status(500).json({ error: 'Database inactive' });
+      const snap = await db.collection('discovered_template_library').orderBy('createdAt', 'desc').limit(100).get();
+      const templates = snap.docs.map(doc => doc.data());
+      res.json({ success: true, templates, count: templates.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 
@@ -4854,6 +4958,35 @@ CRITICAL DESIGN RULES:
           maxAge: 60 * 24 * 60 * 60 * 1000 // 60 days
         });
 
+        // Attempt to fetch LinkedIn User Info to populate user profile name & picture
+        try {
+          const userinfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` }
+          });
+          if (userinfoRes.ok) {
+            const info = await userinfoRes.json();
+            const linkedInProfile = {
+              name: info.name || `${info.given_name || ''} ${info.family_name || ''}`.trim(),
+              picture: info.picture || null,
+              email: info.email || null,
+              headline: info.headline || info.localizedHeadline || info.vanityName || null,
+              sub: info.sub || null,
+              updatedAt: new Date().toISOString()
+            };
+            let targetUserId = productId;
+            if (productId.startsWith('founder_')) {
+              targetUserId = productId.replace('founder_', '');
+            }
+            if (db && targetUserId) {
+              const userRef = db.collection('users').doc(targetUserId);
+              await userRef.set({ linkedInProfile }, { merge: true });
+              console.log(`[LinkedIn OAuth] Saved profile for user ${targetUserId}:`, linkedInProfile.name);
+            }
+          }
+        } catch (infoErr) {
+          console.warn('[LinkedIn OAuth] Could not fetch userinfo:', infoErr);
+        }
+
         res.send(`
           <html><body><script>
             if (window.opener) {
@@ -4889,6 +5022,100 @@ CRITICAL DESIGN RULES:
     }
   });
 
+  // --- Admin/User API: Auto-Fetch LinkedIn Profile & Bio ---
+  app.post('/api/linkedin/auto-fetch-profile', requireAuth, async (req, res) => {
+    try {
+      const { productId, linkedinUrl, founderName } = req.body;
+      let targetUserId = (req as any).user?.uid;
+      if (productId && productId.startsWith('founder_')) {
+        targetUserId = productId.replace('founder_', '');
+      }
+
+      if (!db) return res.status(500).json({ error: "Database connection inactive" });
+
+      const userDoc = await db.collection('users').doc(targetUserId).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+
+      let profileName = userData?.linkedInProfile?.name || userData?.name || founderName || (req as any).user?.name || "Founder";
+      let profilePicture = userData?.linkedInProfile?.picture || userData?.photoURL || null;
+      let profileHeadline = userData?.linkedInProfile?.headline || userData?.founderBio || null;
+
+      // 1. Attempt token-based fetch from LinkedIn API
+      const token = await getToken(productId || `founder_${targetUserId}`, 'linkedin') || req.cookies[`linkedin_token_${productId}`];
+      if (token) {
+        try {
+          const userinfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (userinfoRes.ok) {
+            const info = await userinfoRes.json();
+            if (info.name) profileName = info.name;
+            if (info.picture) profilePicture = info.picture;
+            if (info.headline) profileHeadline = info.headline;
+          }
+        } catch (e) {
+          console.warn("[auto-fetch-profile] LinkedIn API userinfo warning:", e);
+        }
+      }
+
+      // 2. If headline or picture is missing, perform live grounded web search for LinkedIn profile details
+      if ((!profileHeadline || !profilePicture) && process.env.GEMINI_API_KEY) {
+        try {
+          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+          const searchPrompt = `Perform a Google Search to find the exact public LinkedIn profile details for: "${profileName}" ${linkedinUrl ? `(${linkedinUrl})` : ''}.
+Extract their current professional title, past companies, and short bio/headline formatted exactly like a LinkedIn profile headline (e.g. "SWE-II @ Google | Ex @Flipkart, @Cisco and @Siemens | 230k+ @LinkedIn").
+Also search for their public LinkedIn profile avatar image URL if indexed.
+Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do NOT wrap in markdown code blocks.`;
+
+          const response = await ai.models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: [{ role: "user", parts: [{ text: searchPrompt }] }],
+            config: {
+              tools: [{ googleSearch: {} }]
+            }
+          });
+
+          const textRes = (response.text || "").replace(/```json|```/g, '').trim();
+          const match = textRes.match(/\{[\s\S]*\}/);
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            if (parsed.headline && parsed.headline.trim().length > 5) {
+              profileHeadline = parsed.headline.trim();
+            }
+            if (parsed.avatarUrl && parsed.avatarUrl.startsWith('http') && !profilePicture) {
+              profilePicture = parsed.avatarUrl.trim();
+            }
+            if (parsed.name && parsed.name.trim().length > 2) {
+              profileName = parsed.name.trim();
+            }
+          }
+        } catch (searchErr) {
+          console.warn("[auto-fetch-profile] Grounded web search warning:", searchErr);
+        }
+      }
+
+      // Fallback headline if still empty
+      if (!profileHeadline) {
+        profileHeadline = userData?.role ? `${userData.role} | Founder` : "Founder & Executive • Daily Strategy";
+      }
+
+      const linkedInProfile = {
+        name: profileName,
+        picture: profilePicture,
+        headline: profileHeadline,
+        updatedAt: new Date().toISOString()
+      };
+
+      await db.collection('users').doc(targetUserId).set({ linkedInProfile }, { merge: true });
+
+      console.log(`[Auto-Fetch Profile] Successfully fetched & saved profile for ${targetUserId}:`, linkedInProfile);
+      return res.json({ success: true, profile: linkedInProfile });
+    } catch (err: any) {
+      console.error("[Auto-Fetch Profile Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to auto-fetch profile" });
+    }
+  });
+
   app.get('/api/linkedin/status', requireAuth, async (req, res) => {
     try {
       const productId = req.query.productId as string;
@@ -4897,7 +5124,37 @@ CRITICAL DESIGN RULES:
         await setToken(productId, 'linkedin', cookieToken);
       }
       const connected = await hasUserToken(productId, 'linkedin');
-      res.json({ connected });
+      const token = await getToken(productId, 'linkedin') || cookieToken;
+
+      let linkedInProfile = null;
+      if (connected && token) {
+        try {
+          const userinfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (userinfoRes.ok) {
+            const info = await userinfoRes.json();
+            linkedInProfile = {
+              name: info.name || `${info.given_name || ''} ${info.family_name || ''}`.trim(),
+              picture: info.picture || null,
+              email: info.email || null,
+              headline: info.headline || info.localizedHeadline || info.vanityName || null,
+              sub: info.sub || null
+            };
+            let targetUserId = productId;
+            if (productId && productId.startsWith('founder_')) {
+              targetUserId = productId.replace('founder_', '');
+            }
+            if (db && targetUserId) {
+              await db.collection('users').doc(targetUserId).set({ linkedInProfile }, { merge: true });
+            }
+          }
+        } catch (e) {
+          // ignore silent userinfo errors
+        }
+      }
+
+      res.json({ connected, profile: linkedInProfile });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

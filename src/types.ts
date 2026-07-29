@@ -50,6 +50,7 @@ export interface ProductDNA {
   logoUrl?: string; // Kept for backwards compatibility
   logoDarkUrl?: string; // Used on light backgrounds
   logoLightUrl?: string; // Used on dark backgrounds
+  targetPlatforms?: string[]; // E.g. ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']
   
   // Advanced DNA (Psychographics & Strategy)
   enemy?: string;

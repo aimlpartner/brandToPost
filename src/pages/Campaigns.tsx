@@ -771,9 +771,6 @@ export function Campaigns() {
     "Instagram",
     "Facebook",
     "Reddit",
-    "TikTok",
-    "YouTube Shorts",
-    "Pinterest",
   ];
 
   const handleToggleShare = async () => {
@@ -2358,9 +2355,7 @@ export function Campaigns() {
                       "Twitter",
                       "Facebook",
                       "Instagram",
-                      "TikTok",
                       "Reddit",
-                      "YouTube",
                     ].map((platform) => {
                       const pLowerCase = platform.toLowerCase();
                       // Check if this campaign has any posts for this platform

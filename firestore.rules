@@ -170,7 +170,7 @@ service cloud.firestore {
     }
 
     match /products/{productId} {
-      allow read: if isDocOwner();
+      allow read: if isDocOwner() || isAdmin();
       allow create: if isNewDocOwner() && isValidProduct(request.resource.data);
       allow update: if isDocOwner() && isNewDocOwner() && isValidProduct(request.resource.data) && userIdUnchanged() && idUnchanged();
       allow delete: if isDocOwner();
