@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
 import { GuidedTour } from "./GuidedTour";
+import { ThemeToggle } from "./ThemeToggle";
 
 const bottomNavItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -91,26 +92,30 @@ export function Layout() {
             </div>
           )}
         </div>
-        <button
-          onClick={() => navigate("/dashboard/campaigns?create=true")}
-          className="p-2 text-gray-300 hover:text-white hover:bg-[#7C3AED]/20 rounded-lg transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="lucide lucide-plus"
+        <div className="flex items-center gap-2">
+          <ThemeToggle variant="icon" />
+          <button
+            onClick={() => navigate("/dashboard/campaigns?create=true")}
+            className="p-2 text-gray-400 hover:text-slate-800 hover:bg-[#7C3AED]/20 rounded-lg transition-colors cursor-pointer"
+            title="Create Campaign"
           >
-            <path d="M5 12h14" />
-            <path d="M12 5v14" />
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="lucide lucide-plus"
+            >
+              <path d="M5 12h14" />
+              <path d="M12 5v14" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Sidebar - Desktop */}

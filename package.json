@@ -16,6 +16,7 @@
     "animejs": "^4.5.0",
     "clsx": "^2.1.1",
     "cookie-parser": "^1.4.6",
+    "darkreader": "^4.9.128",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase": "^10.11.1",

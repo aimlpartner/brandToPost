@@ -8,6 +8,7 @@ import { db, auth } from "../firebase";
 import { collection, query, where, getDocs, deleteDoc, doc, setDoc } from "firebase/firestore";
 import { handleFirestoreError, OperationType, logSilentError } from "../lib/firestore-error";
 import { deleteCookie } from "../lib/cookies";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 const InstagramLogo = () => (
   <svg className="h-6 w-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -715,6 +716,14 @@ export function Settings() {
  )}
 
  <div className="glass-panel p-8 space-y-8">
+  {/* Appearance & Theme Section */}
+  <div className="border-b border-slate-200/60 pb-8">
+    <h3 className="text-lg font-semibold leading-6 text-slate-800">Appearance & Theme</h3>
+    <p className="mt-1 text-sm text-slate-500 mb-6">
+      Choose your workspace theme across all consoles and tools.
+    </p>
+    <ThemeToggle variant="cards" />
+  </div>
  
  {/* Integrations Section */}
  <div>

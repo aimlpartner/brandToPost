@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X, ArrowRight, MessageSquare, Loader2, Zap, CheckCircle2, Crown } from 'lucide-react';
+import { ThemeToggle } from './ThemeToggle';
 
 export function PublicLayout({ children, transparentNavbar = false }: { children: React.ReactNode; transparentNavbar?: boolean }) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -118,6 +119,7 @@ export function PublicLayout({ children, transparentNavbar = false }: { children
               </Link>
               <Link to="/blog" className={`text-sm font-semibold transition-colors duration-300 ${isDarkNavbar ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-950'}`}>Blog</Link>
               <Link to="/login" className={`text-sm font-semibold transition-colors hidden md:block duration-300 ${isDarkNavbar ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-950'}`}>Sign In</Link>
+              <ThemeToggle variant="icon" />
               <Link to="/login?mode=signup" className="px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-sm whitespace-nowrap">
                 Start free trial
               </Link>

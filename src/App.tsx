@@ -38,89 +38,94 @@ import { LinkedInTemplateCollector } from "./pages/LinkedInTemplateCollector";
 import { InstagramTemplateCollector } from "./pages/InstagramTemplateCollector";
 import { XTemplateCollector } from "./pages/XTemplateCollector";
 import { CampaignTemplateTest } from "./pages/CampaignTemplateTest";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { UniversalFloatingThemeToggle } from "./components/UniversalFloatingThemeToggle";
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="" element={<LandingPage />} />
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/landing" element={<LandingPage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/research-blueprints" element={<GroundingResearchUtility />} />
-            <Route path="/research-linkedin" element={<LinkedInTemplateCollector />} />
-            <Route path="/research-instagram" element={<InstagramTemplateCollector />} />
-            <Route path="/research-x" element={<XTemplateCollector />} />
-            <Route
-              path="/campaigns-test"
-              element={
-                <ProductProvider>
-                  <CampaignTemplateTest />
-                </ProductProvider>
-              }
-            />
-            <Route path="/blueprint-playground" element={<ResearchedBlueprintPlayground />} />
-            <Route path="/templates/playground" element={<ResearchedBlueprintPlayground />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/whatsapp/login" element={<WhatsAppLogin />} />
-            <Route path="/blog" element={<BlogList />} />
-            <Route path="/blogs" element={<BlogList />} />
-            <Route path="/blog/:slug" element={<BlogPost />} />
-            <Route path="/blogs/:slug" element={<BlogPost />} />
-            <Route
-              path="/whatsapp-system"
-              element={
-                <ProductProvider>
-                  <WhatsAppDashboard />
-                </ProductProvider>
-              }
-            />
-            <Route
-              path="/whatsapp/dashboard"
-              element={
-                <ProductProvider>
-                  <WhatsAppDashboard />
-                </ProductProvider>
-              }
-            />
-            <Route path="/shared/:campaignId" element={<SharedCampaign />} />
-            <Route element={<ProtectedRoute />}>
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="" element={<LandingPage />} />
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/landing" element={<LandingPage />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/research-blueprints" element={<GroundingResearchUtility />} />
+              <Route path="/research-linkedin" element={<LinkedInTemplateCollector />} />
+              <Route path="/research-instagram" element={<InstagramTemplateCollector />} />
+              <Route path="/research-x" element={<XTemplateCollector />} />
               <Route
-                path="/onboarding"
+                path="/campaigns-test"
                 element={
                   <ProductProvider>
-                    <Onboarding />
+                    <CampaignTemplateTest />
                   </ProductProvider>
                 }
               />
-              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/blueprint-playground" element={<ResearchedBlueprintPlayground />} />
+              <Route path="/templates/playground" element={<ResearchedBlueprintPlayground />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/whatsapp/login" element={<WhatsAppLogin />} />
+              <Route path="/blog" element={<BlogList />} />
+              <Route path="/blogs" element={<BlogList />} />
+              <Route path="/blog/:slug" element={<BlogPost />} />
+              <Route path="/blogs/:slug" element={<BlogPost />} />
               <Route
-                path="/dashboard"
+                path="/whatsapp-system"
                 element={
                   <ProductProvider>
-                    <Layout />
+                    <WhatsAppDashboard />
                   </ProductProvider>
                 }
-              >
-                <Route index element={<Dashboard />} />
-                <Route path="dna" element={<ProductDNA />} />
-                <Route path="creatives" element={<Creatives />} />
-                <Route path="campaigns" element={<Campaigns />} />
-                <Route path="scripts" element={<Scripts />} />
-                <Route path="schedule" element={<Schedule />} />
-                <Route path="master-founder" element={<MasterFounder />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="profile" element={<div className="p-8 text-white">Profile Page Coming Soon</div>} />
+              />
+              <Route
+                path="/whatsapp/dashboard"
+                element={
+                  <ProductProvider>
+                    <WhatsAppDashboard />
+                  </ProductProvider>
+                }
+              />
+              <Route path="/shared/:campaignId" element={<SharedCampaign />} />
+              <Route element={<ProtectedRoute />}>
+                <Route
+                  path="/onboarding"
+                  element={
+                    <ProductProvider>
+                      <Onboarding />
+                    </ProductProvider>
+                  }
+                />
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProductProvider>
+                      <Layout />
+                    </ProductProvider>
+                  }
+                >
+                  <Route index element={<Dashboard />} />
+                  <Route path="dna" element={<ProductDNA />} />
+                  <Route path="creatives" element={<Creatives />} />
+                  <Route path="campaigns" element={<Campaigns />} />
+                  <Route path="scripts" element={<Scripts />} />
+                  <Route path="schedule" element={<Schedule />} />
+                  <Route path="master-founder" element={<MasterFounder />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="profile" element={<div className="p-8 text-white">Profile Page Coming Soon</div>} />
+                </Route>
               </Route>
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <CookieConsent />
-        </BrowserRouter>
-      </AuthProvider>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <CookieConsent />
+            <UniversalFloatingThemeToggle />
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

@@ -9,6 +9,7 @@ import {
 import { logSilentError } from '../lib/firestore-error';
 import { VideoLoader } from '../components/VideoLoader';
 import { motion } from 'motion/react';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export function Login() {
   const { user, userProfile, loading, logout, signInWithGoogle, signInWithFacebook, signInWithApple, signInWithEmail, signUpWithEmail, resetPassword } = useAuth();
@@ -189,9 +190,10 @@ export function Login() {
           mode === 'signup' ? 'bg-[#7C3AED]/2' : 'bg-[#2583EB]/2'
         }`}></div>
 
-        {/* Logo */}
-        <div className="relative z-10 flex justify-start flex-shrink-0">
+        {/* Logo & Theme Toggle */}
+        <div className="relative z-10 flex items-center justify-between flex-shrink-0">
           <img src="/B2PLOGO.png" alt="Logo" className="h-9 w-auto object-contain" />
+          <ThemeToggle variant="icon" />
         </div>
 
         {/* Form Container */}

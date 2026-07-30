@@ -4,6 +4,7 @@ import { cn } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useState, useRef, useEffect } from "react";
+import { ThemeToggle } from "./ThemeToggle";
 
 const navigation = [
  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -188,8 +189,9 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
    </nav>
 
-   {/* Bottom: User Profile + Logout */}
-   <div className="mt-auto border-t border-slate-100 px-3 py-4">
+   {/* Bottom: User Profile + Theme + Logout */}
+   <div className="mt-auto border-t border-slate-100 px-3 py-4 space-y-1.5">
+    <ThemeToggle variant="sidebar" />
     <NavLink
      to="/dashboard/profile"
      onClick={onClose}

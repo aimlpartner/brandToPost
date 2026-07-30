@@ -89,10 +89,13 @@ const AGENTS = [
 
 export function AgentSolitaireCards() {
   const sectionRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [shuffleDir, setShuffleDir] = useState<'next' | 'prev' | null>(null);
   const [isLocked, setIsLocked] = useState(false);
 
+  const isLockedRef = useRef(false);
+  const unlockCooldownRef = useRef(false);
   const activeIndexRef = useRef(activeIndex);
   activeIndexRef.current = activeIndex;
 
@@ -111,8 +114,14 @@ export function AgentSolitaireCards() {
         setShuffleDir(null);
       }, 360);
     } else {
+      // Reached the end (Agent 10) — unlock and let user continue scrolling down
       setIsLocked(false);
+      isLockedRef.current = false;
       document.body.style.overflow = '';
+      unlockCooldownRef.current = true;
+      setTimeout(() => {
+        unlockCooldownRef.current = false;
+      }, 1000);
     }
   }, []);
 
@@ -128,39 +137,49 @@ export function AgentSolitaireCards() {
         setShuffleDir(null);
       }, 360);
     } else {
+      // Reached the beginning (Agent 1) — unlock and let user continue scrolling up
       setIsLocked(false);
+      isLockedRef.current = false;
       document.body.style.overflow = '';
+      unlockCooldownRef.current = true;
+      setTimeout(() => {
+        unlockCooldownRef.current = false;
+      }, 1000);
     }
   }, []);
 
-  // IntersectionObserver to lock scroll when section enters viewport
+  // IntersectionObserver to lock scroll when the cards stage enters viewport
   useEffect(() => {
-    const section = sectionRef.current;
-    if (!section) return;
+    const stage = stageRef.current;
+    if (!stage) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
-            const rect = section.getBoundingClientRect();
+          if (entry.isIntersecting && entry.intersectionRatio > 0.45) {
+            if (isLockedRef.current || unlockCooldownRef.current) return;
+
+            const rect = stage.getBoundingClientRect();
             if (rect.top > 0) {
               setActiveIndex(0);
             } else {
               setActiveIndex(AGENTS.length - 1);
             }
             setIsLocked(true);
+            isLockedRef.current = true;
             document.body.style.overflow = 'hidden';
-            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          } else {
+            stage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else if (!entry.isIntersecting) {
             setIsLocked(false);
+            isLockedRef.current = false;
             document.body.style.overflow = '';
           }
         });
       },
-      { threshold: [0.4] }
+      { threshold: [0.45] }
     );
 
-    observer.observe(section);
+    observer.observe(stage);
     return () => {
       observer.disconnect();
       document.body.style.overflow = '';
@@ -235,48 +254,67 @@ export function AgentSolitaireCards() {
 
   return (
     <section ref={sectionRef} className="solitaire-section" id="creative-roster">
-      {/* Section Header */}
+      {/* Section Header (visible before scrolling into the locked card stage) */}
       <div className="solitaire-header">
         <h2 className="solitaire-title">
-          Meet your AI <span className="solitaire-title-accent">Marketing Team.</span>
+          Meet your <span className="solitaire-title-highlight">AI Marketing Team.</span>
         </h2>
+        <p className="solitaire-subtitle">
+          10 autonomous specialists working in sync to power your content engine.
+        </p>
       </div>
 
-      {/* Card Stage */}
-      <div className="solitaire-stage">
-        <div className={`solitaire-card ${shuffleClass}`} key={agent.id} style={{ '--card-accent': agent.color } as React.CSSProperties}>
-          <div className="solitaire-card-inner">
+      {/* Card Stage with Deck Stack (this stage locks to 100vh when scrolling into it) */}
+      <div ref={stageRef} className="solitaire-stage">
+        <div className={`solitaire-deck-stack ${isFlipping.current ? 'is-shuffling' : ''}`}>
+          {/* Deck card (bottom layer) */}
+          <div className="solitaire-deck-card solitaire-deck-card--bottom">
+            <div className="solitaire-deck-card-pattern" />
+          </div>
 
-            {/* Top-left corner: logo + rank */}
-            <div className="solitaire-card-corner solitaire-card-corner--tl">
-              <img src="/B2PLOGO.png" alt="" className="solitaire-card-logo" draggable={false} />
-              <span className="solitaire-card-rank">{agent.rank}</span>
+          {/* Deck card (middle layer) */}
+          <div className="solitaire-deck-card solitaire-deck-card--middle">
+            <div className="solitaire-deck-card-pattern" />
+          </div>
+
+          {/* Top Active Card */}
+          <div className={`solitaire-card ${shuffleClass}`} key={agent.id} style={{ '--card-accent': agent.color } as React.CSSProperties}>
+            <div className="solitaire-card-inner">
+
+              {/* Top-left corner: logo + rank */}
+              <div className="solitaire-card-corner solitaire-card-corner--tl">
+                <img src="/B2PLOGO.png" alt="" className="solitaire-card-logo" draggable={false} />
+                <span className="solitaire-card-rank">{agent.rank}</span>
+              </div>
+
+              {/* Full-bleed Joker-style Portrait */}
+              <div className="solitaire-card-portrait">
+                <img
+                  src={agent.avatar}
+                  alt={agent.name}
+                  loading="eager"
+                  draggable={false}
+                />
+              </div>
+
+              {/* Name + Purpose */}
+              <div className="solitaire-card-identity">
+                <h3 className="solitaire-card-name">{agent.name}</h3>
+                <span className="solitaire-card-purpose">{agent.purpose}</span>
+              </div>
+
+              {/* Bottom-right corner: logo + rank (inverted) */}
+              <div className="solitaire-card-corner solitaire-card-corner--br">
+                <img src="/B2PLOGO.png" alt="" className="solitaire-card-logo" draggable={false} />
+                <span className="solitaire-card-rank">{agent.rank}</span>
+              </div>
+
+              {/* Inset decorative border */}
+              <div className="solitaire-card-border-inset" />
+
+              {/* Very subtle card surface pattern */}
+              <div className="solitaire-card-surface-pattern" />
             </div>
-
-            {/* Full-bleed Joker-style Portrait */}
-            <div className="solitaire-card-portrait">
-              <img
-                src={agent.avatar}
-                alt={agent.name}
-                loading="eager"
-                draggable={false}
-              />
-            </div>
-
-            {/* Name + Purpose */}
-            <div className="solitaire-card-identity">
-              <h3 className="solitaire-card-name">{agent.name}</h3>
-              <span className="solitaire-card-purpose">{agent.purpose}</span>
-            </div>
-
-            {/* Bottom-right corner: logo + rank (inverted) */}
-            <div className="solitaire-card-corner solitaire-card-corner--br">
-              <img src="/B2PLOGO.png" alt="" className="solitaire-card-logo" draggable={false} />
-              <span className="solitaire-card-rank">{agent.rank}</span>
-            </div>
-
-            {/* Inset decorative border */}
-            <div className="solitaire-card-border-inset" />
           </div>
         </div>
       </div>
