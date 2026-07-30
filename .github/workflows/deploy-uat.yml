@@ -41,7 +41,8 @@ jobs:
         run: |
           mkdir deploy_temp
           cp -r dist deploy_temp/
-          cp server.js deploy_temp/
+          cp dist/server.cjs deploy_temp/server.js
+          cp dist/server.cjs.map deploy_temp/server.js.map || true
           cp package.json deploy_temp/
           cp package-lock.json deploy_temp/
           cp .htaccess deploy_temp/
