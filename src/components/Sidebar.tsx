@@ -150,12 +150,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     ))}
     </div>
 
-    {/* Separator / Master Control Label */}
+    {/* Separator / Founder Agent Label */}
     <div className="px-3 py-2 mt-4 border-t border-slate-100/60">
-      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block px-1">Master Controls</span>
+      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block px-1">Founder Agent</span>
     </div>
 
-    {/* Master Founder Link - Styled uniquely and highlighted */}
+    {/* Founder Agent Link */}
     <div className="mt-1">
       <NavLink
         to="/dashboard/master-founder"
@@ -180,38 +180,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
               )}
               strokeWidth={2.2}
             />
-            <span className="relative z-10 font-bold flex-1 min-w-0 truncate whitespace-nowrap text-[12px] sm:text-[13px]">Master Founder Agent</span>
-            {!isActive && (
-              <span className="ml-auto bg-violet-600 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider scale-90 origin-right shrink-0">
-                Master
-              </span>
-            )}
+            <span className="relative z-10 font-bold flex-1 min-w-0 truncate whitespace-nowrap text-[12px] sm:text-[13px]">Founder Agent</span>
           </>
         )}
       </NavLink>
     </div>
 
-    {/* DNA Visualizer Demo Link */}
-    <div className="mt-2">
-      <NavLink
-        to="/templates"
-        onClick={onClose}
-        className={({ isActive }) =>
-          cn(
-            "flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all duration-200 shadow-sm border",
-            isActive
-              ? "bg-[#7C3AED] text-white border-[#7C3AED]"
-              : "text-slate-600 bg-slate-50 border-slate-100 hover:bg-slate-100"
-          )
-        }
-      >
-        <Layout
-          className="h-[18px] w-[18px] shrink-0 text-slate-400"
-          strokeWidth={1.8}
-        />
-        <span className="font-bold flex-1 min-w-0 truncate text-[12px] sm:text-[13px]">Visual Template Library</span>
-      </NavLink>
-    </div>
    </nav>
 
    {/* Bottom: User Profile + Logout */}

@@ -66,8 +66,8 @@ export function Dashboard() {
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {/* Tror Assistant Welcome Card */}
         <div className="tour-welcome-card glass-card p-4 sm:p-6 sm:col-span-2 lg:col-span-3 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden bg-white/95 border-[#7C3AED]/15 shadow-sm">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#7C3AED]/10 blur-[80px] rounded-full pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#7C3AED]/10 blur-[60px] rounded-full pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[radial-gradient(circle,_rgba(124,58,237,0.08)_0%,_transparent_70%)] rounded-full pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-[radial-gradient(circle,_rgba(124,58,237,0.06)_0%,_transparent_70%)] rounded-full pointer-events-none" />
 
           <div className="relative shrink-0 z-10 w-32 h-32 md:w-40 md:h-40 rounded-full border border-[#7C3AED]/15 bg-white flex items-center justify-center p-2 shadow-[0_0_30px_rgba(124,58,237,0.15)]">
             <img
@@ -299,7 +299,7 @@ export function Dashboard() {
       </div>
 
       {showTour && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85">
           <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-[30px] p-8 overflow-hidden text-slate-100 shadow-2xl">
             {/* Glows */}
             <div className="absolute top-[-20%] left-[-10%] w-60 h-60 bg-[#7C3AED]/20 rounded-full blur-[60px] pointer-events-none" />

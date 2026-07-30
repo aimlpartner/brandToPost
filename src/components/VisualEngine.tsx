@@ -134,7 +134,7 @@ export function VisualEngine({
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [safeVisualType, visualData, imageUrl, activeLogo, bgStatus, logoStatus, redrawCounter]);
+  }, [safeVisualType, JSON.stringify(visualData), imageUrl, activeLogo, bgStatus, logoStatus, redrawCounter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();

@@ -1,3 +1,4 @@
+import { PlusPenIcon } from "../components/PlusPenIcon";
 import { VideoLoader } from "../components/VideoLoader";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -25,6 +26,7 @@ import {
   Upload,
   Megaphone,
   Pencil,
+  CheckCircle2,
 } from "lucide-react";
 import { researchProductDNA, synthesizeFounderAgent } from "../services/geminiService";
 import { useProducts } from "../contexts/ProductContext";
@@ -292,6 +294,7 @@ export function ProductDNA() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [aiInputTab, setAiInputTab] = useState<"website" | "description" | "document">("website");
   const [productDocument, setProductDocument] = useState<{
     data: string;
     mimeType: string;
@@ -858,62 +861,148 @@ export function ProductDNA() {
       </BentoCard>
 
       {/* AI Auto-Fill — col 1 */}
-      <BentoCard span={1} className="!bg-slate-50/60">
-        <SectionTitle icon={Sparkles} title="AI Auto-Fill" />
-        <p className="text-xs text-slate-500 leading-relaxed mb-5">
-          Drop your website URL or upload docs, and let AI reverse-engineer your core positioning, audience, and voice.
+      <BentoCard span={1} className="!bg-slate-50/60 h-fit">
+        <SectionTitle icon={PlusPenIcon} title="AI Auto-Fill" />
+        <p className="text-xs text-slate-500 leading-relaxed mb-4">
+          Select an extraction source below to reverse-engineer your brand positioning, audience, and voice.
         </p>
-        <div className="space-y-5">
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              <Globe className="h-3 w-3" /> Website URL
-            </label>
-            <div className="h-px bg-slate-200 mb-3" />
-            <input
-              type="text" name="website" value={dna.website} 
-              onChange={(e) => {
-                handleChange(e);
-                if (urlError) setUrlError(null);
-              }}
-              className={`w-full bg-white border ${urlError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-[#7C3AED]"} rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-300 outline-none transition-colors`}
-              placeholder="stripe.com"
-            />
-            {urlError && (
-              <p className="mt-1.5 text-[11px] font-semibold text-red-500 leading-normal">
-                {urlError}
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              <FileText className="h-3 w-3" /> Description
-            </label>
-            <div className="h-px bg-slate-200 mb-3" />
-            <textarea
-              name="description" value={dna.description || ""} onChange={handleChange} rows={2}
-              className="w-full bg-white border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-300 outline-none resize-none transition-colors"
-              placeholder="Briefly describe what you build..."
-            />
-          </div>
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              <Link className="h-3 w-3" /> Document
-            </label>
-            <div className="h-px bg-slate-200 mb-3" />
-            <input
-              type="file" accept=".pdf,.txt,.md" onChange={handleDocumentUpload}
-              className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 transition-colors"
-            />
-            {productDocument && <p className="mt-2 text-xs text-green-600 font-medium truncate">✓ {productDocument.name}</p>}
-          </div>
+
+        {/* Tabbed Source Switcher */}
+        <div className="flex bg-slate-200/80 p-1 rounded-xl gap-1 mb-4">
+          <button
+            type="button"
+            onClick={() => setAiInputTab("website")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              aiInputTab === "website"
+                ? "bg-white text-slate-900 shadow-xs font-bold"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            <span>Website</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAiInputTab("description")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              aiInputTab === "description"
+                ? "bg-white text-slate-900 shadow-xs font-bold"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span>Text</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAiInputTab("document")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              aiInputTab === "document"
+                ? "bg-white text-slate-900 shadow-xs font-bold"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            <span>Doc</span>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {aiInputTab === "website" && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                <Globe className="h-3 w-3 text-violet-600" /> Website URL
+              </label>
+              <div className="h-px bg-slate-200 mb-3" />
+              <input
+                type="text" name="website" value={dna.website} 
+                onChange={(e) => {
+                  handleChange(e);
+                  if (urlError) setUrlError(null);
+                }}
+                className={`w-full bg-white border ${urlError ? "border-red-500 focus:border-red-500" : "border-slate-200 focus:border-[#7C3AED]"} rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-300 outline-none transition-colors`}
+                placeholder="stripe.com"
+              />
+              {urlError ? (
+                <p className="mt-1.5 text-[11px] font-semibold text-red-500 leading-normal">
+                  {urlError}
+                </p>
+              ) : (
+                <p className="mt-2 text-[11px] text-slate-400 font-light flex items-center gap-1.5">
+                  <Zap className="h-3 w-3 text-violet-500 shrink-0" />
+                  <span>Crawls homepage, features, pricing, and about pages</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          {aiInputTab === "description" && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                <FileText className="h-3 w-3 text-violet-600" /> Brand Description
+              </label>
+              <div className="h-px bg-slate-200 mb-3" />
+              <textarea
+                name="description" value={dna.description || ""} onChange={handleChange} rows={4}
+                className="w-full bg-white border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-2.5 text-sm text-slate-800 placeholder-slate-300 outline-none resize-none transition-colors"
+                placeholder="Briefly describe your product, main value proposition, key target audience, and core differentiators..."
+              />
+            </div>
+          )}
+
+          {aiInputTab === "document" && (
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                <Upload className="h-3 w-3 text-violet-600" /> Upload Document
+              </label>
+              <div className="h-px bg-slate-200 mb-3" />
+              <div className="border-2 border-dashed border-slate-200 hover:border-violet-300 rounded-xl p-4 text-center bg-white transition-colors">
+                <input
+                  type="file" accept=".pdf,.txt,.md" onChange={handleDocumentUpload}
+                  className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 transition-colors cursor-pointer"
+                />
+                <p className="mt-2 text-[10px] text-slate-400 font-light">Supports PDF, TXT, and Markdown files up to 10MB</p>
+              </div>
+              {productDocument && <p className="mt-2 text-xs text-green-600 font-medium truncate">✓ {productDocument.name}</p>}
+            </div>
+          )}
+
           <button
             type="button" onClick={handleResearch}
-            disabled={isResearching || (!dna.website && !dna.description && !productDocument)}
-            className="tour-dna-extract-btn w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl px-5 py-2.5 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center transition-colors"
+            disabled={
+              isResearching || 
+              (aiInputTab === "website" && !dna.website) ||
+              (aiInputTab === "description" && !dna.description) ||
+              (aiInputTab === "document" && !productDocument)
+            }
+            className="tour-dna-extract-btn w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl px-5 py-2.5 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center transition-colors cursor-pointer shadow-xs"
           >
-            {isResearching ? <VideoLoader className="mr-2 h-7 w-7" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            {isResearching ? <VideoLoader className="mr-2 h-7 w-7" /> : <PlusPenIcon className="mr-2 h-4 w-4 text-white shrink-0" />}
             Extract Brand DNA
           </button>
+
+          {/* AI Extraction Coverage Feature Callout Box */}
+          {(!dna.crawledUrls || dna.crawledUrls.length === 0) && (
+            <div className="pt-3 border-t border-slate-200/60 space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Extraction Coverage
+              </span>
+              <div className="bg-white border border-slate-200/70 rounded-xl p-3 space-y-2 text-[11px] text-slate-600 shadow-xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span>Core Positioning & Value Proposition</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span>Target Audience & Persona ICP</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span>Tone of Voice & Vocabulary Signature</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {dna.crawledUrls && dna.crawledUrls.length > 0 && (
             <div className="mt-4 pt-4 border-t border-slate-200/60">
@@ -1356,7 +1445,7 @@ export function ProductDNA() {
       {/* Delete Confirmation Modal */}
       {isDeleteModalOpen &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80">
             <div className="bg-white rounded-[22px] shadow-xl max-w-md w-full p-6 border border-slate-200">
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">

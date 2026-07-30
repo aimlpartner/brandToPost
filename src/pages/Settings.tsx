@@ -1119,7 +1119,7 @@ export function Settings() {
 
  {/* LinkedIn Organization Modal */}
  {showOrgModal && createPortal(
-<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80">
  <div className="bg-white rounded-[18px] shadow-xl w-full max-w-md p-6 m-4 border border-slate-200">
  <h3 className="text-xl font-bold text-slate-800 mb-2">Select LinkedIn Page</h3>
  <p className="text-sm text-slate-500 mb-6">

@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { VideoLoader } from "../components/VideoLoader";
 import { useState, useEffect } from "react";
 import { WeeklyCampaign, ProductDNA, PlatformPost } from "../types";
+import { PlusPenIcon } from "../components/PlusPenIcon";
 import {
   generateFieldSuggestions,
   generateCampaign,
@@ -90,6 +91,15 @@ const getVisualDataWithImages = (
   return newVd;
 };
 
+export const isPlatformMatch = (p1?: string | null, p2?: string | null) => {
+  if (!p1 || !p2) return false;
+  const a = p1.toLowerCase().trim();
+  const b = p2.toLowerCase().trim();
+  if (a === b) return true;
+  if ((a === "x" || a === "twitter") && (b === "x" || b === "twitter")) return true;
+  return false;
+};
+
 const getPlatformLogo = (platform: string, isActive: boolean = false, className: string = "w-5 h-5") => {
   const p = platform.toLowerCase();
   
@@ -120,13 +130,13 @@ const getPlatformLogo = (platform: string, isActive: boolean = false, className:
       return <FaLinkedin className={cn("text-[#0A66C2]", className)} />;
     case "twitter":
     case "x":
-      return <FaXTwitter className={cn("text-slate-800 dark:text-white", className)} />;
+      return <FaXTwitter className={cn("text-slate-900", className)} />;
     case "facebook":
       return <FaFacebook className={cn("text-[#1877F2]", className)} />;
     case "instagram":
       return <FaInstagram className={cn("text-[#E1306C]", className)} />;
     case "tiktok":
-      return <FaTiktok className={cn("text-slate-900 dark:text-white", className)} />;
+      return <FaTiktok className={cn("text-slate-900", className)} />;
     case "reddit":
       return <FaReddit className={cn("text-[#FF4500]", className)} />;
     case "youtube":
@@ -229,7 +239,10 @@ export function Campaigns() {
             : `${item.campaignId}-${item.platform}`;
           newQueued[key] = true;
         });
-        setQueued(newQueued);
+        setQueued(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(newQueued)) return prev;
+          return newQueued;
+        });
       } catch (err) {
         logSilentError(err as Error, { context: "fetchQueueStatus" });
       }
@@ -240,7 +253,41 @@ export function Campaigns() {
     return () => clearInterval(interval);
   }, [activeProduct, user]);
 
+  const [uploadedCreativesCount, setUploadedCreativesCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!activeProduct || !user) {
+      setUploadedCreativesCount(0);
+      return;
+    }
+    const q = query(
+      collection(db, "creatives"),
+      where("productId", "==", activeProduct.id),
+      where("userId", "==", user.uid)
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setUploadedCreativesCount(snapshot.size);
+      },
+      (err) => {
+        logSilentError(err, { context: "campaignsFetchCreativesCount" });
+      }
+    );
+    return () => unsubscribe();
+  }, [activeProduct, user]);
+
+  const totalBrandAssets = uploadedCreativesCount + (activeProduct?.extractedMediaImages?.length || 0);
+  const hasEnoughAssets = totalBrandAssets >= 3;
+
   const [generateImages, setGenerateImages] = useState(false);
+
+  useEffect(() => {
+    if (totalBrandAssets < 3) {
+      setGenerateImages(true);
+    }
+  }, [totalBrandAssets]);
+
   const [showModal, setShowModal] = useState(false);
   // 1 = focus form, 4 = generating, 5 = review draft
   const [modalStep, setModalStep] = useState<1 | 4 | 5>(1);
@@ -534,6 +581,21 @@ export function Campaigns() {
           try {
             if (user) {
               const cleanCampaign = JSON.parse(JSON.stringify(updatedCampaign));
+              // Strip heavy HTML from saved documents to avoid Firestore 1MB limits
+              cleanCampaign.dailyPosts?.forEach((dp: any) => {
+                if (dp.visualData) {
+                  delete dp.visualData.customHtml;
+                  delete dp.visualData.renderedHtml;
+                  delete dp.visualData.rawHtml;
+                }
+                dp.platformVersions?.forEach((pv: any) => {
+                  if (pv.visualData) {
+                    delete pv.visualData.customHtml;
+                    delete pv.visualData.renderedHtml;
+                    delete pv.visualData.rawHtml;
+                  }
+                });
+              });
               await setDoc(doc(db, "campaigns", campaignId), cleanCampaign);
             } else {
               // LocalStorage Fallback for guests
@@ -631,7 +693,20 @@ export function Campaigns() {
 
       const filename = fallbackFilename || `post_visual_${pv?.platform || 'card'}.png`;
 
-      // 1. FIRST Priority: If V3 visual template exists (renderedHtml / customHtml), render full 1080x1080 visual card
+      // 1. FIRST Priority: Pre-rendered AI image URL or image asset
+      const existingUrl =
+        generatedVisuals[publishKey] ||
+        pv?.imageUrl ||
+        (pv?.imageId ? campaignImages[pv.imageId] : undefined) ||
+        (dp?.imageUrl) ||
+        (dp?.imageId ? campaignImages[dp.imageId] : undefined);
+
+      if (existingUrl) {
+        await handleDownloadImageBlob(existingUrl, filename);
+        return;
+      }
+
+      // 2. Second Priority: If no generated image exists, render V3 visual template (renderedHtml / customHtml)
       if (visualData?.renderedHtml || visualData?.customHtml) {
         const token = auth.currentUser ? await auth.currentUser.getIdToken() : "";
         const res = await fetch("/api/render-visual", {
@@ -658,19 +733,7 @@ export function Campaigns() {
         }
       }
 
-      // 2. Second Priority: Pre-rendered flattened image URL or image asset
-      const existingUrl =
-        generatedVisuals[publishKey] ||
-        pv?.imageUrl ||
-        (pv?.imageId ? campaignImages[pv.imageId] : undefined) ||
-        (dp?.imageUrl) ||
-        (dp?.imageId ? campaignImages[dp.imageId] : undefined);
-
-      if (existingUrl) {
-        await handleDownloadImageBlob(existingUrl, filename);
-      } else {
-        alert("No visual asset found to download.");
-      }
+      alert("No visual asset found to download.");
     } catch (err: any) {
       console.error("Failed to download visual card:", err);
       alert("Download failed. Please try again.");
@@ -1032,7 +1095,7 @@ export function Campaigns() {
     setIsGenerating(true);
     setError(null);
 
-    setGenerationTotal(generateImages ? 4 : 3);
+    setGenerationTotal(3);
     setGenerationStep(1);
     setGenerationStatus(
       `Tror is analyzing ${finalFocus} and gathering market intelligence...`,
@@ -2352,7 +2415,7 @@ export function Campaigns() {
                     {[
                       "All",
                       "LinkedIn",
-                      "Twitter",
+                      "X",
                       "Facebook",
                       "Instagram",
                       "Reddit",
@@ -2363,19 +2426,20 @@ export function Campaigns() {
                         platform === "All" ||
                         (selectedCampaign.dailyPosts &&
                           selectedCampaign.dailyPosts.some((dp) =>
-                            dp.platformVersions.some(
-                              (pv) => pv.platform.toLowerCase() === pLowerCase,
+                            dp.platformVersions.some((pv) =>
+                              isPlatformMatch(pv.platform, platform),
                             ),
                           )) ||
                         (selectedCampaign.platformVersions &&
-                          selectedCampaign.platformVersions.some(
-                            (pv) => pv.platform.toLowerCase() === pLowerCase,
+                          selectedCampaign.platformVersions.some((pv) =>
+                            isPlatformMatch(pv.platform, platform),
                           ));
 
                       if (!hasPostsForPlatform && platform !== "All") return null;
                       const isActive =
-                        platformFilter === pLowerCase ||
-                        (platform === "All" && platformFilter === null);
+                        platform === "All"
+                          ? platformFilter === null
+                          : isPlatformMatch(platformFilter, platform);
 
                       return (
                         <button
@@ -2576,8 +2640,7 @@ export function Campaigns() {
                       const filteredPVs = dp.platformVersions.filter(
                         (pv) =>
                           platformFilter === null ||
-                          pv.platform.toLowerCase() ===
-                            platformFilter.toLowerCase(),
+                          isPlatformMatch(pv.platform, platformFilter),
                       );
 
                       if (filteredPVs.length === 0) return null;
@@ -2657,145 +2720,6 @@ export function Campaigns() {
                                         )}
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0 flex-nowrap justify-start md:justify-end">
-                                        <button
-                                          onClick={() =>
-                                            queued[publishKey]
-                                              ? handleUnqueue(
-                                                  pv.platform,
-                                                  selectedCampaign.id,
-                                                  dp.day,
-                                                )
-                                              : handleQueue(
-                                                  pv.platform,
-                                                  formatCopy(pv.copy),
-                                                  selectedCampaign.id,
-                                                  dp.day,
-                                                  dp.date,
-                                                  pv.imageUrl || dp.imageUrl || (pv.imageId ? campaignImages[pv.imageId] : undefined) || (dp.imageId ? campaignImages[dp.imageId] : undefined),
-                                                )
-                                          }
-                                          disabled={queuing[publishKey]}
-                                          className={cn(
-                                            "inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors shadow-sm shrink-0",
-                                            queued[publishKey] &&
-                                              "bg-[#7C3AED]/12 border-[#7C3AED]/30 text-[#7C3AED] hover:bg-[#7C3AED]/20",
-                                          )}
-                                        >
-                                          {queuing[publishKey] ? (
-                                            <VideoLoader className="mr-1.5 h-7 w-7" />
-                                          ) : queued[publishKey] ? (
-                                            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-[#7C3AED]" />
-                                          ) : (
-                                            <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                                          )}
-                                          {queued[publishKey]
-                                            ? "Queued"
-                                            : "Queue"}
-                                        </button>
-                                        
-                                        {isLinkedin && (
-                                          isLinkedinConnected ? (
-                                            <button
-                                              onClick={() =>
-                                                handlePublish(
-                                                  pv.platform,
-                                                  formatCopy(pv.copy),
-                                                  selectedCampaign.id,
-                                                  dp.day,
-                                                  generatedVisuals[publishKey] ||
-                                                    pv.imageUrl ||
-                                                    (pv.imageId
-                                                      ? campaignImages[pv.imageId]
-                                                      : typeof dp !==
-                                                            "undefined" &&
-                                                          dp.imageId
-                                                        ? campaignImages[
-                                                            dp.imageId
-                                                          ]
-                                                        : undefined),
-                                                )
-                                              }
-                                              disabled={
-                                                isPublishing || isPublished
-                                              }
-                                              className="inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] rounded-lg transition-colors shadow-sm shrink-0"
-                                            >
-                                              {isPublishing ? (
-                                                <VideoLoader className="mr-1.5 h-7 w-7" />
-                                              ) : isPublished ? (
-                                                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                                              ) : (
-                                                <Send className="mr-1.5 h-3.5 w-3.5" />
-                                              )}
-                                              {isPublished
-                                                ? "Published"
-                                                : "Publish"}
-                                            </button>
-                                          ) : (
-                                            <button
-                                              disabled
-                                              title="Connect LinkedIn in Settings to publish directly"
-                                              className="opacity-50 cursor-not-allowed inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-slate-400 bg-slate-100 border border-slate-200 rounded-lg transition-colors shadow-sm shrink-0"
-                                            >
-                                              <Send className="mr-1.5 h-3.5 w-3.5" />
-                                              Publish
-                                            </button>
-                                          )
-                                        )}
-
-                                        {pv.platform.toLowerCase() === "instagram" && (
-                                          isInstagramConnected ? (
-                                            <button
-                                              onClick={() =>
-                                                handlePublish(
-                                                  pv.platform,
-                                                  formatCopy(pv.copy),
-                                                  selectedCampaign.id,
-                                                  dp.day,
-                                                  generatedVisuals[
-                                                    publishKey
-                                                  ] ||
-                                                    pv.imageUrl ||
-                                                    (pv.imageId
-                                                      ? campaignImages[
-                                                          pv.imageId
-                                                        ]
-                                                      : typeof dp !==
-                                                            "undefined" &&
-                                                          dp.imageId
-                                                        ? campaignImages[
-                                                            dp.imageId
-                                                          ]
-                                                        : undefined),
-                                                )
-                                              }
-                                              disabled={
-                                                isPublishing || isPublished
-                                              }
-                                              className="inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-white bg-[#E1306C] hover:bg-[#c12456] rounded-lg transition-colors shadow-sm shrink-0"
-                                            >
-                                              {isPublishing ? (
-                                                <VideoLoader className="mr-1.5 h-7 w-7" />
-                                              ) : isPublished ? (
-                                                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                                              ) : (
-                                                <Send className="mr-1.5 h-3.5 w-3.5" />
-                                              )}
-                                              {isPublished
-                                                ? "Published"
-                                                : "Publish"}
-                                            </button>
-                                          ) : (
-                                            <button
-                                              disabled
-                                              title="Connect Instagram in Settings to publish directly"
-                                              className="opacity-50 cursor-not-allowed inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-slate-400 bg-slate-100 border border-slate-200 rounded-lg transition-colors shadow-sm shrink-0"
-                                            >
-                                              <Send className="mr-1.5 h-3.5 w-3.5" />
-                                              Publish
-                                            </button>
-                                          )
-                                        )}
 
                                         <button
                                           onClick={() =>
@@ -2908,8 +2832,7 @@ export function Campaigns() {
                       .filter(
                         (pv) =>
                           platformFilter === null ||
-                          pv.platform.toLowerCase() ===
-                            platformFilter.toLowerCase(),
+                          isPlatformMatch(pv.platform, platformFilter),
                       )
                       .map((pv, idx) => {
                         const matchingDp = selectedCampaign.dailyPosts ? selectedCampaign.dailyPosts[idx % selectedCampaign.dailyPosts.length] : undefined;
@@ -2947,119 +2870,6 @@ export function Campaigns() {
                                 )}
                               </div>
                               <div className="flex items-center gap-2 shrink-0 flex-nowrap justify-start md:justify-end">
-                                <button
-                                  onClick={() =>
-                                    queued[publishKey]
-                                      ? handleUnqueue(
-                                          pv.platform,
-                                          selectedCampaign.id,
-                                        )
-                                      : handleQueue(
-                                          pv.platform,
-                                          formatCopy(pv.copy),
-                                          selectedCampaign.id,
-                                          undefined,
-                                          undefined,
-                                          pv.imageUrl || (pv.imageId ? campaignImages[pv.imageId] : undefined),
-                                        )
-                                  }
-                                  disabled={queuing[publishKey]}
-                                  className={cn(
-                                    "inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors shadow-sm shrink-0",
-                                    queued[publishKey] &&
-                                      "bg-[#7C3AED]/12 border-[#7C3AED]/30 text-[#7C3AED] hover:bg-[#7C3AED]/20",
-                                  )}
-                                >
-                                  {queuing[publishKey] ? (
-                                    <VideoLoader className="mr-1.5 h-7 w-7" />
-                                  ) : queued[publishKey] ? (
-                                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-[#7C3AED]" />
-                                  ) : (
-                                    <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                                  )}
-                                  {queued[publishKey] ? "Queued" : "Queue"}
-                                </button>
-                                
-                                {isLinkedin && (
-                                  isLinkedinConnected ? (
-                                    <button
-                                      onClick={() =>
-                                        handlePublish(
-                                          pv.platform,
-                                          formatCopy(pv.copy),
-                                          selectedCampaign.id,
-                                          undefined,
-                                          generatedVisuals[publishKey] ||
-                                            pv.imageUrl ||
-                                            (pv.imageId
-                                              ? campaignImages[pv.imageId]
-                                              : undefined),
-                                        )
-                                      }
-                                      disabled={isPublishing || isPublished}
-                                      className="inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] rounded-lg transition-colors shadow-sm shrink-0"
-                                    >
-                                      {isPublishing ? (
-                                        <VideoLoader className="mr-1.5 h-7 w-7" />
-                                      ) : isPublished ? (
-                                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                                      ) : (
-                                        <Send className="mr-1.5 h-3.5 w-3.5" />
-                                      )}
-                                      {isPublished ? "Published" : "Publish"}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      disabled
-                                      title="Connect LinkedIn in Settings to publish directly"
-                                      className="opacity-50 cursor-not-allowed inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-slate-400 bg-slate-100 border border-slate-200 rounded-lg transition-colors shadow-sm shrink-0"
-                                    >
-                                      <Send className="mr-1.5 h-3.5 w-3.5" />
-                                      Publish
-                                    </button>
-                                  )
-                                )}
-
-                                {pv.platform.toLowerCase() === "instagram" && (
-                                  isInstagramConnected ? (
-                                    <button
-                                      onClick={() =>
-                                        handlePublish(
-                                          pv.platform,
-                                          formatCopy(pv.copy),
-                                          selectedCampaign.id,
-                                          undefined,
-                                          generatedVisuals[publishKey] ||
-                                            pv.imageUrl ||
-                                            (pv.imageId
-                                              ? campaignImages[pv.imageId]
-                                              : undefined),
-                                        )
-                                      }
-                                      disabled={isPublishing || isPublished}
-                                      className="inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-white bg-[#E1306C] hover:bg-[#c12456] rounded-lg transition-colors shadow-sm shrink-0"
-                                    >
-                                      {isPublishing ? (
-                                        <VideoLoader className="mr-1.5 h-7 w-7" />
-                                      ) : isPublished ? (
-                                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                                      ) : (
-                                        <Send className="mr-1.5 h-3.5 w-3.5" />
-                                      )}
-                                      {isPublished ? "Published" : "Publish"}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      disabled
-                                      title="Connect Instagram in Settings to publish directly"
-                                      className="opacity-50 cursor-not-allowed inline-flex items-center justify-center px-3 h-8 text-xs font-semibold text-slate-400 bg-slate-100 border border-slate-200 rounded-lg transition-colors shadow-sm shrink-0"
-                                    >
-                                      <Send className="mr-1.5 h-3.5 w-3.5" />
-                                      Publish
-                                    </button>
-                                  )
-                                )}
-
                                 <button
                                   onClick={() =>
                                     handleCopyText(
@@ -3151,7 +2961,7 @@ export function Campaigns() {
       {/* Generation Modal */}
       {showModal &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-0 sm:p-4 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-0 sm:p-4">
             <div className="bg-white w-full sm:max-w-4xl overflow-hidden flex flex-col h-full sm:h-auto sm:max-h-[90vh] shadow-[0_25px_60px_rgba(15,23,42,0.18)] !rounded-none sm:!rounded-[22px] border-0 sm:border border-slate-200">
                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
                 <h2 className="text-lg font-bold text-slate-800 font-display">
@@ -3167,7 +2977,7 @@ export function Campaigns() {
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto">
+              <div className="p-6 overflow-y-auto scroll-smooth">
                 {error && (
                   <div className="mb-6 glass-panel border-red-500/20 bg-red-500/10 p-4">
                     <p className="text-sm text-red-500">{error}</p>
@@ -3455,26 +3265,92 @@ export function Campaigns() {
                       </div>
                     </div>
 
-                    <div className="space-y-3 pt-4 border-t border-slate-200/60 font-semibold">
-                      <label className="flex items-center gap-3 text-base font-bold text-slate-800 cursor-pointer font-display">
-                        <div className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={generateImages}
-                            onChange={(e) =>
-                              setGenerateImages(e.target.checked)
-                            }
-                            disabled={isGenerating}
-                          />
-                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#7C3AED]"></div>
-                        </div>
-                        <ImageIcon className="h-5 w-5 text-slate-400" />
-                        Generate AI Background Images
+                    <div className="space-y-3 pt-4 border-t border-slate-200/60">
+                      <label className="block text-base font-bold text-slate-800 font-display">
+                        Visual Generation Mode
                       </label>
-                      <p className="text-xs text-slate-500 font-light pl-[3.25rem] leading-relaxed">
-                        When enabled, the AI will generate brand new backgrounds for your posts. When disabled, the system will prioritize using your uploaded brand photos and assets.
+                      <p className="text-xs text-slate-500 font-light mb-3">
+                        Choose whether to generate fresh executive AI photographic visuals or edit your uploaded brand photo assets.
                       </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setGenerateImages(true)}
+                          className={cn(
+                            "flex flex-col p-3 rounded-xl border text-left transition-all",
+                            generateImages
+                              ? "border-[#7C3AED] bg-[#7C3AED]/5"
+                              : "border-slate-200 bg-white hover:border-[#7C3AED]/30"
+                          )}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={cn("text-sm font-semibold flex items-center gap-1.5", generateImages ? "text-[#7C3AED]" : "text-slate-700")}>
+                              <PlusPenIcon className="h-4 w-4 text-[#7C3AED] shrink-0" />
+                              <span>AI Generated Visuals</span>
+                            </span>
+                            <span className="text-[10px] bg-[#7C3AED]/10 text-[#7C3AED] px-2 py-0.5 rounded-full font-bold">GPT Image 2</span>
+                          </div>
+                          <span className="text-xs text-slate-400 font-light">
+                            Generates crisp 1:1 editorial photographic posts with custom typography & stamped logo.
+                          </span>
+                        </button>
+
+                        {hasEnoughAssets ? (
+                          <button
+                            type="button"
+                            onClick={() => setGenerateImages(false)}
+                            className={cn(
+                              "flex flex-col p-3 rounded-xl border text-left transition-all",
+                              !generateImages
+                                ? "border-[#7C3AED] bg-[#7C3AED]/5"
+                                : "border-slate-200 bg-white hover:border-[#7C3AED]/30"
+                            )}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={cn("text-sm font-semibold flex items-center gap-1.5", !generateImages ? "text-[#7C3AED]" : "text-slate-700")}>
+                                <ImageIcon className="h-4 w-4 text-[#7C3AED] shrink-0" />
+                                <span>Brand Asset Editing</span>
+                              </span>
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">OpenAI Edits</span>
+                            </div>
+                            <span className="text-xs text-slate-400 font-light">
+                              Uses your uploaded product photo assets, applies OpenAI image edits, and stamps brand logo.
+                            </span>
+                          </button>
+                        ) : (
+                          <div className="flex flex-col p-3 rounded-xl border border-amber-200/80 bg-amber-50/60 text-left justify-between">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-sm font-semibold text-amber-800 flex items-center gap-1.5">
+                                  <ImageIcon className="h-4 w-4 text-amber-700 shrink-0" />
+                                  <span>Brand Asset Editing</span>
+                                </span>
+                                <span className="text-[10px] bg-amber-200/70 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                                  Requires 3+ Assets
+                                </span>
+                              </div>
+                              <p className="text-xs text-amber-700/90 font-light leading-relaxed">
+                                To prevent the repetition of images across your 7-day campaign posts, this option requires at least <strong>3 uploaded brand assets</strong>. You currently have {totalBrandAssets} asset{totalBrandAssets === 1 ? '' : 's'}.
+                              </p>
+                            </div>
+                            <div className="mt-2.5 pt-2 border-t border-amber-200/60 flex items-center justify-between">
+                              <span className="text-[10px] text-amber-800 font-medium italic">
+                                Using AI Generated Visuals.
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowModal(false);
+                                  navigate('/creatives');
+                                }}
+                                className="text-[11px] font-bold text-violet-700 hover:text-violet-900 underline flex items-center gap-1 cursor-pointer"
+                              >
+                                <span>Upload Assets</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -3722,7 +3598,7 @@ export function Campaigns() {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80">
             <div className="bg-white max-w-sm w-full overflow-hidden rounded-[22px] border border-slate-200/80 shadow-[0_20px_60px_rgba(15,23,42,0.15)] animate-in fade-in zoom-in-95 duration-200">
               <div className="p-6 text-center">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-rose-50 border border-rose-100 mb-4 animate-[pulse_3s_ease-in-out_infinite]">
@@ -3770,7 +3646,7 @@ export function Campaigns() {
       {isShareModalOpen &&
         selectedCampaign &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80">
             <div className="bg-white max-w-lg w-full overflow-hidden flex flex-col rounded-3xl border border-slate-200/80 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
               
               {/* Header */}

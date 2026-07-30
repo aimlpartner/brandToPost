@@ -68,8 +68,14 @@ html, body {
   color: var(--color-brand-light);
   min-height: 100vh;
   font-weight: 400;
+  scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#main-scrollable-container {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 body.modal-open #main-scrollable-container,
@@ -123,27 +129,25 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Glassmorphism Utilities - Creative Tech Luxury */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(124, 58, 237, 0.12);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03), inset 0 0 20px rgba(124, 58, 237, 0.01);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03);
   border-radius: 8px;
-  backdrop-filter: blur(16px);
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(124, 58, 237, 0.12);
   box-shadow: 0 4px 20px -5px rgba(124, 58, 237, 0.03);
   border-radius: 6px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(12px);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .glass-card:hover {
   transform: translateY(-2px);
   border-color: rgba(124, 58, 237, 0.25);
-  box-shadow: 0 8px 30px -5px rgba(124, 58, 237, 0.07), inset 0 0 15px rgba(37, 131, 235, 0.03);
-  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 8px 30px -5px rgba(124, 58, 237, 0.07);
+  background: #FFFFFF;
 }
 
 .glass-button {

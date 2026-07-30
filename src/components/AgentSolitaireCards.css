@@ -1,0 +1,341 @@
+/* =============================================
+   AGENT SOLITAIRE CARDS — Single Big Card + Scroll Shuffle
+   ============================================= */
+
+/* Section Container */
+.solitaire-section {
+  position: relative;
+  width: 100%;
+  padding: 60px 24px 80px;
+  background: linear-gradient(180deg, #FCFBF9 0%, #F3EEE4 50%, #FCFBF9 100%);
+  border-bottom: 1px solid rgba(168, 162, 150, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Subtle grain overlay */
+.solitaire-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* -----------------------------------------------
+   HEADER
+   ----------------------------------------------- */
+.solitaire-header {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto 36px;
+  padding: 0 16px;
+  text-align: left;
+  position: relative;
+  z-index: 1;
+}
+
+.solitaire-title {
+  font-family: var(--font-display, 'Outfit'), system-ui, sans-serif;
+  font-size: clamp(2rem, 5vw, 4.25rem);
+  font-weight: 300;
+  color: #0f172a;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  margin: 0;
+}
+
+.solitaire-title-accent {
+  font-weight: 400;
+  font-style: italic;
+  color: #7C3AED;
+}
+
+/* -----------------------------------------------
+   CARD STAGE
+   ----------------------------------------------- */
+.solitaire-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+/* -----------------------------------------------
+   THE CARD (MUCH LARGER JOKER CARD)
+   ----------------------------------------------- */
+.solitaire-card {
+  width: min(480px, 92vw);
+  flex-shrink: 0;
+}
+
+.solitaire-card-inner {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2.5 / 3.6;
+  background: #FFFFFE;
+  border: 1px solid rgba(168, 162, 150, 0.22);
+  border-radius: 20px;
+  padding: 28px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.04),
+    0 16px 40px rgba(0, 0, 0, 0.06),
+    0 32px 72px rgba(0, 0, 0, 0.05);
+}
+
+/* Inset decorative border (playing card style) */
+.solitaire-card-border-inset {
+  position: absolute;
+  inset: 12px;
+  border: 1px solid rgba(168, 162, 150, 0.15);
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+/* -----------------------------------------------
+   CORNER: B2P LOGO (top) + RANK NUMBER (bottom)
+   ----------------------------------------------- */
+.solitaire-card-corner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+  z-index: 3;
+}
+
+.solitaire-card-corner--tl {
+  top: 22px;
+  left: 24px;
+}
+
+.solitaire-card-corner--br {
+  bottom: 22px;
+  right: 24px;
+  transform: rotate(180deg);
+}
+
+.solitaire-card-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  opacity: 0.8;
+}
+
+.solitaire-card-rank {
+  font-family: var(--font-display, 'Outfit'), Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1523;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* -----------------------------------------------
+   FULL-BLEED JOKER-STYLE PORTRAIT (ENLARGED)
+   ----------------------------------------------- */
+.solitaire-card-portrait {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  margin: 12px 0 16px;
+}
+
+.solitaire-card-portrait img {
+  width: 100%;
+  height: 100%;
+  max-height: 440px;
+  object-fit: contain;
+  object-position: center bottom;
+  display: block;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.12));
+}
+
+/* -----------------------------------------------
+   NAME + PURPOSE
+   ----------------------------------------------- */
+.solitaire-card-identity {
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.solitaire-card-name {
+  font-family: var(--font-display, 'Outfit'), system-ui, sans-serif;
+  font-size: 30px;
+  font-weight: 500;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px;
+  line-height: 1.2;
+}
+
+.solitaire-card-purpose {
+  font-family: var(--font-sans, 'Inter'), system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #78716c;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
+
+/* -----------------------------------------------
+   SHUFFLE ANIMATIONS
+   ----------------------------------------------- */
+.solitaire-shuffle-in {
+  animation: solitaire-enter 0.35s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.solitaire-shuffle-out-left {
+  animation: solitaire-exit-left 0.32s cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+
+.solitaire-shuffle-out-right {
+  animation: solitaire-exit-right 0.32s cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+
+@keyframes solitaire-enter {
+  from {
+    opacity: 0;
+    transform: translateY(24px) rotate(3deg) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0) scale(1);
+  }
+}
+
+@keyframes solitaire-exit-left {
+  from {
+    opacity: 1;
+    transform: translateX(0) rotate(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-120px) rotate(-12deg);
+  }
+}
+
+@keyframes solitaire-exit-right {
+  from {
+    opacity: 1;
+    transform: translateX(0) rotate(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(120px) rotate(12deg);
+  }
+}
+
+/* -----------------------------------------------
+   RESPONSIVE — Tablet
+   ----------------------------------------------- */
+@media (max-width: 768px) {
+  .solitaire-section {
+    padding: 48px 16px 48px;
+  }
+
+  .solitaire-header {
+    margin-bottom: 28px;
+  }
+
+  .solitaire-card {
+    width: min(360px, 88vw);
+  }
+
+  .solitaire-card-inner {
+    padding: 20px 16px 16px;
+    border-radius: 16px;
+  }
+
+  .solitaire-card-border-inset {
+    inset: 8px;
+    border-radius: 12px;
+  }
+
+  .solitaire-card-portrait img {
+    max-height: 320px;
+  }
+
+  .solitaire-card-name {
+    font-size: 24px;
+  }
+
+  .solitaire-card-purpose {
+    font-size: 12px;
+  }
+
+  .solitaire-card-rank {
+    font-size: 16px;
+  }
+
+  .solitaire-card-logo {
+    width: 28px;
+    height: 28px;
+  }
+
+  .solitaire-card-corner--tl {
+    top: 16px;
+    left: 18px;
+  }
+
+  .solitaire-card-corner--br {
+    bottom: 16px;
+    right: 18px;
+  }
+}
+
+/* -----------------------------------------------
+   RESPONSIVE — Small Phone
+   ----------------------------------------------- */
+@media (max-width: 480px) {
+  .solitaire-card {
+    width: min(300px, 88vw);
+  }
+
+  .solitaire-card-inner {
+    padding: 16px 12px 12px;
+  }
+
+  .solitaire-card-portrait img {
+    max-height: 240px;
+  }
+
+  .solitaire-card-name {
+    font-size: 20px;
+  }
+
+  .solitaire-card-purpose {
+    font-size: 10px;
+  }
+
+  .solitaire-card-logo {
+    width: 24px;
+    height: 24px;
+  }
+
+  .solitaire-card-rank {
+    font-size: 14px;
+  }
+}

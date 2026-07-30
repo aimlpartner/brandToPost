@@ -96,6 +96,7 @@ export interface ProductDNA {
   automateDailyPosts?: boolean;
   automateDailyBlogs?: boolean;
   automateWeeklyCampaigns?: boolean;
+  useBrandAssets?: boolean;
   automationTimeUtc?: string;
   automationWeeklyDay?: string;
   automationLogs?: Array<{ timestamp: string, type: string, theme: string, focus: string, status: string }>;

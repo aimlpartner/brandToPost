@@ -145,26 +145,11 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
         </div>
       );
     }
-    // V3 Master Template Engine — render hydrated template directly with responsive scale
-    if (visualData?.renderedHtml || visualData?.customHtml) {
-      const htmlContent = visualData.renderedHtml || visualData.customHtml;
-      return (
-        <TemplatePreviewFrame
-          htmlContent={htmlContent}
-          originalUrl={originalUrl}
-          onEdit={() => setIsVisualEditorOpen(true)}
-        />
-      );
-    }
-
-    if (!currentImageUrl) return null;
-
-    // If the image is already flattened (has overlays baked in), show it as a static image.
-    // This is the default path for all saved campaigns — no re-rendering, no VisualEngine.
-    if (isAlreadyFlattened) {
+    // 1. FIRST Priority: If an AI-generated or uploaded image exists, display it!
+    if (currentImageUrl) {
       return (
         <div className="w-full relative group">
-          <img src={currentImageUrl || undefined} alt="Post" className="w-full h-auto max-h-[500px] object-contain mx-auto" />
+          <img src={currentImageUrl} alt="Post" className="w-full h-auto max-h-[500px] object-contain mx-auto" />
           {(visualType || originalUrl) && (
             <button 
               type="button"
@@ -177,6 +162,20 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
         </div>
       );
     }
+
+    // 2. Second Priority: V3 Master Template Engine fallback — render hydrated template if no image URL exists
+    if (visualData?.renderedHtml || visualData?.customHtml) {
+      const htmlContent = visualData.renderedHtml || visualData.customHtml;
+      return (
+        <TemplatePreviewFrame
+          htmlContent={htmlContent}
+          originalUrl={originalUrl}
+          onEdit={() => setIsVisualEditorOpen(true)}
+        />
+      );
+    }
+
+    return null;
 
     // Only use VisualEngine for draft/unsaved posts during campaign creation flow
     if (visualType && visualType !== 'none') {
@@ -620,7 +619,7 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
 
  return (
  <div 
- className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+ className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 p-4 overflow-y-auto scroll-smooth"
  onClick={onClose}
  >
  <button 

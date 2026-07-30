@@ -165,7 +165,7 @@ export function Layout() {
               ease: "easeInOut",
             }}
             id="main-scrollable-container"
-            className="absolute inset-0 w-full h-full overflow-x-hidden overflow-y-auto pt-16 pb-[60px] md:pb-6 md:p-6 md:pt-6 touch-pan-y will-change-transform"
+            className="absolute inset-0 w-full h-full overflow-x-hidden overflow-y-auto pt-16 pb-[60px] md:pb-6 md:p-6 md:pt-6 touch-pan-y scroll-smooth"
           >
             <div className="w-full max-w-7xl mx-auto min-h-full box-border relative">
               <Outlet />

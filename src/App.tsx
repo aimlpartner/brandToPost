@@ -25,7 +25,6 @@ import AdminDashboard from "./pages/AdminDashboard";
 import { MasterFounder } from "./pages/MasterFounder";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
-import { VisualTemplateLibrary } from "./pages/VisualTemplateLibrary";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ProductProvider } from "./contexts/ProductContext";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -64,14 +63,6 @@ export default function App() {
             />
             <Route path="/blueprint-playground" element={<ResearchedBlueprintPlayground />} />
             <Route path="/templates/playground" element={<ResearchedBlueprintPlayground />} />
-            <Route
-              path="/templates"
-              element={
-                <ProductProvider>
-                  <VisualTemplateLibrary />
-                </ProductProvider>
-              }
-            />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/whatsapp/login" element={<WhatsAppLogin />} />

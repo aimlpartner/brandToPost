@@ -224,6 +224,34 @@ async function generateContentProxy(model: string, contents: any, config?: any, 
   }
 }
 
+export async function generateImageViaProxy(prompt: string | any, userId?: string, productId?: string, logoUrl?: string): Promise<string | null> {
+  const token = await auth.currentUser?.getIdToken();
+  const activeProductId = productId || (userId ? (getCookie(`activeProductId_${userId}`) || localStorage.getItem(`activeProductId_${userId}`)) : null);
+
+  const promptObj = typeof prompt === 'string' ? { prompt } : prompt;
+
+  const response = await fetchWithRetry('/api/ai/generate-campaign-images', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(activeProductId ? { 'X-Product-Id': activeProductId } : {})
+    },
+    body: JSON.stringify({ prompts: [promptObj], logoUrl })
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate image: ${response.status} ${errorText}`);
+  }
+  
+  const data = await response.json();
+  if (data.success && data.imageUrls && data.imageUrls.length > 0) {
+    return data.imageUrls[0];
+  }
+  return null;
+}
+
 async function logTokenUsage(userId: string | undefined, operationType: string, model: string, usageMetadata: any) {
   if (!userId || !usageMetadata) return;
   
@@ -587,7 +615,7 @@ export async function researchFocus(focus: string, channels: string[] = [], subC
   const strategies = [
     { model: "gemini-3.1-pro-preview", search: true },
     { model: "gemini-3.5-flash", search: true },
-    { model: "gemini-3.5-flash", search: false }
+    { model: "gemini-2.5-flash", search: false }
   ];
 
   let lastError: any = null;
@@ -710,6 +738,38 @@ const campaignSchema = {
  * Canvas is fixed at 1080x1080 — see docs/weekly-campaign-v2-plan.md §8.1.
  * There is no draft-regeneration path; a rejected draft is simply generated again.
  */
+function generateWeeklyLogoPositions(): string[] {
+  const corners = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+  const shuffle = (arr: string[]) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const firstFour = shuffle(corners);
+  const nextThree = shuffle(corners).slice(0, 3);
+  const positions = shuffle([...firstFour, ...nextThree]);
+
+  for (let i = 1; i < positions.length; i++) {
+    if (positions[i] === positions[i - 1]) {
+      for (let j = i + 1; j < positions.length; j++) {
+        if (positions[j] !== positions[i - 1] && (j === positions.length - 1 || positions[j] !== positions[i])) {
+          [positions[i], positions[j]] = [positions[j], positions[i]];
+          break;
+        }
+      }
+    }
+  }
+
+  return positions;
+}
+
+/**
+ * Generate a full 7-day social campaign using Gemini 3 Pro
+ */
 export async function generateCampaign(
   dna: ProductDNA,
   focus: string,
@@ -725,9 +785,11 @@ export async function generateCampaign(
 ): Promise<Omit<WeeklyCampaign, 'id' | 'createdAt'>> {
   if (onProgress) onProgress(1, 4, "Researching brand DNA & synthesizing 7-day post copy...");
 
-  const activeChannels = (dna.targetPlatforms && Array.isArray(dna.targetPlatforms) && dna.targetPlatforms.length > 0)
-    ? dna.targetPlatforms
-    : (channels && channels.length > 0 ? channels : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']);
+  const activeChannels = (channels && Array.isArray(channels) && channels.length > 0)
+    ? channels
+    : ((dna.targetPlatforms && Array.isArray(dna.targetPlatforms) && dna.targetPlatforms.length > 0)
+      ? dna.targetPlatforms
+      : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']);
 
   const prompt = `You are a world-class senior B2B content strategist and brand growth director.
 
@@ -741,7 +803,7 @@ Selected Channels: ${activeChannels.join(', ')}
 
 REQUIREMENTS:
 1. Generate dailyPosts for all 7 days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
-2. For each day, create platformVersions tailored for: ${activeChannels.join(', ')}.
+2. For each day, create platformVersions tailored ONLY for these Selected Channels: ${activeChannels.join(', ')}. Do NOT generate posts or platformVersions for any platform not explicitly included in Selected Channels.
 3. For each day, provide a punchy "headline" (10-15 words max) and "subtext" (15-25 words max) inside "visualData" that captures the day's key value hook.
 4. Provide a descriptive, cinematic "cinematicPrompt" inside visualData for generating a background photo.
 `;
@@ -758,26 +820,61 @@ REQUIREMENTS:
     const cleaned = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
     const campaignData = JSON.parse(cleaned);
 
-    if (onProgress) onProgress(2, 4, "Fetching Master Template Pool & picking 7 unused templates...");
+    if (onProgress) onProgress(2, 3, "Generating 7 high-end visual posts using OpenAI gpt-image-2-medium...");
 
-    // Fetch Master Templates pool from server API
-    let masterPool: any[] = [];
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const brandColors = (dna as any).primaryColor ? [(dna as any).primaryColor, (dna as any).secondaryColor, (dna as any).accentColor].filter(Boolean) : (dna.visualData?.colors || ['#08080C', '#FAF9F6', '#3B82F6']);
+    const fontStyle = (dna as any).fontFamily || dna.visualData?.fonts?.primary || 'Inter Tight, bold modern sans-serif';
+    const logoUrl = dna.logoUrl || (dna as any).logoDarkUrl || (dna as any).logoLightUrl || '/whatsapp_images/BrandToPost.png';
+
+    // Extract brand photo assets if available
+    const brandAssets = (dna as any).brandAssets || (dna as any).creatives || dna.extractedMediaImages || [];
+
+    const weeklyLogoPositions = generateWeeklyLogoPositions();
+    const structuredPrompts = (campaignData.dailyPosts || []).map((dp: any, idx: number) => {
+      const headline = dp.visualData?.headline || dp.contentType || `${dna.name} — ${days[idx]}`;
+      const subtext = dp.visualData?.subtext || (dna as any).tagline || dna.description || 'Automated B2B Growth Engine';
+      const promptText = dp.visualData?.cinematicPrompt || dp.imagePrompt || `High-end executive photographic visual for ${dna.name}, topic: ${headline}, 1:1 ratio, clean aesthetic`;
+      const brandAssetUrl = (!generateImages && brandAssets.length > 0)
+        ? (typeof brandAssets[idx % brandAssets.length] === 'string' ? brandAssets[idx % brandAssets.length] : brandAssets[idx % brandAssets.length]?.url)
+        : undefined;
+
+      const logoPosition = weeklyLogoPositions[idx % weeklyLogoPositions.length];
+      if (!dp.visualData) dp.visualData = {};
+      dp.visualData.logoPosition = logoPosition;
+
+      return {
+        prompt: promptText,
+        headline,
+        subtext,
+        brandColors,
+        fontStyle,
+        brandAssetUrl,
+        logoPosition
+      };
+    });
+
+    let generatedAiImages: string[] = [];
     try {
-      const templateRes = await fetch('/api/research-channel-templates?channel=master');
-      const tData = await templateRes.json();
-      if (tData.success && Array.isArray(tData.templates)) {
-        masterPool = tData.templates;
+      const currentUser = auth.currentUser;
+      const token = currentUser ? await currentUser.getIdToken() : '';
+      const imgRes = await fetch('/api/ai/generate-campaign-images', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ prompts: structuredPrompts, logoUrl, productId: dna.id })
+      });
+      const iData = await imgRes.json();
+      if (iData.success && Array.isArray(iData.imageUrls)) {
+        generatedAiImages = iData.imageUrls;
       }
     } catch (e) {
-      console.warn("Failed to fetch master pool via API, using fallback templates");
+      console.warn("Failed to generate AI campaign images via backend proxy", e);
     }
 
-    // Import template hydrator helpers dynamically or synchronously
-    const { pickUnusedMasterTemplates, hydrateTemplateHtml } = await import('../lib/campaignTemplateHydrator');
-
-    const pickedTemplates = pickUnusedMasterTemplates(masterPool, 7);
-
-    if (onProgress) onProgress(3, 4, "Generating 7 unique template-guided visual assets...");
+    if (onProgress) onProgress(3, 3, "Stamping brand logo & finalizing 1080x1080 visual assets...");
 
     const defaultImages = [
       'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80',
@@ -789,79 +886,25 @@ REQUIREMENTS:
       'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&auto=format&fit=crop&q=80'
     ];
 
-    let generatedAiImages: string[] = [];
-    if (generateImages) {
-      const imagePrompts = (campaignData.dailyPosts || []).map((dp: any, idx: number) => {
-        return dp.visualData?.cinematicPrompt || dp.visualData?.imagePrompt || `High-end editorial photographic visual for ${dna.name}, topic: ${dp.visualData?.headline || focus || 'B2B Growth'}, 1:1 ratio, clean aesthetic, no text`;
-      });
-      try {
-        const currentUser = auth.currentUser;
-        const token = currentUser ? await currentUser.getIdToken() : '';
-        const imgRes = await fetch('/api/ai/generate-campaign-images', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({ prompts: imagePrompts, productId: dna.id })
-        });
-        const iData = await imgRes.json();
-        if (iData.success && Array.isArray(iData.imageUrls)) {
-          generatedAiImages = iData.imageUrls;
-        }
-      } catch (e) {
-        console.warn("Failed to generate AI campaign images via backend proxy", e);
-      }
-    }
-
-    if (onProgress) onProgress(4, 4, "Hydrating templates & finalizing 1080x1080 visual graphics...");
-
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
     const dailyPosts = (campaignData.dailyPosts || []).map((dp: any, idx: number) => {
-      const template = pickedTemplates[idx] || masterPool[idx % Math.max(1, masterPool.length)] || {
-        id: `template_${String(idx + 1).padStart(3, '0')}`,
-        name: `Master Template ${idx + 1}`,
-        rawHtml: `<div style="width:1080px;height:1080px;background:{{SECONDARY_COLOR}};color:#08080C;padding:80px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;align-items:center;"><img src="{{LOGO_URL}}" style="height:50px;object-fit:contain;"/></div><div><h1 style="font-size:56px;font-weight:800;color:{{PRIMARY_COLOR}};margin-bottom:20px;">{{HEADLINE}}</h1><p style="font-size:28px;color:#475569;">{{SUBTEXT}}</p></div><div style="width:100%;height:400px;background-image:url({{IMAGE_URL}});background-size:cover;border-radius:16px;"></div></div>`
-      };
-
       const headline = dp.visualData?.headline || dp.contentType || `${dna.name} — ${days[idx]}`;
       const subtext = dp.visualData?.subtext || (dna as any).tagline || dna.description || 'Automated B2B Growth Engine';
-      // Prioritize brand asset images if available over generic stock background images
-      const brandAssets = (dna as any).brandAssets || (dna as any).creatives || [];
-      const brandAssetUrl = brandAssets.length > 0
-        ? (typeof brandAssets[idx % brandAssets.length] === 'string' ? brandAssets[idx % brandAssets.length] : brandAssets[idx % brandAssets.length]?.url)
-        : null;
-
-      const imageUrl = brandAssetUrl
-        || ((generatedAiImages[idx] && generatedAiImages[idx].startsWith('/api/'))
-          ? generatedAiImages[idx]
-          : defaultImages[idx % defaultImages.length]);
-
-      const hydratedHtml = hydrateTemplateHtml(template.rawHtml, {
-        headline,
-        subtext,
-        imageUrl,
-        logoUrl: dna.logoUrl || dna.logoDarkUrl || dna.logoLightUrl || '/whatsapp_images/BrandToPost.png',
-        primaryColor: (dna as any).primaryColor || dna.visualData?.colors?.[0] || '#3B82F6',
-        secondaryColor: (dna as any).secondaryColor || dna.visualData?.colors?.[1] || '#FAF9F6',
-        accentColor: (dna as any).accentColor || dna.visualData?.colors?.[2] || '#10B981',
-        fontFamily: (dna as any).fontFamily || dna.visualData?.fonts?.primary || 'Inter Tight, sans-serif'
-      });
+      const finalImageUrl = (generatedAiImages[idx] && generatedAiImages[idx].startsWith('/api/'))
+        ? generatedAiImages[idx]
+        : defaultImages[idx % defaultImages.length];
 
       const visualDataObj = {
         ...(dp.visualData || {}),
         headline,
         subtext,
-        templateId: template.id,
-        templateName: template.name,
-        customHtml: template.rawHtml,
-        renderedHtml: hydratedHtml
+        colors: brandColors,
+        fontStyle,
+        isFlattened: true
       };
 
       const updatedPlatformVersions = (dp.platformVersions || []).map((pv: any) => ({
         ...pv,
-        imageUrl,
+        imageUrl: finalImageUrl,
         visualType: 'custom-overlay',
         visualData: visualDataObj
       }));
@@ -869,8 +912,7 @@ REQUIREMENTS:
       return {
         ...dp,
         day: days[idx] || dp.day,
-        layoutId: template.id,
-        imageUrl,
+        imageUrl: finalImageUrl,
         visualType: 'custom-overlay',
         visualData: visualDataObj,
         platformVersions: updatedPlatformVersions
@@ -948,33 +990,10 @@ Return ONLY the description prompt text, with no wrappers, no conversational tex
 
       // 2. Drive the generation engine to create the high-res 1K base image
       loggerService.addLog("image", "info", `Step 2: Submitting planned backdrop prompt to Imagen AI text-to-photo generator...`);
-      const imgRes = await generateContentProxy(
-        'gemini-3.1-flash-image-preview',
-        imagePrompt,
-        {
-          imageConfig: {
-            imageSize: "1K",
-            aspectRatio: "1:1"
-          }
-        }
-      );
-
-      // Track usage (1 image generated)
-      if (params.userId) {
-        await logTokenUsage(params.userId, "generateOneDayStoryImage", "gemini-3.1-flash-image-preview", {
-          promptTokenCount: 0,
-          candidatesTokenCount: 0,
-          totalTokenCount: 1
-        }).catch(console.error);
-      }
-
-      const parts = imgRes.candidates?.[0]?.content?.parts || [];
-      for (const part of parts) {
-        if (part.inlineData) {
-          baseImageBase64 = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-          loggerService.addLog("image", "success", `Step 2 complete: High-res background image successfully generated.`);
-          break;
-        }
+      const imgResUrl = await generateImageViaProxy(imagePrompt, params.userId, undefined);
+      if (imgResUrl) {
+        baseImageBase64 = imgResUrl;
+        loggerService.addLog("image", "success", `Step 2 complete: High-res background image successfully generated.`);
       }
     } else {
       // Direct text/graphic layout placement: Skip multimodal backdrop content analysis as requested
@@ -1375,7 +1394,7 @@ Return a JSON object with the following fields:
   let finalImagePrompt = customImagePrompt || result.imagePrompt;
   let chosenLayoutId = "";
 
-  const textOnlyBlueprints = ["x-tweet-card", "notes-app-screenshot", "metrics-breakdown-card", "linkedin-carousel-cover"];
+  const textOnlyBlueprints = ["x-tweet-card"];
 
   if ((attachmentStyle === "image-only" || attachmentStyle === "image-overlay") && finalImagePrompt) {
     try {
@@ -1421,32 +1440,9 @@ Return a JSON object with the following fields:
       }
       }
 
-      const imgRes = await generateContentProxy(
-        'gemini-3.1-flash-image-preview',
-        finalImagePrompt,
-        {
-          imageConfig: {
-            imageSize: "1K",
-            aspectRatio: "1:1"
-          }
-        }
-      );
-      
-      if (userId) {
-        await logTokenUsage(userId, "generateGeneralFounderPost_image", "gemini-3.1-flash-image-preview", {
-          promptTokenCount: 0,
-          candidatesTokenCount: 0,
-          totalTokenCount: 1
-        });
-      }
-
-      if (imgRes?.candidates?.[0]?.content?.parts) {
-        for (const pt of imgRes.candidates[0].content.parts) {
-          if (pt.inlineData) {
-            imageUrl = `data:${pt.inlineData.mimeType || 'image/png'};base64,${pt.inlineData.data}`;
-            break;
-          }
-        }
+      const imgResUrl = await generateImageViaProxy(finalImagePrompt, userId, undefined);
+      if (imgResUrl) {
+        imageUrl = imgResUrl;
       }
 
     } catch (err) {
@@ -1696,7 +1692,7 @@ Return a JSON object with the following fields:
   let finalImagePrompt = customImagePrompt || result.imagePrompt;
   let chosenLayoutId = "";
 
-  const textOnlyBlueprints = ["x-tweet-card", "notes-app-screenshot", "metrics-breakdown-card", "linkedin-carousel-cover"];
+  const textOnlyBlueprints = ["x-tweet-card"];
 
   if ((attachmentStyle === "image-only" || attachmentStyle === "image-overlay") && finalImagePrompt) {
     try {
@@ -1742,32 +1738,9 @@ Return a JSON object with the following fields:
       }
       }
 
-      const imgRes = await generateContentProxy(
-        'gemini-3.1-flash-image-preview',
-        finalImagePrompt,
-        {
-          imageConfig: {
-            imageSize: "1K",
-            aspectRatio: "1:1"
-          }
-        }
-      );
-      
-      if (userId) {
-        await logTokenUsage(userId, "generateBrandedFounderPost_image", "gemini-3.1-flash-image-preview", {
-          promptTokenCount: 0,
-          candidatesTokenCount: 0,
-          totalTokenCount: 1
-        });
-      }
-
-      if (imgRes?.candidates?.[0]?.content?.parts) {
-        for (const pt of imgRes.candidates[0].content.parts) {
-          if (pt.inlineData) {
-            imageUrl = `data:${pt.inlineData.mimeType || 'image/png'};base64,${pt.inlineData.data}`;
-            break;
-          }
-        }
+      const imgResUrl = await generateImageViaProxy(finalImagePrompt, userId, product?.id);
+      if (imgResUrl) {
+        imageUrl = imgResUrl;
       }
 
     } catch (err) {
@@ -1993,125 +1966,6 @@ export async function researchVisualTrends(): Promise<VisualTrendReport> {
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
               <svg style="width: 28px; height: 28px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 2.59l5.71 5.71-1.42 1.42L13 6.41V16h-2V6.41L7.71 9.72 6.29 8.3 12 2.59zM4 15v4c0 .55.45 1 1 1h14c.55 0 1-.45 1-1v-4h2v4c0 1.66-1.34 3-3 3H5c-1.66 0-3-1.34-3-3v-4h2z"/></svg>
-            </div>
-          </div>
-        </div>`
-      },
-      {
-        id: "notes-app-screenshot",
-        name: "Apple Notes Founder Memo",
-        primaryColor: "#E59C00",
-        secondaryColor: "#FBFBFD",
-        fontFamily: "Inter",
-        sourceTrend: "Native Apple Notes Memo Trend",
-        viralityScore: "98/100",
-        whyViral: "Raw iOS Apple Notes screenshot card with highest organic reach on LinkedIn",
-        isLightBg: true,
-        rawHtml: `<div style="width: 1080px; height: 1080px; background: #fbfbfd; color: #1d1d1f; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 75px 80px;">
-          <div>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 45px; padding-bottom: 28px; border-bottom: 1.5px solid #e5e5ea;">
-              <div style="display: flex; align-items: center; gap: 12px; color: #e59c00; font-size: 30px; font-weight: 600;">
-                <svg style="width: 32px; height: 32px; fill: currentColor;" viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
-                <span>Notes</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 20px; color: #e59c00; font-size: 28px; font-weight: 700;">
-                <svg style="width: 34px; height: 34px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                <span>Done</span>
-              </div>
-            </div>
-            <div style="font-size: 54px; line-height: 1.28; font-weight: 800; color: #1d1d1f; margin-bottom: 36px; letter-spacing: -0.02em; word-break: break-word;">
-              {{HEADLINE}}
-            </div>
-            <div style="font-size: 30px; line-height: 1.55; color: #424245; font-weight: 400; word-break: break-word;">
-              {{SUBTEXT}}
-            </div>
-          </div>
-          <div style="border-top: 1.5px solid #e5e5ea; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #86868b; font-size: 24px; font-weight: 500;">
-            <span>Today at 9:41 AM</span>
-            <span>142 words</span>
-          </div>
-        </div>`
-      },
-      {
-        id: "metrics-breakdown-card",
-        name: "B2B SaaS Growth & Metric Card",
-        primaryColor: "#10B981",
-        secondaryColor: "#08080C",
-        fontFamily: "Inter",
-        sourceTrend: "B2B Metric Case Study Trend",
-        viralityScore: "97/100",
-        whyViral: "High-converting stat callout grid with bold growth numbers",
-        isLightBg: false,
-        rawHtml: `<div style="width: 1080px; height: 1080px; background: #08080c; color: #ffffff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 75px 80px;">
-          <div>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 45px;">
-              <div style="display: flex; align-items: center; gap: 14px; background: #161822; border: 1px solid #2a2d3d; padding: 10px 24px; border-radius: 100px;">
-                <div style="width: 14px; height: 14px; border-radius: 50%; background: #10b981; box-shadow: 0 0 12px #10b981;"></div>
-                <span style="font-size: 20px; font-weight: 700; color: #f8fafc; letter-spacing: 0.05em; text-transform: uppercase;">Growth Metric Case Study</span>
-              </div>
-              <span style="color: #64748b; font-size: 22px; font-weight: 600;">#B2BPLAYBOOK</span>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 50px;">
-              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
-                <div style="font-size: 48px; font-weight: 900; color: #10b981; line-height: 1; margin-bottom: 8px;">+340%</div>
-                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">MRR Growth</div>
-              </div>
-              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
-                <div style="font-size: 48px; font-weight: 900; color: #6366f1; line-height: 1; margin-bottom: 8px;">$1.2M</div>
-                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">ARR Pipeline</div>
-              </div>
-              <div style="background: #11131c; border: 1px solid #222638; border-radius: 20px; padding: 28px 24px;">
-                <div style="font-size: 48px; font-weight: 900; color: #f59e0b; line-height: 1; margin-bottom: 8px;">&lt; 14 Days</div>
-                <div style="font-size: 18px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em;">Payback Period</div>
-              </div>
-            </div>
-            <div style="font-size: 46px; line-height: 1.32; font-weight: 800; color: #ffffff; margin-bottom: 24px; letter-spacing: -0.015em;">
-              {{HEADLINE}}
-            </div>
-            <div style="font-size: 26px; line-height: 1.5; color: #94a3b8; font-weight: 400;">
-              {{SUBTEXT}}
-            </div>
-          </div>
-          <div style="border-top: 1px solid #222638; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #64748b; font-size: 24px; font-weight: 600;">
-            <span style="color: #cbd5e1; font-weight: 700;">Verified B2B Operating Model</span>
-            <span style="color: #6366f1; font-weight: 700;">Read Full Breakdown ↓</span>
-          </div>
-        </div>`
-      },
-      {
-        id: "linkedin-carousel-cover",
-        name: "LinkedIn Viral Carousel Cover",
-        primaryColor: "#6366F1",
-        secondaryColor: "#08080C",
-        fontFamily: "Inter",
-        sourceTrend: "LinkedIn Top 1% Carousel Hook Trend",
-        viralityScore: "96/100",
-        whyViral: "Ultra-clean high-contrast typography cover with SWIPE indicator",
-        isLightBg: false,
-        rawHtml: `<div style="width: 1080px; height: 1080px; background: #08080c; color: #ffffff; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 80px 85px; position: relative;">
-          <div style="position: absolute; top: 0; left: 0; right: 0; height: 12px; background: linear-gradient(90deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);"></div>
-          <div>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 50px;">
-              <span style="background: #1e1b4b; border: 1px solid #4338ca; color: #a5b4fc; font-size: 20px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; padding: 12px 28px; border-radius: 100px;">
-                THE FOUNDER PLAYBOOK · SLIDE 1/7
-              </span>
-              <span style="color: #64748b; font-size: 22px; font-weight: 700;">FOUNDER INSIGHT</span>
-            </div>
-            <div style="font-size: 60px; line-height: 1.22; font-weight: 900; color: #ffffff; margin-bottom: 32px; letter-spacing: -0.02em; word-break: break-word;">
-              {{HEADLINE}}
-            </div>
-            <div style="font-size: 30px; line-height: 1.5; color: #94a3b8; font-weight: 400; max-width: 900px;">
-              {{SUBTEXT}}
-            </div>
-          </div>
-          <div style="border-top: 1px solid #1e293b; padding-top: 32px; display: flex; align-items: center; justify-content: space-between; color: #ffffff; font-size: 26px; font-weight: 700;">
-            <div style="display: flex; align-items: center; gap: 14px;">
-              <div style="width: 16px; height: 16px; border-radius: 50%; background: #6366f1;"></div>
-              <span style="color: #cbd5e1; font-weight: 600;">Founder Curation</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 12px; color: #818cf8; font-weight: 800;">
-              <span>SWIPE</span>
-              <svg style="width: 32px; height: 32px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
             </div>
           </div>
         </div>`

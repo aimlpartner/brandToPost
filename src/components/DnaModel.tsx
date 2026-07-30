@@ -63,7 +63,7 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
         alpha: true,
       });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     } catch (e) {
       isWebGLSupported = false;
       loggerService.addLog(
@@ -156,7 +156,7 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
 
       // --- 2.5 Particle Field Setup ---
       particleGeom = new THREE.BufferGeometry();
-      const particleCount = 60;
+      const particleCount = 25;
       const posArray = new Float32Array(particleCount * 3);
       for (let i = 0; i < particleCount * 3; i++) {
         posArray[i] = (Math.random() - 0.5) * 12;
@@ -228,7 +228,7 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
     }
 
     // 2D Particles Setup (Fallback)
-    const particleCount2d = 40;
+    const particleCount2d = 15;
     const particles2d = Array.from({ length: particleCount2d }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
@@ -323,12 +323,24 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
       container.addEventListener("pointerleave", handlePointerCancel as any);
     }
 
+    let isVisible = true;
+    const visibilityObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        isVisible = entry.isIntersecting;
+      });
+    }, { threshold: 0.01 });
+
+    if (containerRef.current) {
+      visibilityObserver.observe(containerRef.current);
+    }
+
     // --- 4. Animation Loop ---
     let animId: number;
     const tempV = new THREE.Vector3();
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      if (!isVisible || document.hidden) return;
 
       if (isWebGLSupported && renderer && scene && camera && particles) {
         // Rotate background stardust particles slowly
@@ -671,6 +683,7 @@ export function DnaModel({ progress, dna, isComplete, onHoverChange }: DnaModelP
     // --- 7. Resource Cleanup ---
     return () => {
       cancelAnimationFrame(animId);
+      visibilityObserver.disconnect();
       window.removeEventListener("resize", handleResize);
 
       // Clean up pointer listeners

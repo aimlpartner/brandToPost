@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { 
   Brain, Cpu, Upload, Loader2, Sparkles, Save, Target, MessageSquare, 
   Zap, Clock, Globe, FileText, CheckCircle2, ChevronRight, Play, Check,
   Palette, Type, Download, Copy, RefreshCw, FileSignature, Linkedin, Image as ImageIcon, X,
-  LayoutGrid, ListFilter, ChevronLeft, ShieldCheck, Eye, Share2, Sliders
+  LayoutGrid, ListFilter, ChevronLeft, ShieldCheck, Eye, Share2, Sliders, Info, AlertCircle, TrendingUp, Wand2
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
@@ -20,6 +21,7 @@ import {
 } from "../lib/sanitizeTemplateHtml";
 import { synthesizeFounderAgent, generateGeneralFounderPost, generateFounderTopicSuggestions, generateBrandedFounderPost, researchVisualTrends } from "../services/geminiService";
 import { CustomTimePicker } from "../components/CustomTimePicker";
+import { PlusPenIcon } from "../components/PlusPenIcon";
 import { PostPreviewModal } from "../components/PostPreviewModal";
 import { FaLinkedin, FaXTwitter, FaFacebook, FaInstagram, FaReddit } from "react-icons/fa6";
 import { utcToLocal, localToUtc, cn } from "../lib/utils";
@@ -49,6 +51,7 @@ function ScaledIframePreview({ htmlToRender, title }: { htmlToRender: string; ti
     <div ref={containerRef} className="relative w-full aspect-square rounded-lg bg-black overflow-hidden border border-slate-800">
       <iframe
         title={title}
+        loading="lazy"
         srcDoc={`<!DOCTYPE html><html><head><style>html,body{margin:0;padding:0;overflow:hidden;background:#000000;width:1080px;height:1080px;}</style></head><body style="margin:0;padding:0;overflow:hidden;">${htmlToRender}</body></html>`}
         sandbox="allow-same-origin"
         scrolling="no"
@@ -168,8 +171,13 @@ interface SmartFieldProps {
 
 function SmartField({ label, value, placeholder = "—", hint, multiline = false, onChange, accentColor }: SmartFieldProps) {
   const [editing, setEditing] = useState(false);
+  const [localVal, setLocalVal] = useState(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setLocalVal(value);
+  }, [value]);
 
   useEffect(() => {
     if (editing) {
@@ -185,6 +193,23 @@ function SmartField({ label, value, placeholder = "—", hint, multiline = false
     }
   }, [editing, multiline]);
 
+  const handleToggleDone = () => {
+    if (editing) {
+      if (localVal !== value) {
+        onChange(localVal);
+      }
+      setEditing(false);
+    } else {
+      setEditing(true);
+    }
+  };
+
+  const handleBlur = () => {
+    if (localVal !== value) {
+      onChange(localVal);
+    }
+  };
+
   return (
     <div className="group">
       <div className="flex items-center justify-between mb-2">
@@ -193,7 +218,7 @@ function SmartField({ label, value, placeholder = "—", hint, multiline = false
         </span>
         <button
           type="button"
-          onClick={() => setEditing(!editing)}
+          onClick={handleToggleDone}
           className="text-xs text-[#7C3AED] hover:text-[#6D28D9] font-medium"
         >
           {editing ? "Done" : "Edit"}
@@ -205,8 +230,15 @@ function SmartField({ label, value, placeholder = "—", hint, multiline = false
         multiline ? (
           <textarea
             ref={textareaRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
+            value={localVal}
+            onChange={(e) => {
+              setLocalVal(e.target.value);
+              if (textareaRef.current) {
+                textareaRef.current.style.height = "auto";
+                textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+              }
+            }}
+            onBlur={handleBlur}
             placeholder={placeholder}
             rows={3}
             className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2.5 text-sm text-slate-850 outline-none resize-none transition-colors"
@@ -215,8 +247,9 @@ function SmartField({ label, value, placeholder = "—", hint, multiline = false
           <input
             ref={inputRef}
             type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
+            value={localVal}
+            onChange={(e) => setLocalVal(e.target.value)}
+            onBlur={handleBlur}
             placeholder={placeholder}
             className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-sm text-slate-850 outline-none transition-colors"
           />
@@ -488,6 +521,8 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
 
   // Voice Inputs
   const [voiceDesc, setVoiceDesc] = useState(userProfile?.founderVoiceDescription || "");
+  const voiceDescTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isVoiceDescFocusedRef = useRef(false);
   const [voiceFile, setVoiceFile] = useState<{ name: string; mimeType: string; data: string } | null>(
     userProfile?.founderVoiceFileName && userProfile?.founderVoiceFileData
       ? {
@@ -517,6 +552,7 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
   // Social Channels Selector Modal state
   const [channelModalBrand, setChannelModalBrand] = useState<any | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']);
+  const [selectedUseBrandAssets, setSelectedUseBrandAssets] = useState<boolean | undefined>(undefined);
   const [isSavingChannels, setIsSavingChannels] = useState(false);
 
   const openChannelSelectorModal = (brand: any) => {
@@ -526,6 +562,7 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
         ? brand.targetPlatforms
         : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']
     );
+    setSelectedUseBrandAssets(brand.useBrandAssets);
   };
 
   // Body scroll locking when any modal is active
@@ -641,7 +678,8 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
         },
         body: JSON.stringify({
           productId: `founder_${user.uid}`,
-          founderName: userProfile?.name || user?.displayName || ""
+          founderName: userProfile?.name || user?.displayName || "",
+          linkedinUrl: (userProfile as any)?.linkedinUrl || (userProfile?.linkedInProfile as any)?.url || ""
         })
       });
 
@@ -667,7 +705,9 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
   // Automatic Background Profile & Bio Fetcher Trigger
   useEffect(() => {
     if (user && !isAutoFetchingProfile) {
-      if (!userProfile?.linkedInProfile?.headline || !userProfile?.linkedInProfile?.picture) {
+      const headline = userProfile?.linkedInProfile?.headline || "";
+      const isGenericHeadline = !headline || headline.includes("User | Founder") || headline.includes("Founder & Executive") || headline.includes("Founder Profile");
+      if (isGenericHeadline || !userProfile?.linkedInProfile?.picture) {
         handleAutoFetchLinkedinProfile(true);
       }
     }
@@ -739,14 +779,14 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
   const [loadingAutoposts, setLoadingAutoposts] = useState(true);
 
   // Automated Visual Studio Studio State (Client-Side Interactive Canvas)
-  const [generatedPostCopy, setGeneratedPostCopy] = useState("Create a post that challenges the generic 'AI will change everything' narrative. Instead, focus on specific, measurable applications of AI in B2B marketing and operations that deliver concrete ROI and pipeline...");
-  const [generatedHeadline, setGeneratedHeadline] = useState("The AI ROI Illusion");
-  const [generatedSubtext, setGeneratedSubtext] = useState("Why abstract AI hype is destroying your marketing budget (and how to mandate pipeline ROI).");
-  const [generatedImageUrl, setGeneratedImageUrl] = useState(STOCK_IMAGES[0].url);
+  const [generatedPostCopy, setGeneratedPostCopy] = useState("");
+  const [generatedHeadline, setGeneratedHeadline] = useState("");
+  const [generatedSubtext, setGeneratedSubtext] = useState("");
+  const [generatedImageUrl, setGeneratedImageUrl] = useState("");
   const [trendReport, setTrendReport] = useState<any | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("editorial-left");
   const [selectedPrebuiltTemplate, setSelectedPrebuiltTemplate] = useState<string>("auto");
-  const [hasGeneratedOutput, setHasGeneratedOutput] = useState(true);
+  const [hasGeneratedOutput, setHasGeneratedOutput] = useState(false);
 
   // Template Approval Flow State
   const [approvedTemplateId, setApprovedTemplateId] = useState<string | null>(null);
@@ -1254,7 +1294,9 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
 
   useEffect(() => {
     if (userProfile) {
-      setVoiceDesc(userProfile.founderVoiceDescription || "");
+      if (!isVoiceDescFocusedRef.current && !voiceDescTimeoutRef.current) {
+        setVoiceDesc(userProfile.founderVoiceDescription || "");
+      }
       if (userProfile.founderVoiceFileName && userProfile.founderVoiceFileData) {
         setVoiceFile({
           name: userProfile.founderVoiceFileName,
@@ -1273,6 +1315,27 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
       }
     }
   }, [userProfile]);
+
+  const handleVoiceDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setVoiceDesc(val);
+    if (voiceDescTimeoutRef.current) {
+      clearTimeout(voiceDescTimeoutRef.current);
+    }
+    voiceDescTimeoutRef.current = setTimeout(() => {
+      saveProfileData({ founderVoiceDescription: val });
+      voiceDescTimeoutRef.current = null;
+    }, 1000);
+  };
+
+  const handleVoiceDescBlur = () => {
+    isVoiceDescFocusedRef.current = false;
+    if (voiceDescTimeoutRef.current) {
+      clearTimeout(voiceDescTimeoutRef.current);
+      voiceDescTimeoutRef.current = null;
+    }
+    saveProfileData({ founderVoiceDescription: voiceDesc });
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1507,7 +1570,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-xl font-bold tracking-tight text-slate-805 font-display">Master Founder Agent</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-805 font-display">Founder Agent</h1>
               {userProfile?.founderAgentSynthesized ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 uppercase tracking-wider">
                   <Sparkles className="h-2.5 w-2.5" /> Founder Brain Active
@@ -1528,13 +1591,6 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-left">
           <p className="text-xs text-red-650 font-semibold">{error}</p>
-        </div>
-      )}
-
-      {saved && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left flex items-center gap-2">
-          <Check className="h-4 w-4 text-emerald-600" />
-          <p className="text-xs text-emerald-750 font-semibold">Changes synced successfully!</p>
         </div>
       )}
 
@@ -1632,15 +1688,29 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                         
                         <div className="space-y-5">
                           <div>
-                            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-550 uppercase tracking-wider mb-2">
-                              <MessageSquare className="h-3 w-3 text-slate-455" /> Voice Description
-                            </label>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-550 uppercase tracking-wider">
+                                <MessageSquare className="h-3 w-3 text-slate-455" /> Voice Description
+                              </label>
+                              <AnimatePresence>
+                                {saved && (
+                                  <motion.span
+                                    initial={{ opacity: 0, scale: 0.85, y: -2 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.85, y: -2 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80 shadow-xs"
+                                  >
+                                    <Check className="h-2.5 w-2.5 text-emerald-500" strokeWidth={2.5} /> Saved
+                                  </motion.span>
+                                )}
+                              </AnimatePresence>
+                            </div>
                             <textarea
                               value={voiceDesc}
-                              onChange={(e) => {
-                                setVoiceDesc(e.target.value);
-                                saveProfileData({ founderVoiceDescription: e.target.value });
-                              }}
+                              onFocus={() => { isVoiceDescFocusedRef.current = true; }}
+                              onChange={handleVoiceDescChange}
+                              onBlur={handleVoiceDescBlur}
                               rows={4}
                               className="w-full bg-white border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2.5 text-xs text-slate-805 placeholder-slate-300 outline-none resize-none transition-colors"
                               placeholder="e.g. I prefer punchy sentences, speak skeptically of corporate speak, and focus on developer problems..."
@@ -2116,120 +2186,377 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
           /* Brand Control Board */
           <div className="space-y-4">
             <BentoCard span={3}>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
                   <SectionTitle icon={Globe} title="Connected Brands Automation Manager" iconColor="text-violet-600" />
-                  <p className="text-xs text-slate-400 font-light mt-1">
-                    Manage individual daily automation schedules, toggles, and manual run executions across your brands.
+                  <p className="text-xs text-slate-500 font-light mt-1">
+                    Manage individual daily automation schedules, content triggers, visual sources, and manual executions across your brands.
                   </p>
                 </div>
               </div>
 
+              {/* Helpful Rule Callout Banner */}
+              <div className="mb-5 p-3 rounded-xl bg-violet-50/60 border border-violet-100 flex items-start gap-2.5">
+                <Info className="h-4 w-4 text-violet-600 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-violet-900 leading-relaxed">
+                  <strong className="font-semibold">Automation Rule:</strong> Daily Posts and Weekly Campaigns operate with mutual exclusion. Enabling Daily Posts automatically pauses Weekly Campaigns for that brand, and vice-versa, preventing redundant social posts.
+                </p>
+              </div>
+
               {products.length === 0 ? (
-                <div className="text-center py-12 bg-slate-55 rounded-2xl border border-slate-150">
-                  <p className="text-sm text-slate-400 italic">No brands found. Add one in the sidebar brand switcher.</p>
+                <div className="text-center py-12 bg-slate-50/50 rounded-2xl border border-slate-200/80">
+                  <p className="text-sm text-slate-500 italic">No brands found. Add one in the sidebar brand switcher.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        <th className="py-3.5 px-4">Brand / Website</th>
-                        <th className="py-3.5 px-4 text-center">Daily Posts</th>
-                        <th className="py-3.5 px-4 text-center">Daily Blogs</th>
-                        <th className="py-3.5 px-4 text-center">Weekly Campaigns</th>
-                        <th className="py-3.5 px-4">Automation Time</th>
-                        <th className="py-3.5 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {products.map((brand) => {
-                        const localTimeStr = utcToLocal(brand.automationTimeUtc || "14:00");
-                        const statusMessage = brandMessage[brand.id];
+                <>
+                  {/* Desktop Table View (md and up) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[1040px]">
+                      <colgroup>
+                        <col style={{ width: "24%" }} />
+                        <col style={{ width: "9%" }} />
+                        <col style={{ width: "9%" }} />
+                        <col style={{ width: "12%" }} />
+                        <col style={{ width: "13%" }} />
+                        <col style={{ width: "20%" }} />
+                        <col style={{ width: "13%" }} />
+                      </colgroup>
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          <th className="py-3.5 px-4 text-left">Brand &amp; Target Socials</th>
+                          <th className="py-3.5 px-3 text-center">Daily Posts</th>
+                          <th className="py-3.5 px-3 text-center">Daily Blogs</th>
+                          <th className="py-3.5 px-3 text-center">Weekly Campaigns</th>
+                          <th className="py-3.5 px-3 text-center">Visual Source</th>
+                          <th className="py-3.5 px-3 text-center">Automation Time</th>
+                          <th className="py-3.5 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {products.map((brand) => {
+                          const localTimeStr = utcToLocal(brand.automationTimeUtc || "14:00");
+                          const statusMessage = brandMessage[brand.id];
 
-                        const toggleFeature = async (field: "automateDailyPosts" | "automateDailyBlogs" | "automateWeeklyCampaigns") => {
-                          const val = !brand[field];
-                          const updates: any = { [field]: val };
-                          
-                          // Mutual Exclusion Rule: Weekly Campaigns ON -> Daily Posts OFF, and Vice Versa
-                          if (field === "automateWeeklyCampaigns" && val === true) {
-                            updates.automateDailyPosts = false;
-                          } else if (field === "automateDailyPosts" && val === true) {
-                            updates.automateWeeklyCampaigns = false;
-                          }
+                          const toggleFeature = async (field: "automateDailyPosts" | "automateDailyBlogs" | "automateWeeklyCampaigns") => {
+                            const val = !brand[field];
+                            const updates: any = { [field]: val };
+                            
+                            // Mutual Exclusion Rule: Weekly Campaigns ON -> Daily Posts OFF, and Vice Versa
+                            if (field === "automateWeeklyCampaigns" && val === true) {
+                              updates.automateDailyPosts = false;
+                            } else if (field === "automateDailyPosts" && val === true) {
+                              updates.automateWeeklyCampaigns = false;
+                            }
 
-                          // Auto enable/disable master switch
-                          const finalPosts = updates.automateDailyPosts !== undefined ? updates.automateDailyPosts : !!brand.automateDailyPosts;
-                          const finalBlogs = field === "automateDailyBlogs" ? val : !!brand.automateDailyBlogs;
-                          const finalWeekly = updates.automateWeeklyCampaigns !== undefined ? updates.automateWeeklyCampaigns : !!brand.automateWeeklyCampaigns;
-                          updates.automationAgentEnabled = finalPosts || finalBlogs || finalWeekly;
-                          
-                          await updateProduct(brand.id, updates);
+                            // Auto enable/disable master switch
+                            const finalPosts = updates.automateDailyPosts !== undefined ? updates.automateDailyPosts : !!brand.automateDailyPosts;
+                            const finalBlogs = field === "automateDailyBlogs" ? val : !!brand.automateDailyBlogs;
+                            const finalWeekly = updates.automateWeeklyCampaigns !== undefined ? updates.automateWeeklyCampaigns : !!brand.automateWeeklyCampaigns;
+                            updates.automationAgentEnabled = finalPosts || finalBlogs || finalWeekly;
+                            
+                            await updateProduct(brand.id, updates);
 
-                          // Open Social Channel Selection Modal if enabling Daily Posts or Weekly Campaigns
-                          if ((field === "automateDailyPosts" || field === "automateWeeklyCampaigns") && val === true) {
-                            openChannelSelectorModal(brand);
-                          }
-                        };
+                            // Open Social Channel Selection Modal if enabling Daily Posts or Weekly Campaigns
+                            if ((field === "automateDailyPosts" || field === "automateWeeklyCampaigns") && val === true) {
+                              openChannelSelectorModal(brand);
+                            }
+                          };
 
-                        return (
-                          <tr key={brand.id} className="hover:bg-slate-50/40 transition-colors">
-                            {/* Product Identity */}
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-3">
-                                {brand.logoUrl || brand.logoDarkUrl ? (
-                                  <img
-                                    src={brand.logoUrl || brand.logoDarkUrl}
-                                    alt={brand.name}
-                                    className="h-8 w-8 rounded-lg shrink-0 object-contain border border-slate-150 p-0.5 bg-white"
-                                  />
-                                ) : (
-                                  <div className="h-8 w-8 rounded-lg bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-755 shrink-0">
-                                    {brand.name[0].toUpperCase()}
-                                  </div>
-                                )}
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold text-slate-805">{brand.name}</p>
-                                  <a
-                                    href={brand.website}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-[10px] text-slate-400 hover:text-[#7C3AED] truncate block max-w-[160px]"
-                                  >
-                                    {brand.website || "No website"}
-                                  </a>
-
-                                  {/* Active Channels Logos */}
-                                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                    {(brand.targetPlatforms && brand.targetPlatforms.length > 0
-                                      ? brand.targetPlatforms
-                                      : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']
-                                    ).map((plat: string) => (
-                                      <div
-                                        key={plat}
-                                        className="h-6 w-6 rounded-full bg-white border border-slate-200 shadow-2xs flex items-center justify-center transition-transform hover:scale-105"
-                                        title={plat === 'twitter' ? 'X (Twitter)' : plat.toUpperCase()}
-                                      >
-                                        {getPlatformLogo(plat, "h-3.5 w-3.5")}
-                                      </div>
-                                    ))}
-                                    <button
-                                      onClick={() => openChannelSelectorModal(brand)}
-                                      className="text-[9px] text-violet-600 hover:text-violet-800 font-bold underline flex items-center gap-0.5 ml-1"
-                                      title="Configure target social media channels"
+                          return (
+                            <tr key={brand.id} className="hover:bg-slate-50/50 transition-colors">
+                              {/* Product Identity & Channels */}
+                              <td className="py-4 px-4 align-middle">
+                                <div className="flex items-center gap-3">
+                                  {brand.logoUrl || brand.logoDarkUrl ? (
+                                    <img
+                                      src={brand.logoUrl || brand.logoDarkUrl}
+                                      alt={brand.name}
+                                      className="h-9 w-9 rounded-xl shrink-0 object-contain border border-slate-200 p-0.5 bg-white shadow-2xs"
+                                    />
+                                  ) : (
+                                    <div className="h-9 w-9 rounded-xl bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-700 shrink-0 border border-violet-200">
+                                      {brand.name[0].toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-slate-900 truncate">{brand.name}</p>
+                                    <a
+                                      href={brand.website}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[10px] text-slate-400 hover:text-violet-600 truncate block max-w-[150px]"
                                     >
-                                      <Sliders className="h-2.5 w-2.5" /> Edit
-                                    </button>
+                                      {brand.website || "No website"}
+                                    </a>
+
+                                    {/* Active Channels Logos & Edit Gear */}
+                                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                      {(brand.targetPlatforms && brand.targetPlatforms.length > 0
+                                        ? brand.targetPlatforms
+                                        : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']
+                                      ).map((plat: string) => (
+                                        <div
+                                          key={plat}
+                                          className="h-5 w-5 rounded-full bg-white border border-slate-200 shadow-2xs flex items-center justify-center shrink-0"
+                                          title={plat === 'twitter' ? 'X (Twitter)' : plat.toUpperCase()}
+                                        >
+                                          {getPlatformLogo(plat, "h-3 w-3")}
+                                        </div>
+                                      ))}
+                                      <button
+                                        type="button"
+                                        onClick={() => openChannelSelectorModal(brand)}
+                                        className="text-[9px] text-violet-600 hover:text-violet-800 font-bold flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-md hover:bg-violet-50 transition-colors cursor-pointer"
+                                        title="Configure social channels and visual generation mode"
+                                      >
+                                        <Sliders className="h-2.5 w-2.5" />
+                                        <span>Edit</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </td>
+                              </td>
 
-                            {/* Daily Posts toggle */}
-                            <td className="py-4 px-4 text-center">
+                              {/* Daily Posts toggle */}
+                              <td className="py-4 px-3 text-center align-middle">
+                                <div className="flex flex-col items-center justify-center">
+                                  <button
+                                    type="button"
+                                    title="Toggle Daily Social Posts"
+                                    onClick={() => toggleFeature("automateDailyPosts")}
+                                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none ${
+                                      brand.automateDailyPosts ? "bg-violet-600" : "bg-slate-200"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-150 ${
+                                        brand.automateDailyPosts ? "translate-x-4" : "translate-x-0"
+                                      }`}
+                                    />
+                                  </button>
+                                  <span className="text-[9px] text-slate-400 mt-1 font-medium">
+                                    {brand.automateDailyPosts ? "Active" : "Off"}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Daily Blogs toggle */}
+                              <td className="py-4 px-3 text-center align-middle">
+                                <div className="flex flex-col items-center justify-center">
+                                  <button
+                                    type="button"
+                                    title="Toggle Daily SEO Blogs"
+                                    onClick={() => toggleFeature("automateDailyBlogs")}
+                                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none ${
+                                      brand.automateDailyBlogs ? "bg-violet-600" : "bg-slate-200"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-150 ${
+                                        brand.automateDailyBlogs ? "translate-x-4" : "translate-x-0"
+                                      }`}
+                                    />
+                                  </button>
+                                  <span className="text-[9px] text-slate-400 mt-1 font-medium">
+                                    {brand.automateDailyBlogs ? "Active" : "Off"}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Weekly Campaigns toggle */}
+                              <td className="py-4 px-3 text-center align-middle">
+                                <div className="flex flex-col items-center justify-center">
+                                  <button
+                                    type="button"
+                                    title="Toggle 7-Day Weekly Campaigns"
+                                    onClick={() => toggleFeature("automateWeeklyCampaigns")}
+                                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none ${
+                                      brand.automateWeeklyCampaigns ? "bg-violet-600" : "bg-slate-200"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-150 ${
+                                        brand.automateWeeklyCampaigns ? "translate-x-4" : "translate-x-0"
+                                      }`}
+                                    />
+                                  </button>
+                                  <span className="text-[9px] text-slate-400 mt-1 font-medium">
+                                    {brand.automateWeeklyCampaigns ? "Active" : "Off"}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Visual Source usage status & modal selector */}
+                              <td className="py-4 px-3 text-center align-middle">
+                                <button
+                                  type="button"
+                                  onClick={() => openChannelSelectorModal(brand)}
+                                  title="Click to configure visual generation mode"
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                                    brand.useBrandAssets === true
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                      : brand.useBrandAssets === false
+                                      ? "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100"
+                                      : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 animate-pulse"
+                                  }`}
+                                >
+                                  {brand.useBrandAssets === true ? (
+                                    <span className="flex items-center gap-1">
+                                      <ImageIcon className="h-3 w-3 text-emerald-600" />
+                                      <span>Brand Assets</span>
+                                    </span>
+                                  ) : brand.useBrandAssets === false ? (
+                                    <span className="flex items-center gap-1">
+                                      <PlusPenIcon className="h-3 w-3 text-violet-600 shrink-0" />
+                                      <span>AI Visuals</span>
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1">
+                                      <AlertCircle className="h-3 w-3 text-amber-600" />
+                                      <span>Required</span>
+                                    </span>
+                                  )}
+                                </button>
+                              </td>
+
+                              {/* Scheduling time */}
+                              <td className="py-4 px-3 text-center align-middle">
+                                <div className="inline-flex justify-center">
+                                  <CustomTimePicker
+                                    value={localTimeStr}
+                                    onChange={async (newLocalTime) => {
+                                      const timeUtc = localToUtc(newLocalTime);
+                                      await updateProduct(brand.id, { automationTimeUtc: timeUtc });
+                                    }}
+                                  />
+                                </div>
+                              </td>
+
+                              {/* Actions column: manual run */}
+                              <td className="py-4 px-4 text-right align-middle">
+                                <div className="flex flex-col items-end gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={runningBrandId === brand.id || !userProfile?.founderAgentSynthesized}
+                                    onClick={() => handleTriggerBrandRun(brand.id)}
+                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-violet-50 text-[#7C3AED] hover:bg-violet-100 disabled:opacity-40 disabled:cursor-not-allowed border border-violet-200 rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                                  >
+                                    {runningBrandId === brand.id ? (
+                                      <>
+                                        <Loader2 className="animate-spin h-3 w-3" />
+                                        <span>Running...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="h-3 w-3 fill-current" />
+                                        <span>Trigger Run</span>
+                                      </>
+                                    )}
+                                  </button>
+                                  {statusMessage && (
+                                    <span className={`text-[9px] font-medium leading-tight max-w-[150px] text-right block ${
+                                      statusMessage.type === "success" ? "text-emerald-600" : "text-red-500"
+                                    }`}>
+                                      {statusMessage.text}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card Grid View (< md) */}
+                  <div className="block md:hidden space-y-3">
+                    {products.map((brand) => {
+                      const localTimeStr = utcToLocal(brand.automationTimeUtc || "14:00");
+                      const statusMessage = brandMessage[brand.id];
+
+                      const toggleFeature = async (field: "automateDailyPosts" | "automateDailyBlogs" | "automateWeeklyCampaigns") => {
+                        const val = !brand[field];
+                        const updates: any = { [field]: val };
+                        if (field === "automateWeeklyCampaigns" && val === true) {
+                          updates.automateDailyPosts = false;
+                        } else if (field === "automateDailyPosts" && val === true) {
+                          updates.automateWeeklyCampaigns = false;
+                        }
+                        const finalPosts = updates.automateDailyPosts !== undefined ? updates.automateDailyPosts : !!brand.automateDailyPosts;
+                        const finalBlogs = field === "automateDailyBlogs" ? val : !!brand.automateDailyBlogs;
+                        const finalWeekly = updates.automateWeeklyCampaigns !== undefined ? updates.automateWeeklyCampaigns : !!brand.automateWeeklyCampaigns;
+                        updates.automationAgentEnabled = finalPosts || finalBlogs || finalWeekly;
+                        
+                        await updateProduct(brand.id, updates);
+                        if ((field === "automateDailyPosts" || field === "automateWeeklyCampaigns") && val === true) {
+                          openChannelSelectorModal(brand);
+                        }
+                      };
+
+                      return (
+                        <div key={brand.id} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4 shadow-2xs">
+                          {/* Brand Info Bar */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {brand.logoUrl || brand.logoDarkUrl ? (
+                                <img
+                                  src={brand.logoUrl || brand.logoDarkUrl}
+                                  alt={brand.name}
+                                  className="h-10 w-10 rounded-xl shrink-0 object-contain border border-slate-200 p-0.5 bg-white"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center text-sm font-bold text-violet-700 shrink-0">
+                                  {brand.name[0].toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <h4 className="text-xs font-bold text-slate-900">{brand.name}</h4>
+                                <a
+                                  href={brand.website}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[10px] text-slate-400 hover:text-violet-600 truncate block max-w-[180px]"
+                                >
+                                  {brand.website || "No website"}
+                                </a>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openChannelSelectorModal(brand)}
+                              className="px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 text-[10px] font-bold border border-violet-200 flex items-center gap-1"
+                            >
+                              <Sliders className="h-3 w-3" />
+                              <span>Settings</span>
+                            </button>
+                          </div>
+
+                          {/* Social Platform Chips */}
+                          <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100">
+                            <span className="text-[10px] font-semibold text-slate-400 mr-1">Channels:</span>
+                            {(brand.targetPlatforms && brand.targetPlatforms.length > 0
+                              ? brand.targetPlatforms
+                              : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit']
+                            ).map((plat: string) => (
+                              <div
+                                key={plat}
+                                className="h-5 w-5 rounded-full bg-white border border-slate-200 flex items-center justify-center shrink-0"
+                                title={plat}
+                              >
+                                {getPlatformLogo(plat, "h-3 w-3")}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Toggles Grid */}
+                          <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-100">
+                            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50">
+                              <span className="text-[10px] font-bold text-slate-600 mb-1.5">Daily Posts</span>
                               <button
+                                type="button"
                                 onClick={() => toggleFeature("automateDailyPosts")}
-                                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none ${
+                                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 ${
                                   brand.automateDailyPosts ? "bg-violet-600" : "bg-slate-200"
                                 }`}
                               >
@@ -2239,13 +2566,14 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                                   }`}
                                 />
                               </button>
-                            </td>
+                            </div>
 
-                            {/* Daily Blogs toggle */}
-                            <td className="py-4 px-4 text-center">
+                            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50">
+                              <span className="text-[10px] font-bold text-slate-600 mb-1.5">Daily Blogs</span>
                               <button
+                                type="button"
                                 onClick={() => toggleFeature("automateDailyBlogs")}
-                                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none ${
+                                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 ${
                                   brand.automateDailyBlogs ? "bg-violet-600" : "bg-slate-200"
                                 }`}
                               >
@@ -2255,13 +2583,14 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                                   }`}
                                 />
                               </button>
-                            </td>
+                            </div>
 
-                            {/* Weekly Campaigns toggle */}
-                            <td className="py-4 px-4 text-center">
+                            <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50">
+                              <span className="text-[10px] font-bold text-slate-600 mb-1.5">Weekly Camp.</span>
                               <button
+                                type="button"
                                 onClick={() => toggleFeature("automateWeeklyCampaigns")}
-                                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none ${
+                                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 ${
                                   brand.automateWeeklyCampaigns ? "bg-violet-600" : "bg-slate-200"
                                 }`}
                               >
@@ -2271,58 +2600,78 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                                   }`}
                                 />
                               </button>
-                            </td>
+                            </div>
+                          </div>
 
-                            {/* Scheduling time */}
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-1.5 text-xs text-slate-650">
-                                <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                <CustomTimePicker
-                                  value={localTimeStr}
-                                  onChange={async (newLocalTime) => {
-                                    const timeUtc = localToUtc(newLocalTime);
-                                    await updateProduct(brand.id, { automationTimeUtc: timeUtc });
-                                  }}
-                                />
-                              </div>
-                            </td>
-
-                            {/* Actions column: manual run */}
-                            <td className="py-4 px-4 text-right">
-                              <div className="flex flex-col items-end gap-1">
-                                <button
-                                  type="button"
-                                  disabled={runningBrandId === brand.id || !userProfile?.founderAgentSynthesized}
-                                  onClick={() => handleTriggerBrandRun(brand.id)}
-                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-violet-50 text-[#7C3AED] hover:bg-violet-100 disabled:opacity-40 disabled:cursor-not-allowed border border-violet-205/50 rounded-lg text-[11px] font-bold transition-all"
-                                >
-                                  {runningBrandId === brand.id ? (
-                                    <>
-                                      <Loader2 className="animate-spin h-3 w-3" />
-                                      <span>Running...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Play className="h-3 w-3 fill-current" />
-                                      <span>Trigger Run</span>
-                                    </>
-                                  )}
-                                </button>
-                                {statusMessage && (
-                                  <span className={`text-[9px] font-medium leading-tight max-w-[180px] text-right block ${
-                                    statusMessage.type === "success" ? "text-emerald-650" : "text-red-505"
-                                  }`}>
-                                    {statusMessage.text}
+                          {/* Time & Visual Source Footer */}
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-slate-500">Visuals:</span>
+                              <button
+                                type="button"
+                                onClick={() => openChannelSelectorModal(brand)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                                  brand.useBrandAssets === true
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : brand.useBrandAssets === false
+                                    ? "bg-violet-50 text-violet-700 border-violet-200"
+                                    : "bg-amber-50 text-amber-800 border-amber-300 animate-pulse"
+                                }`}
+                              >
+                                {brand.useBrandAssets === true ? (
+                                  <span className="flex items-center gap-1">
+                                    <ImageIcon className="h-3 w-3 text-emerald-600" />
+                                    <span>Brand Assets</span>
+                                  </span>
+                                ) : brand.useBrandAssets === false ? (
+                                  <span className="flex items-center gap-1">
+                                    <PlusPenIcon className="h-3 w-3 text-violet-600 shrink-0" />
+                                    <span>AI Visuals</span>
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1">
+                                    <AlertCircle className="h-3 w-3 text-amber-600" />
+                                    <span>Required</span>
                                   </span>
                                 )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <CustomTimePicker
+                                value={localTimeStr}
+                                onChange={async (newLocalTime) => {
+                                  const timeUtc = localToUtc(newLocalTime);
+                                  await updateProduct(brand.id, { automationTimeUtc: timeUtc });
+                                }}
+                              />
+                              <button
+                                type="button"
+                                disabled={runningBrandId === brand.id || !userProfile?.founderAgentSynthesized}
+                                onClick={() => handleTriggerBrandRun(brand.id)}
+                                className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              >
+                                {runningBrandId === brand.id ? (
+                                  <Loader2 className="animate-spin h-3 w-3" />
+                                ) : (
+                                  <Play className="h-3 w-3 fill-current" />
+                                )}
+                                <span>Run</span>
+                              </button>
+                            </div>
+                          </div>
+                          {statusMessage && (
+                            <p className={`text-[9px] font-medium text-right ${
+                              statusMessage.type === "success" ? "text-emerald-600" : "text-red-500"
+                            }`}>
+                              {statusMessage.text}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </BentoCard>
           </div>
@@ -2443,29 +2792,49 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
 
               {/* Personal Socials Connection Area */}
               <div className="mt-4 pt-4 border-t border-slate-100/80 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <Linkedin className="h-3.5 w-3.5 text-[#0A66C2]" />
-                      Personal Social Connection (LinkedIn Profile)
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 font-sans font-bold text-[9px] border border-emerald-500/20">✨ UNLOCKED FOR FOUNDER</span>
-                    </h4>
-                    <p className="text-[10px] text-slate-400 font-light mt-0.5">
-                      Connect your personal LinkedIn account so your virtual founder doppelganger can publish posts directly to your profile.
-                    </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/70">
+                  {/* Left: Avatar + Name + Headline */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-violet-100 text-violet-700 font-bold overflow-hidden border border-slate-200 flex items-center justify-center shrink-0 shadow-2xs">
+                      {founderAuthorAvatar ? (
+                        <img src={founderAuthorAvatar} alt="LinkedIn Avatar" className="w-full h-full object-cover rounded-full" />
+                      ) : (
+                        <span className="text-sm font-extrabold">{founderAuthorName.charAt(0)}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-slate-900 truncate">{founderAuthorName}</h4>
+                        <Linkedin className="h-3.5 w-3.5 text-[#0A66C2] shrink-0" />
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium truncate max-w-[320px]">
+                        {userProfile?.linkedInProfile?.headline || (userProfile as any)?.founderBio || "Founder Profile • Automated Daily Posts"}
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
+                  {/* Right: Connection Actions */}
+                  <div className="flex items-center gap-2 shrink-0">
                     {isLinkedinConnected ? (
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
-                          Connected to Profile
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                          <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
+                          <span>Connected</span>
                         </span>
                         <button
                           type="button"
+                          onClick={() => handleAutoFetchLinkedinProfile(false)}
+                          disabled={isAutoFetchingProfile}
+                          title="Sync LinkedIn Headline & Avatar"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isAutoFetchingProfile ? "animate-spin text-indigo-600" : ""}`} />
+                          <span>{isAutoFetchingProfile ? "Syncing..." : "Sync"}</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleDisconnectLinkedin}
-                          className="text-[10px] font-bold text-red-500 hover:text-red-650 hover:bg-red-50 border border-slate-200 hover:border-red-200 px-3 py-1.5 rounded-xl transition cursor-pointer"
+                          className="text-[10px] font-bold text-slate-500 hover:text-red-600 px-2.5 py-1 rounded-lg hover:bg-red-50 border border-slate-200 transition-colors cursor-pointer"
                         >
                           Disconnect
                         </button>
@@ -2474,83 +2843,13 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                       <button
                         type="button"
                         onClick={handleConnectLinkedin}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold text-white bg-[#0A66C2] hover:bg-[#00509d] transition shadow-sm cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-bold text-white bg-[#0A66C2] hover:bg-[#00509d] transition shadow-2xs cursor-pointer"
                       >
-                        <Linkedin className="h-3 w-3" />
-                        Connect Personal Profile
+                        <Linkedin className="h-3.5 w-3.5" />
+                        <span>Connect LinkedIn</span>
                       </button>
                     )}
                   </div>
-                </div>
-
-                {/* LinkedIn Profile Identity & Bio Customizer Box */}
-                <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-violet-100 text-violet-700 font-bold overflow-hidden border border-slate-200 flex items-center justify-center shrink-0 shadow-2xs">
-                        {founderAuthorAvatar ? (
-                          <img src={founderAuthorAvatar} alt="LinkedIn Avatar" className="w-full h-full object-cover rounded-full" />
-                        ) : (
-                          <span className="text-xs font-extrabold">{founderAuthorName.charAt(0)}</span>
-                        )}
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-800 block leading-tight">{founderAuthorName}</span>
-                        <span className="text-[10px] text-slate-500 font-medium">LinkedIn Author Profile & Bio Persona</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs">
-                        {isAutoFetchingProfile ? (
-                          <>
-                            <Loader2 className="w-3 h-3 text-emerald-600 animate-spin" /> Auto-Syncing Profile...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-600 stroke-[3]" /> Auto-Synced LinkedIn Profile & Bio
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  {!isLinkedinConnected && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-slate-200/50">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                          Founder Profile Bio / Headline
-                        </label>
-                        <input
-                          type="text"
-                          value={userProfile?.linkedInProfile?.headline || (userProfile as any)?.founderBio || ""}
-                          placeholder="e.g. SWE-II @ Google | Ex @Flipkart, @Cisco and @Siemens | 230k+ @LinkedIn"
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const updatedProfile = { ...(userProfile?.linkedInProfile || {}), headline: val };
-                            saveProfileData({ linkedInProfile: updatedProfile, founderBio: val });
-                          }}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-violet-500 transition-colors shadow-2xs"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                          Founder Profile Picture URL (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={userProfile?.linkedInProfile?.picture || ""}
-                          placeholder="Paste your photo URL or image link"
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const updatedProfile = { ...(userProfile?.linkedInProfile || {}), picture: val };
-                            saveProfileData({ linkedInProfile: updatedProfile });
-                          }}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-violet-500 transition-colors shadow-2xs"
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </BentoCard>
@@ -2623,7 +2922,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                           onClick={() => setIsTopicModalOpen(true)}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
                         >
-                          <Sparkles className="h-3.5 w-3.5" />
+                          <PlusPenIcon className="h-3.5 w-3.5 text-violet-650" />
                           <span>+ New Post</span>
                         </button>
                       </div>
@@ -2909,7 +3208,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                           onClick={() => setIsTopicModalOpen(true)}
                           className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
                         >
-                          <Sparkles className="h-3.5 w-3.5" />
+                          <PlusPenIcon className="h-3.5 w-3.5 text-violet-650" />
                           <span>Configure Post Topic & Scope</span>
                         </button>
                       </div>
@@ -3015,19 +3314,22 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
 
               {/* Popup Modal: Configure Post Topic & Visual Scope Form (Equal max-w-5xl width as Campaign Modal) */}
               {isTopicModalOpen && createPortal(
-                <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-[99999] flex items-center justify-center p-4 md:p-6 overflow-y-auto" onClick={() => setIsTopicModalOpen(false)}>
-                  <div className="bg-white border border-slate-200/90 rounded-[24px] max-w-5xl w-full p-6 md:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200 shadow-[0_25px_70px_rgba(15,23,42,0.25)] relative my-auto max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                      <div>
-                        <SectionTitle icon={FileSignature} title="Create Founder Post" iconColor="text-violet-650" />
-                        <p className="text-xs text-slate-500 font-light mt-0.5">
+                <div className="fixed inset-0 bg-slate-950/85 z-[99999] flex items-center justify-center p-4 md:p-6 overflow-y-auto scroll-smooth" onClick={() => setIsTopicModalOpen(false)}>
+                  <div className="bg-white border border-slate-200/90 rounded-[24px] max-w-5xl w-full p-6 md:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200 shadow-[0_25px_70px_rgba(15,23,42,0.25)] relative my-auto max-h-[92vh] overflow-y-auto scroll-smooth" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <PlusPenIcon className="h-4.5 w-4.5 text-violet-650 shrink-0" />
+                          <h3 className="text-base font-bold text-slate-900 tracking-tight">Create Founder Post</h3>
+                        </div>
+                        <p className="text-xs text-slate-500 font-light">
                           Set persona scope, post topic, and visual template layout.
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setIsTopicModalOpen(false)}
-                        className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                        className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition cursor-pointer shrink-0 -mr-2 -mt-1"
                       >
                         <X className="h-5 w-5" />
                       </button>
@@ -3212,33 +3514,15 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                           {[
                             {
                               id: "auto",
-                              name: "✨ Dynamic AI Research",
+                              name: "Dynamic AI Research",
                               tag: "Grounded Trends",
                               desc: "Researches live AI visual trends per post"
                             },
                             {
                               id: "x-tweet-card",
-                              name: "𝕏 Viral Tweet Card",
+                              name: "X Viral Tweet Card",
                               tag: "99/100 Virality",
                               desc: "Native dark X tweet screenshot"
-                            },
-                            {
-                              id: "notes-app-screenshot",
-                              name: "📝 Apple Notes Memo",
-                              tag: "Organic Reach",
-                              desc: "Native iOS Notes screenshot card"
-                            },
-                            {
-                              id: "metrics-breakdown-card",
-                              name: "📈 B2B SaaS Metric Card",
-                              tag: "Case Study",
-                              desc: "High-converting growth stat grid"
-                            },
-                            {
-                              id: "linkedin-carousel-cover",
-                              name: "🎠 LinkedIn Carousel Cover",
-                              tag: "Hook Slide",
-                              desc: "Top viral slide cover with Swipe"
                             }
                           ].map((tpl) => {
                             const isSelected = selectedPrebuiltTemplate === tpl.id;
@@ -3247,7 +3531,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                             let htmlToRender = "";
                             if (tpl.id !== "auto" && LAYOUT_BLUEPRINTS[tpl.id]) {
                               htmlToRender = LAYOUT_BLUEPRINTS[tpl.id].buildHtml({
-                                headline: tpl.id === "x-tweet-card" ? "Stop Trading Founder Time For Slow Growth" : tpl.id === "notes-app-screenshot" ? "Hard truth after scaling to $1M ARR:" : tpl.id === "metrics-breakdown-card" ? "Why 90% of SaaS AI Features Suffer Zero Retention" : "How We Built a $10M Pipeline Without A Single Sales Rep",
+                                headline: tpl.id === "x-tweet-card" ? "Stop Trading Founder Time For Slow Growth" : "How We Built a $10M Pipeline Without A Single Sales Rep",
                                 subtext: "The 5 core operating models scaling B2B teams mandate.",
                                 imageUrl: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1080&q=80",
                                 logoUrl: null,
@@ -3621,7 +3905,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
   </div>
 
       {showSuccessModal && createPortal(
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[99999] flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowSuccessModal(false)}>
+        <div className="fixed inset-0 bg-slate-950/85 z-[99999] flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowSuccessModal(false)}>
           <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 text-center animate-in fade-in zoom-in-95 duration-200 shadow-2xl relative my-auto" onClick={(e) => e.stopPropagation()}>
             {/* Pulsing check circle indicator */}
             <div className="mx-auto h-16 w-16 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full flex items-center justify-center mb-4">
@@ -3643,16 +3927,16 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
       )}
 
       {channelModalBrand && createPortal(
-        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto" onClick={() => setChannelModalBrand(null)}>
+        <div className="fixed inset-0 z-[99999] bg-slate-950/85 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setChannelModalBrand(null)}>
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150 relative my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Share2 className="h-5 w-5 text-violet-600" />
-                  Target Social Media Channels
+                  Automation Settings
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Select channels for <span className="font-semibold text-slate-800">{channelModalBrand.name}</span>. Content will only be generated for your selected channels.
+                  Configure channels and visual generation mode for <span className="font-semibold text-slate-800">{channelModalBrand.name}</span>.
                 </p>
               </div>
               <button
@@ -3663,6 +3947,9 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
               </button>
             </div>
 
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-bold text-slate-800">1. Target Social Media Channels</h4>
+            </div>
             <div className="space-y-2.5">
               {[
                 { id: 'linkedin', label: 'LinkedIn' },
@@ -3706,6 +3993,61 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
               })}
             </div>
 
+            <div className="pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-1.5">
+                <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>2. Visual Generation Mode</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">REQUIRED</span>
+                </h4>
+              </div>
+              <p className="text-xs text-slate-500 font-light mb-3">
+                Choose whether automated Daily Posts and Weekly Campaigns should edit your uploaded Brand Assets or generate fresh AI visuals.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUseBrandAssets(true)}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    selectedUseBrandAssets === true
+                      ? "border-emerald-500 bg-emerald-50/70 shadow-sm"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <ImageIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="text-xs font-bold text-slate-800">Use Brand Assets</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-light leading-relaxed">
+                    Uses uploaded creatives, applies OpenAI edits &amp; stamps brand logo.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedUseBrandAssets(false)}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    selectedUseBrandAssets === false
+                      ? "border-violet-600 bg-violet-50/70 shadow-sm"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <PlusPenIcon className="h-4 w-4 text-violet-600 shrink-0" />
+                    <span className="text-xs font-bold text-slate-800">AI Visuals</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-light leading-relaxed">
+                    Generates fresh AI executive photographic visuals (GPT Image 2).
+                  </p>
+                </button>
+              </div>
+              {selectedUseBrandAssets === undefined && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded-lg mt-2.5 flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <span>Required: Please select whether to use Brand Assets or AI Generated Visuals before saving.</span>
+                </p>
+              )}
+            </div>
+
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
               <button
                 onClick={() => setChannelModalBrand(null)}
@@ -3715,12 +4057,19 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
               </button>
               <button
                 onClick={async () => {
+                  if (selectedUseBrandAssets === undefined) {
+                    alert("Required: Please select whether to use Brand Assets or AI Generated Visuals.");
+                    return;
+                  }
                   setIsSavingChannels(true);
                   try {
-                    await updateProduct(channelModalBrand.id, { targetPlatforms: selectedPlatforms });
+                    await updateProduct(channelModalBrand.id, {
+                      targetPlatforms: selectedPlatforms,
+                      useBrandAssets: selectedUseBrandAssets
+                    });
                     setChannelModalBrand(null);
                   } catch (e: any) {
-                    alert("Failed to save channel selection.");
+                    alert("Failed to save automation settings.");
                   } finally {
                     setIsSavingChannels(false);
                   }
@@ -3728,7 +4077,7 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                 disabled={isSavingChannels}
                 className="px-5 py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                {isSavingChannels ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save Channels'}
+                {isSavingChannels ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save Settings'}
               </button>
             </div>
           </div>

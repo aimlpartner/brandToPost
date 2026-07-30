@@ -1,12 +1,14 @@
 import { createPortal } from 'react-dom';
 import { VideoLoader } from '../components/VideoLoader';
 import { useState, useEffect } from "react";
-import { Loader2, Plus, Image as ImageIcon, Trash2, AlertCircle, Folder, DownloadCloud, CheckCircle2, Eye, X } from "lucide-react";
+import { Loader2, Plus, Image as ImageIcon, Trash2, AlertCircle, Folder, DownloadCloud, CheckCircle2, Eye, X, RefreshCw } from "lucide-react";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
 import { db, auth } from "../firebase";
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from "firebase/firestore";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, getAuth, signOut } from "firebase/auth";
+import { initializeApp, deleteApp } from "firebase/app";
+import firebaseConfig from "../../firebase-applet-config.json";
 import { Creative } from "../types";
 import { handleFirestoreError, OperationType, logSilentError } from "../lib/firestore-error";
 
@@ -22,14 +24,18 @@ export function Creatives() {
  const [isLoading, setIsLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
 
- // Google Drive State
+ // Google Drive State (Persistent across sessions with isolated Temp Auth app)
+ const [connectedEmail, setConnectedEmail] = useState<string | null>(() => {
+  return localStorage.getItem('driveConnectedEmail') || null;
+ });
+
  const [driveToken, setDriveToken] = useState<string | null>(() => {
- const stored = sessionStorage.getItem('driveToken');
- const expiry = sessionStorage.getItem('driveTokenExpiry');
- if (stored && expiry && Date.now() < parseInt(expiry, 10)) {
- return stored;
- }
- return null;
+  const stored = localStorage.getItem('driveToken') || sessionStorage.getItem('driveToken');
+  const expiry = localStorage.getItem('driveTokenExpiry') || sessionStorage.getItem('driveTokenExpiry');
+  if (stored && expiry && Date.now() < parseInt(expiry, 10)) {
+  return stored;
+  }
+  return null;
  });
  const [isConnecting, setIsConnecting] = useState(false);
  const [folders, setFolders] = useState<DriveFolder[]>([]);
@@ -77,32 +83,62 @@ export function Creatives() {
  }, [driveToken]);
 
  const handleConnectDrive = async () => {
- setIsConnecting(true);
- setError(null);
- try {
- const provider = new GoogleAuthProvider();
- provider.addScope('https://www.googleapis.com/auth/drive.readonly');
- // Force prompt to ensure we get a new token with the requested scopes
- provider.setCustomParameters({ prompt: 'consent' });
- 
- const result = await signInWithPopup(auth, provider);
- const credential = GoogleAuthProvider.credentialFromResult(result);
- const token = credential?.accessToken;
- 
- if (token) {
- setDriveToken(token);
- sessionStorage.setItem('driveToken', token);
- sessionStorage.setItem('driveTokenExpiry', (Date.now() + 3500 * 1000).toString()); // 58 mins
- fetchFolders(token);
- } else {
- throw new Error("Failed to retrieve access token.");
- }
- } catch (err: any) {
- console.error("Drive connection error:", err);
- setError(err.message || "Failed to connect to Google Drive. Please try again.");
- } finally {
- setIsConnecting(false);
- }
+  setIsConnecting(true);
+  setError(null);
+  try {
+  // Create isolated temporary Firebase app instance so popup OAuth NEVER mutates main app auth session
+  const tempAppName = `google-drive-oauth-${Date.now()}`;
+  const tempApp = initializeApp(firebaseConfig, tempAppName);
+  const tempAuth = getAuth(tempApp);
+
+  const provider = new GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/drive.readonly');
+  provider.addScope('https://www.googleapis.com/auth/userinfo.email');
+  provider.setCustomParameters({ prompt: 'select_account' });
+
+  const result = await signInWithPopup(tempAuth, provider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  const token = credential?.accessToken;
+  const email = result.user?.email || null;
+
+  if (token) {
+  setDriveToken(token);
+  if (email) setConnectedEmail(email);
+
+  const expiryMs = (Date.now() + 3500 * 1000).toString(); // 58 minutes
+  localStorage.setItem('driveToken', token);
+  localStorage.setItem('driveTokenExpiry', expiryMs);
+  if (email) localStorage.setItem('driveConnectedEmail', email);
+  sessionStorage.setItem('driveToken', token);
+  sessionStorage.setItem('driveTokenExpiry', expiryMs);
+
+  fetchFolders(token);
+
+  // Safely sign out & delete temporary app
+  await signOut(tempAuth);
+  await deleteApp(tempApp);
+  } else {
+  await deleteApp(tempApp);
+  throw new Error("Failed to retrieve Google Drive access token.");
+  }
+  } catch (err: any) {
+  console.error("Drive connection error:", err);
+  setError(err.message || "Failed to connect to Google Drive. Please try again.");
+  } finally {
+  setIsConnecting(false);
+  }
+ };
+
+ const handleDisconnectDrive = () => {
+  setDriveToken(null);
+  setConnectedEmail(null);
+  setFolders([]);
+  setSelectedFolderId("");
+  localStorage.removeItem('driveToken');
+  localStorage.removeItem('driveTokenExpiry');
+  localStorage.removeItem('driveConnectedEmail');
+  sessionStorage.removeItem('driveToken');
+  sessionStorage.removeItem('driveTokenExpiry');
  };
 
  const fetchFolders = async (token: string) => {
@@ -319,23 +355,34 @@ export function Creatives() {
  </button>
  </div>
  ) : (
- <div className="space-y-4">
- <div className="flex items-center justify-between bg-[#18F07A]/10 text-[#14C161] px-4 py-3 rounded-lg border border-[#18F07A]/25 backdrop-blur-sm shadow-sm">
- <div className="flex items-center gap-2">
- <CheckCircle2 className="h-5 w-5" />
- <span className="font-semibold text-sm">Connected to Google Drive</span>
- </div>
- <button 
- onClick={() => {
- setDriveToken(null);
- sessionStorage.removeItem('driveToken');
- sessionStorage.removeItem('driveTokenExpiry');
- }}
- className="text-sm font-semibold underline text-slate-500 hover:text-slate-800 transition-colors"
- >
- Disconnect
- </button>
- </div>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[#18F07A]/10 text-[#14C161] px-4 py-3 rounded-lg border border-[#18F07A]/25 backdrop-blur-sm shadow-sm">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 shrink-0" />
+              <span className="font-semibold text-sm">
+                Connected to Google Drive {connectedEmail ? `(${connectedEmail})` : ''}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleConnectDrive}
+                disabled={isConnecting}
+                className="text-xs font-semibold text-slate-700 bg-white/80 hover:bg-white border border-slate-200 px-2.5 py-1 rounded-md transition shadow-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                title="Refresh token or select another folder"
+              >
+                <RefreshCw className={`h-3 w-3 ${isConnecting ? 'animate-spin' : ''}`} />
+                <span>Re-Sync Token</span>
+              </button>
+              <button 
+                type="button"
+                onClick={handleDisconnectDrive}
+                className="text-xs font-semibold underline text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
 
  {isFetchingFolders ? (
  <div className="flex items-center gap-3 text-sm text-slate-500 py-4">
@@ -424,7 +471,7 @@ export function Creatives() {
  (e.target as HTMLImageElement).src = 'https://placehold.co/400x400/f3f4f6/9ca3af?text=Image+Load+Error';
  }}
  />
- <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-[2px]">
+ <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                     <button
                       onClick={() => setPreviewCreative(creative)}
                       className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
@@ -460,7 +507,7 @@ export function Creatives() {
 
  {/* Delete Confirmation Modal */}
  {creativeToDelete && createPortal(
- <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+ <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85">
  <div className="bg-[#1C1C22] rounded-[18px] shadow-xl max-w-md w-full p-6">
  <h3 className="text-lg font-bold text-white mb-2">Delete Creative</h3>
  <p className="text-gray-300 mb-6">
@@ -491,7 +538,7 @@ export function Creatives() {
       {/* Full-screen Image Preview Overlay */}
       {previewCreative && createPortal(
         <div 
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4"
           onClick={() => setPreviewCreative(null)}
         >
           <button 

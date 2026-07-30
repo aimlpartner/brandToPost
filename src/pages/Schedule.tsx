@@ -277,167 +277,40 @@ export function Schedule() {
         </div>
       </div>
 
-      {/* Full Blur Overlay Banner Container */}
-      <div className="relative w-full max-w-7xl mx-auto rounded-3xl overflow-hidden border border-slate-200 shadow-2xl bg-white min-h-[600px]">
-        
-        {/* Full-Coverage Frosted Glass Blur Overlay */}
-        <div className="absolute inset-0 z-50 backdrop-blur-xl bg-slate-950/65 flex flex-col items-center justify-start pt-16 md:pt-24 pb-16 px-8 text-center space-y-5">
-          {/* Subtle Caution Bar Top */}
-          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
+      {/* Secure Construction Banner Container */}
+      <div className="relative w-full max-w-7xl mx-auto rounded-3xl overflow-hidden border border-slate-200 shadow-2xl bg-slate-950 min-h-[500px] flex flex-col items-center justify-center p-8 md:p-16 text-center space-y-6">
+        {/* Subtle Caution Bar Top */}
+        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
 
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-3xl shadow-xl shadow-amber-500/10">
-            🚧
-          </div>
-
-          <div className="space-y-3 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-sans font-semibold tracking-wider uppercase backdrop-blur-md">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <span>🚧 Active Engineering & Construction Zone</span>
-            </div>
-
-            <h2 className="text-3xl sm:text-5xl font-light font-display text-white tracking-tight leading-tight" style={{ color: '#FFFFFF' }}>
-              Autopilot Schedule Is Locked For <br />
-              <span className="font-normal italic text-amber-400">System Calibration.</span>
-            </h2>
-
-            <p className="text-sm font-light text-slate-200 leading-relaxed max-w-md mx-auto">
-              Maya (Autopilot Manager) and the automated posting queue are sealed under maintenance and system upgrades. Direct publishing features are currently paused.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4 pt-2">
-            <Link 
-              to="/dashboard" 
-              className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
-            >
-              <span>Return to Dashboard</span>
-            </Link>
-          </div>
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-3xl shadow-xl shadow-amber-500/10">
+          🚧
         </div>
 
-        {/* Blurred Content Behind */}
-        <div className="p-8 opacity-30 pointer-events-none filter blur-md">
-
- <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
- {/* Settings Panel */}
- <div className="md:col-span-1 space-y-6">
- <div className="glass-panel p-6 shadow-sm border border-slate-200 relative z-30">
- <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
- <Clock className="h-5 w-5 text-slate-400" />
- Daily Schedule
- </h3>
- 
- <div className="space-y-6">
-  <div>
-  <label className="block text-sm font-semibold text-slate-700 mb-2">Posting Time (Local)</label>
-  <div className="flex items-center gap-3">
-  <CustomTimePicker
-  value={localTime}
-  onChange={handleSaveTime}
-  className="tour-posting-time-input"
-  />
-  {isSaving && <CheckCircle2 className="h-5 w-5 text-[#7C3AED] animate-pulse flex-shrink-0" />}
-  </div>
-  </div>
-
- <div className="pt-4 border-t border-slate-200">
- <div className="flex items-center justify-between">
- <div>
- <p className="text-sm font-semibold text-slate-800">Automation Status</p>
- <p className="text-xs text-slate-500 mt-0.5">{config.enabled ? 'Active' : 'Paused'}</p>
- </div>
- <button
- onClick={handleToggle}
- className={cn(
- "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#7C3AED] focus:ring-offset-2",
- config.enabled ? "bg-[#7C3AED]" : "bg-slate-200"
- )}
- >
- <span
- className={cn(
- "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out border border-slate-200",
- config.enabled ? "translate-x-5" : "translate-x-0"
- )}
- />
- </button>
- </div>
- </div>
- </div>
- </div>
-
-
- <div className="glass-card p-6 bg-white border border-slate-200 shadow-sm rounded-xl relative z-10">
- <h4 className="text-sm font-semibold text-slate-800 mb-2">How it works</h4>
- <ul className="text-xs text-slate-500 space-y-2 list-disc pl-4 leading-relaxed font-light">
- <li>Add posts to the queue from the Campaigns page.</li>
- <li>The system will publish the top post in the queue every day at your selected time.</li>
- <li>Make sure your LinkedIn account is connected in Settings.</li>
- <li>Pause automation at any time to stop publishing.</li>
- </ul>
- </div>
- </div>
-
-  {/* Queue Panel */}
-  <div className="md:col-span-3 space-y-6">
-    <div className="glass-panel overflow-hidden flex flex-col min-h-[585px] border border-slate-200 shadow-sm">
-      <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2 font-display">
-          <CalendarClock className="h-5 w-5 text-[#7C3AED]" />
-          Post Queue
-        </h3>
-        <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-600 ">
-          {queue.length} items
-        </span>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-6 bg-white/45">
-        {queue.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center">
-            <div className="h-12 w-12 rounded-full bg-slate-50 border border-slate-200/60 flex items-center justify-center mb-4">
-              <CalendarClock className="h-6 w-6 text-slate-400" />
-            </div>
-            <h3 className="text-sm font-semibold text-slate-800 font-display">Queue is empty</h3>
-            <p className="mt-1 text-sm text-slate-500 max-w-xs font-light">
-              Go to the Campaigns page to add generated posts to your schedule.
-            </p>
+        <div className="space-y-3 max-w-xl">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-sans font-semibold tracking-wider uppercase">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>🚧 Active Engineering & Construction Zone</span>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {queue.map((item, index) => (
-              <div key={item.id} className="relative glass-card p-5 bg-white border border-slate-200/80 hover:border-[#7C3AED]/35 transition-colors shadow-sm rounded-xl">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-600">
-                      {index + 1}
-                    </span>
-                    <span className="inline-flex items-center rounded-md bg-[#1C1C22]/50 border-[#7C3AED]/20 px-2 py-1 text-xs font-medium text-gray-300 ring-1 ring-inset ring-white/50 ">
-                      {item.platform}
-                    </span>
-                    {item.day && (
-                      <span className="inline-flex items-center rounded-md bg-[#1C1C22]/50 border-[#7C3AED]/20 px-2 py-1 text-xs font-medium text-gray-300 ring-1 ring-inset ring-white/50 ">
-                        {item.day} {item.date && `(${new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleRemove(item.id)}
-                    className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
-                    title="Remove from queue"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                <p className="text-sm text-slate-600 whitespace-pre-wrap line-clamp-4 leading-relaxed font-light">{formatCopy(item.text)}</p>
-              </div>
-            ))}
-          </div>
-        )}
+
+          <h2 className="text-3xl sm:text-5xl font-light font-display text-white tracking-tight leading-tight" style={{ color: '#FFFFFF' }}>
+            Autopilot Schedule Is Locked For <br />
+            <span className="font-normal italic text-amber-400">System Calibration.</span>
+          </h2>
+
+          <p className="text-sm font-light text-slate-200 leading-relaxed max-w-md mx-auto">
+            Maya (Autopilot Manager) and the automated posting queue are sealed under maintenance and system upgrades. Direct publishing features are currently paused.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-4 pt-2">
+          <Link 
+            to="/dashboard" 
+            className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <span>Return to Dashboard</span>
+          </Link>
+        </div>
       </div>
     </div>
-  </div>
-</div>
-</div>
-</div>
-</div>
-);
+  );
 }

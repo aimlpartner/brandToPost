@@ -43,15 +43,15 @@ export function CustomTimePicker({ value, onChange, disabled = false, className 
   const minutesList = Array.from({ length: 60 }, (_, i) => i);
 
   return (
-    <div className={cn("inline-flex items-center gap-1.5 bg-white border border-slate-200/90 shadow-sm rounded-xl p-1", className)}>
-      <Clock className="h-3.5 w-3.5 text-violet-600 ml-1.5 shrink-0" />
+    <div className={cn("inline-flex items-center gap-1 bg-white border border-slate-200/90 shadow-2xs rounded-xl p-1 shrink-0", className)}>
+      <Clock className="h-3.5 w-3.5 text-violet-600 ml-1 shrink-0" />
       
       {/* Hour Select */}
       <select
         disabled={disabled}
         value={hour12}
         onChange={(e) => saveTime(parseInt(e.target.value, 10), minute, period)}
-        className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none cursor-pointer transition-colors disabled:opacity-50"
+        className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md px-1.5 py-0.5 text-xs font-bold text-slate-800 outline-none cursor-pointer transition-colors disabled:opacity-50"
       >
         {hoursList.map((h) => (
           <option key={h} value={h}>
@@ -67,7 +67,7 @@ export function CustomTimePicker({ value, onChange, disabled = false, className 
         disabled={disabled}
         value={minute}
         onChange={(e) => saveTime(hour12, parseInt(e.target.value, 10), period)}
-        className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none cursor-pointer transition-colors disabled:opacity-50"
+        className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md px-1.5 py-0.5 text-xs font-bold text-slate-800 outline-none cursor-pointer transition-colors disabled:opacity-50"
       >
         {minutesList.map((m) => (
           <option key={m} value={m}>
@@ -77,14 +77,14 @@ export function CustomTimePicker({ value, onChange, disabled = false, className 
       </select>
 
       {/* AM / PM Toggle Pills */}
-      <div className="flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200 ml-0.5">
+      <div className="flex items-center rounded-md bg-slate-100 p-0.5 border border-slate-200 shrink-0">
         <button
           type="button"
           disabled={disabled}
           onClick={() => saveTime(hour12, minute, "AM")}
           className={cn(
-            "px-2 py-0.5 text-[10px] font-extrabold rounded-md transition-all cursor-pointer",
-            period === "AM" ? "bg-violet-600 text-white shadow-xs" : "text-slate-500 hover:text-slate-800"
+            "px-1.5 py-0.5 text-[9px] font-extrabold rounded transition-all cursor-pointer",
+            period === "AM" ? "bg-violet-600 text-white shadow-2xs" : "text-slate-500 hover:text-slate-800"
           )}
         >
           AM
@@ -94,8 +94,8 @@ export function CustomTimePicker({ value, onChange, disabled = false, className 
           disabled={disabled}
           onClick={() => saveTime(hour12, minute, "PM")}
           className={cn(
-            "px-2 py-0.5 text-[10px] font-extrabold rounded-md transition-all cursor-pointer",
-            period === "PM" ? "bg-violet-600 text-white shadow-xs" : "text-slate-500 hover:text-slate-800"
+            "px-1.5 py-0.5 text-[9px] font-extrabold rounded transition-all cursor-pointer",
+            period === "PM" ? "bg-violet-600 text-white shadow-2xs" : "text-slate-500 hover:text-slate-800"
           )}
         >
           PM

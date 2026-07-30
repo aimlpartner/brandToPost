@@ -102,7 +102,7 @@ requiredEnvVars.forEach(v => {
 function safeParseServiceAccount(raw: string | undefined): any {
   console.log('[Firebase Init Debug] safeParseServiceAccount start. raw exists:', !!raw, 'length:', raw ? raw.length : 0);
   if (!raw) return null;
-  
+
   console.log('[Firebase Init Debug] Raw string sample (first 100 chars):', JSON.stringify(raw.slice(0, 100)));
   console.log('[Firebase Init Debug] Raw string sample (last 100 chars):', JSON.stringify(raw.slice(-100)));
 
@@ -233,33 +233,398 @@ async function logBackendTokenUsage(userId: string | undefined, operationType: s
 }
 
 async function saveImageLocalAndDb(imageId: string, base64Data: string, mimeType: string, prompt: string) {
-  let dbSuccess = false;
-  if (db) {
+  // 1. Save to local filesystem first (fast & reliable for local dev / serving)
+  let localSaved = false;
+  try {
+    const dirPath = path.join(process.cwd(), 'public', 'campaign_images');
+    const legacyDirPath = path.join(process.cwd(), 'public', 'whatsapp_images');
+    await fs.mkdir(dirPath, { recursive: true });
+    await fs.mkdir(legacyDirPath, { recursive: true });
+    const imgBuf = Buffer.from(base64Data, 'base64');
+    await fs.writeFile(path.join(dirPath, `${imageId}.png`), imgBuf);
+    await fs.writeFile(path.join(legacyDirPath, `${imageId}.png`), imgBuf);
+    localSaved = true;
+    console.log(`[saveImageLocalAndDb] Image ${imageId} successfully saved to local disk: public/campaign_images/${imageId}.png`);
+  } catch (fsErr: any) {
+    console.error(`[saveImageLocalAndDb] Local filesystem save failed for ${imageId}:`, fsErr);
+  }
+
+  // 2. Upload to Firebase Cloud Storage (bucket)
+  let storageUrl = '';
+  const tryUploadBucket = async (bucketName: string) => {
+    const bucket = admin.storage().bucket(bucketName);
+    const imgBuf = Buffer.from(base64Data, 'base64');
+    const file = bucket.file(`campaign_images/${imageId}.png`);
+    await file.save(imgBuf, {
+      metadata: {
+        contentType: mimeType || 'image/png'
+      }
+    });
     try {
-      await db.collection('whatsapp_images').doc(imageId).set({
-        base64Data,
-        mimeType,
-        prompt: prompt || "",
-        createdAt: new Date().toISOString()
-      });
-      dbSuccess = true;
-      console.log(`[saveImageLocalAndDb] Image ${imageId} successfully saved to Firestore.`);
-    } catch (dbErr: any) {
-      console.warn(`[saveImageLocalAndDb] Firestore save failed for ${imageId} (likely size limit): ${dbErr.message}`);
+      await file.makePublic();
+    } catch (e) {
+      // Ignore makePublic errors if bucket has uniform access
+    }
+    return `https://storage.googleapis.com/${bucketName}/campaign_images/${imageId}.png`;
+  };
+
+  try {
+    storageUrl = await tryUploadBucket('map-api-459818.appspot.com');
+    console.log(`[saveImageLocalAndDb] Image ${imageId} uploaded to Cloud Storage: ${storageUrl}`);
+  } catch (err1: any) {
+    try {
+      storageUrl = await tryUploadBucket('map-api-459818.firebasestorage.app');
+      console.log(`[saveImageLocalAndDb] Image ${imageId} uploaded to Cloud Storage: ${storageUrl}`);
+    } catch (err2: any) {
+      const msg = err2?.message || String(err2);
+      if (msg.includes('bucket does not exist') || msg.includes('404')) {
+        console.log(`[saveImageLocalAndDb] Cloud Storage bucket not provisioned on GCP. Relying on local disk + Firestore URL metadata.`);
+      } else {
+        console.warn(`[saveImageLocalAndDb] Cloud Storage upload note for ${imageId}: ${msg}`);
+      }
     }
   }
 
-  try {
-    const dirPath = path.join(process.cwd(), 'public', 'whatsapp_images');
-    await fs.mkdir(dirPath, { recursive: true });
-    await fs.writeFile(path.join(dirPath, `${imageId}.png`), Buffer.from(base64Data, 'base64'));
-    console.log(`[saveImageLocalAndDb] Image ${imageId} successfully saved to local disk: public/whatsapp_images/${imageId}.png`);
-  } catch (fsErr: any) {
-    console.error(`[saveImageLocalAndDb] Local filesystem save failed for ${imageId}:`, fsErr);
-    if (!dbSuccess) {
-      throw new Error(`Failed to save image ${imageId} to both Firestore and local disk: ${fsErr.message}`);
+  // 3. Save only short URL / metadata inside Firestore (NEVER save raw 1.5MB+ base64Data in Firestore)
+  if (db) {
+    try {
+      const docPayload = {
+        imageId,
+        url: `/api/campaign/images/${imageId}.png`,
+        storageUrl: storageUrl || null,
+        storagePath: `campaign_images/${imageId}.png`,
+        mimeType: mimeType || 'image/png',
+        prompt: prompt || "",
+        createdAt: new Date().toISOString()
+      };
+      await db.collection('campaign_images').doc(imageId).set(docPayload);
+      await db.collection('whatsapp_images').doc(imageId).set(docPayload);
+      console.log(`[saveImageLocalAndDb] Image metadata URL for ${imageId} successfully saved to Firestore.`);
+    } catch (dbErr: any) {
+      console.warn(`[saveImageLocalAndDb] Firestore save failed for ${imageId}: ${dbErr.message}`);
     }
   }
+
+  if (!localSaved && !storageUrl) {
+    throw new Error(`Failed to save image ${imageId} to both local disk and Cloud Storage.`);
+  }
+}
+
+async function stampBrandLogoOnImage(base64Data: string, logoUrl?: string, position: string = 'top-left'): Promise<string> {
+  if (!logoUrl || typeof logoUrl !== 'string' || !logoUrl.trim()) {
+    return base64Data;
+  }
+
+  try {
+    const { Canvas, loadImage } = await import('skia-canvas');
+    const mainImgBuffer = Buffer.from(base64Data, 'base64');
+    const mainImg = await loadImage(mainImgBuffer);
+
+    let logoBuffer: Buffer | null = null;
+    const cleanLogoUrl = logoUrl.trim();
+
+    if (cleanLogoUrl.startsWith('data:image/')) {
+      const parts = cleanLogoUrl.split(',');
+      if (parts[1]) {
+        logoBuffer = Buffer.from(parts[1], 'base64');
+      }
+    } else if (cleanLogoUrl.startsWith('http://') || cleanLogoUrl.startsWith('https://')) {
+      try {
+        const resp = await fetch(cleanLogoUrl);
+        if (resp.ok) {
+          const arrayBuf = await resp.arrayBuffer();
+          logoBuffer = Buffer.from(arrayBuf);
+        }
+      } catch (fetchErr) {
+        console.warn('[stampBrandLogoOnImage] HTTP fetch error for logo:', fetchErr);
+      }
+    } else {
+      let relativePath = cleanLogoUrl.replace(/^\//, '');
+      if (relativePath.startsWith('api/whatsapp/images/')) {
+        relativePath = relativePath.replace(/^api\//, '');
+      }
+
+      const candidatePaths = [
+        path.join(process.cwd(), 'public', relativePath),
+        path.join(process.cwd(), relativePath),
+        path.join(process.cwd(), 'public', 'whatsapp_images', path.basename(relativePath))
+      ];
+
+      for (const candidate of candidatePaths) {
+        try {
+          logoBuffer = await fs.readFile(candidate);
+          if (logoBuffer && logoBuffer.length > 0) break;
+        } catch (_) {}
+      }
+
+      if ((!logoBuffer || logoBuffer.length === 0) && db) {
+        const match = relativePath.match(/(img_[a-zA-Z0-9]+)/);
+        if (match && match[1]) {
+          try {
+            const docSnap = await db.collection('whatsapp_images').doc(match[1]).get();
+            if (docSnap.exists) {
+              const b64 = docSnap.data()?.base64Data;
+              if (b64) logoBuffer = Buffer.from(b64, 'base64');
+            }
+          } catch (dbErr) {
+            console.warn('[stampBrandLogoOnImage] Firestore logo fetch error:', dbErr);
+          }
+        }
+      }
+    }
+
+    if (!logoBuffer || logoBuffer.length === 0) {
+      return base64Data;
+    }
+
+    const logoImg = await loadImage(logoBuffer);
+
+    const width = mainImg.width || 1080;
+    const height = mainImg.height || 1080;
+    const canvas = new Canvas(width, height);
+    const ctx = canvas.getContext('2d');
+
+    ctx.drawImage(mainImg, 0, 0, width, height);
+
+    const maxLogoSize = Math.round(width * 0.16);
+    let logoW = logoImg.width || 100;
+    let logoH = logoImg.height || 100;
+
+    const scale = Math.min(maxLogoSize / logoW, maxLogoSize / logoH);
+    logoW = Math.max(1, Math.round(logoW * scale));
+    logoH = Math.max(1, Math.round(logoH * scale));
+
+    const margin = Math.round(width * 0.04);
+    let logoX = margin;
+    let logoY = margin;
+
+    const pos = (position || 'top-left').toLowerCase().trim();
+    if (pos === 'top-right') {
+      logoX = width - logoW - margin;
+      logoY = margin;
+    } else if (pos === 'bottom-left') {
+      logoX = margin;
+      logoY = height - logoH - margin;
+    } else if (pos === 'bottom-right') {
+      logoX = width - logoW - margin;
+      logoY = height - logoH - margin;
+    } else {
+      // Default top-left
+      logoX = margin;
+      logoY = margin;
+    }
+
+    ctx.drawImage(logoImg, logoX, logoY, logoW, logoH);
+
+    const stampedBuffer = await canvas.toBuffer('png');
+    return stampedBuffer.toString('base64');
+  } catch (err: any) {
+    console.warn('[stampBrandLogoOnImage] Could not stamp logo onto image:', err.message || err);
+    return base64Data;
+  }
+}
+
+function translateBrandDNA(brandColors?: string[], fontStyle?: string): { colorDescriptor: string; typographyDescriptor: string } {
+  const colors = (brandColors && Array.isArray(brandColors) && brandColors.length > 0)
+    ? brandColors
+    : ['#08080C', '#FAF9F6', '#3B82F6'];
+
+  const colorDescriptions = colors.map((c) => {
+    const colorStr = String(c).trim().toLowerCase();
+    if (colorStr.includes('08080c') || colorStr.includes('black') || colorStr.includes('000') || colorStr.includes('121212')) {
+      return `sleek obsidian black (${c}) with deep charcoal matte shadows and cinematic contrast`;
+    }
+    if (colorStr.includes('faf9f6') || colorStr.includes('white') || colorStr.includes('fff') || colorStr.includes('cream')) {
+      return `warm architectural off-white (${c}) with clean ceramic highlights`;
+    }
+    if (colorStr.includes('3b82f6') || colorStr.includes('blue') || colorStr.includes('2563eb') || colorStr.includes('60a5fa')) {
+      return `vibrant electric sapphire blue (${c}) with subtle neon azure rim lighting`;
+    }
+    if (colorStr.includes('violet') || colorStr.includes('purple') || colorStr.includes('8b5cf6') || colorStr.includes('7c3aed')) {
+      return `luminous ultraviolet (${c}) with gradient silk reflections`;
+    }
+    if (colorStr.includes('green') || colorStr.includes('10b981') || colorStr.includes('emerald') || colorStr.includes('teal')) {
+      return `crisp emerald green (${c}) with bioluminescent accents`;
+    }
+    if (colorStr.includes('red') || colorStr.includes('orange') || colorStr.includes('amber') || colorStr.includes('coral')) {
+      return `warm energetic coral-amber (${c}) with vivid golden radiance`;
+    }
+    return `curated brand accent color ${c} integrated with sleek editorial lighting harmony`;
+  });
+
+  const colorDescriptor = colorDescriptions.join(' paired with ');
+
+  const font = (fontStyle || 'Inter Tight, bold modern sans-serif').trim().toLowerCase();
+  let typographyDescriptor = `crisp architectural geometric sans-serif typography with high editorial contrast, razor-sharp letterforms, and executive spacing`;
+  if (font.includes('serif') && !font.includes('sans')) {
+    typographyDescriptor = `timeless luxury editorial serif typography with refined ligatures and sophisticated kerning`;
+  } else if (font.includes('mono')) {
+    typographyDescriptor = `sleek engineering monospace typography with precision-crafted tech aesthetics`;
+  } else if (fontStyle) {
+    typographyDescriptor = `executive editorial typography styled after ${fontStyle} with razor-sharp legibility and museum-grade typographic hierarchy`;
+  }
+
+  return { colorDescriptor, typographyDescriptor };
+}
+
+async function generateSingleCampaignImageBackend(
+  item: any,
+  logoUrl?: string
+): Promise<string> {
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  const openaiModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+  const openaiQuality = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+
+  const promptText = typeof item === 'string' ? item : item?.prompt || `High quality editorial photographic visual`;
+  const headline = typeof item === 'object' ? item.headline : undefined;
+  const subtext = typeof item === 'object' ? item.subtext : undefined;
+  const brandColors = typeof item === 'object' && Array.isArray(item.brandColors) ? item.brandColors : undefined;
+  const fontStyle = typeof item === 'object' ? item.fontStyle : undefined;
+  const brandAssetUrl = typeof item === 'object' ? item.brandAssetUrl : undefined;
+  const logoPosition = (typeof item === 'object' && item.logoPosition) ? item.logoPosition : 'top-left';
+
+  let base64Data: string | null = null;
+  let mimeType = 'image/png';
+
+  // 1. Try OpenAI Image API if OPENAI_API_KEY is available
+  if (openaiApiKey) {
+    try {
+      const { colorDescriptor, typographyDescriptor } = translateBrandDNA(brandColors, fontStyle);
+      let formattedPrompt = `1:1 ratio square editorial visual post.\n`;
+      if (headline) formattedPrompt += `HEADLINE TEXT TO DISPLAY: "${headline}"\n`;
+      if (subtext) formattedPrompt += `SUBTEXT/BODY COPY: "${subtext}"\n`;
+      formattedPrompt += `VIVID BRAND COLOR & LIGHTING HARMONY: ${colorDescriptor}\n`;
+      formattedPrompt += `VISUAL TYPOGRAPHY DESIGN: ${typographyDescriptor}\n`;
+
+      const pos = logoPosition.toLowerCase().trim();
+      let spatialRule = `LAYOUT CONSTRAINT: Keep top-left corner (top 20% height, left 30% width) completely empty and free of headlines, body text, or graphic overlays for brand logo placement.\n`;
+      if (pos === 'top-right') {
+        spatialRule = `LAYOUT CONSTRAINT: Keep top-right corner (top 20% height, right 30% width) completely empty and free of headlines, body text, or graphic overlays for brand logo placement.\n`;
+      } else if (pos === 'bottom-left') {
+        spatialRule = `LAYOUT CONSTRAINT: Keep bottom-left corner (bottom 20% height, left 30% width) completely empty and free of headlines, body text, or graphic overlays for brand logo placement.\n`;
+      } else if (pos === 'bottom-right') {
+        spatialRule = `LAYOUT CONSTRAINT: Keep bottom-right corner (bottom 20% height, right 30% width) completely empty and free of headlines, body text, or graphic overlays for brand logo placement.\n`;
+      }
+      formattedPrompt += spatialRule;
+      formattedPrompt += `INSTRUCTIONS: Render crisp, perfectly legible headline & subtext with high-end modern B2B editorial typography. Place text cleanly outside the reserved logo area. Use executive visual aesthetics. No extraneous text.`;
+
+      if (brandAssetUrl && (brandAssetUrl.startsWith('http://') || brandAssetUrl.startsWith('https://') || brandAssetUrl.startsWith('data:image/'))) {
+        try {
+          let assetBuf: Buffer;
+          if (brandAssetUrl.startsWith('data:image/')) {
+            assetBuf = Buffer.from(brandAssetUrl.split(',')[1], 'base64');
+          } else {
+            const fetchAsset = await fetch(brandAssetUrl);
+            assetBuf = Buffer.from(await fetchAsset.arrayBuffer());
+          }
+
+          const formData = new FormData();
+          const blob = new Blob([assetBuf], { type: 'image/png' });
+          formData.append('image', blob, 'source.png');
+          formData.append('prompt', formattedPrompt);
+          formData.append('model', openaiModel);
+          if (openaiModel.startsWith('gpt-image')) {
+            formData.append('quality', openaiQuality);
+          } else {
+            formData.append('response_format', 'b64_json');
+          }
+          formData.append('n', '1');
+          formData.append('size', '1024x1024');
+
+          const editRes = await fetch('https://api.openai.com/v1/images/edits', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${openaiApiKey}`
+            },
+            body: formData
+          });
+
+          if (editRes.ok) {
+            const editData = await editRes.json();
+            if (editData?.data?.[0]?.b64_json) {
+              base64Data = editData.data[0].b64_json;
+            } else if (editData?.data?.[0]?.url) {
+              const imgFetch = await fetch(editData.data[0].url);
+              const buf = await imgFetch.arrayBuffer();
+              base64Data = Buffer.from(buf).toString('base64');
+            }
+          } else {
+            const errTxt = await editRes.text();
+            console.error(`[generateSingleCampaignImageBackend] OpenAI Edit API failed HTTP ${editRes.status}:`, errTxt);
+          }
+        } catch (editErr) {
+          console.error('[generateSingleCampaignImageBackend] OpenAI Edit exception:', editErr);
+        }
+      }
+
+      if (!base64Data) {
+        const genRes = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: openaiModel,
+            prompt: formattedPrompt,
+            n: 1,
+            size: '1024x1024',
+            ...(openaiModel.startsWith('gpt-image') ? { quality: openaiQuality } : { response_format: 'b64_json' })
+          })
+        });
+
+        if (genRes.ok) {
+          const genData = await genRes.json();
+          if (genData?.data?.[0]?.b64_json) {
+            base64Data = genData.data[0].b64_json;
+          } else if (genData?.data?.[0]?.url) {
+            const imgFetch = await fetch(genData.data[0].url);
+            const buf = await imgFetch.arrayBuffer();
+            base64Data = Buffer.from(buf).toString('base64');
+          }
+        } else {
+          const errTxt = await genRes.text();
+          console.error(`[generateSingleCampaignImageBackend] OpenAI Generations failed HTTP ${genRes.status}:`, errTxt);
+        }
+      }
+    } catch (oaiErr) {
+      console.warn('[generateSingleCampaignImageBackend] OpenAI generation error:', oaiErr);
+    }
+  }
+
+  // 2. Fallback to Gemini Imagen if OpenAI was not configured or failed
+  if (!base64Data && geminiApiKey) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const fallbackPrompt = `${headline ? `Text headline: ${headline}. ` : ''}${promptText}`;
+      const imgRes = await ai.models.generateImages({
+        model: 'imagen-3.0-generate-001',
+        prompt: fallbackPrompt,
+        config: {
+          numberOfImages: 1,
+          aspectRatio: "1:1",
+          outputMimeType: "image/png"
+        }
+      });
+
+      if (imgRes?.generatedImages?.[0]?.image?.imageBytes) {
+        base64Data = imgRes.generatedImages[0].image.imageBytes;
+      }
+    } catch (gErr) {
+      console.warn('[generateSingleCampaignImageBackend] Gemini Imagen fallback error:', gErr);
+    }
+  }
+
+  // 3. Stamp Brand Logo on image if base64Data was generated
+  if (base64Data) {
+    const stampedBase64 = await stampBrandLogoOnImage(base64Data, logoUrl, logoPosition);
+    const imageId = 'img_camp_' + Math.random().toString(36).substring(2, 10);
+    await saveImageLocalAndDb(imageId, stampedBase64, mimeType, promptText);
+    return `/api/campaign/images/${imageId}.png`;
+  }
+
+  return `https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80`;
 }
 
 const campaignSchema = {
@@ -565,13 +930,60 @@ Return the result in a JSON object with the following fields:
   const nextMonday = getMonday(new Date(), 1);
   const selectedStartDate = formatDate(nextMonday);
 
-  if (campaignData.dailyPosts) {
-    campaignData.dailyPosts = campaignData.dailyPosts.map((dp: any) => {
+  const brandLogoUrl = product.logoUrl || product.logoDarkUrl || product.logoLightUrl || undefined;
+  const brandColors = product.visualData?.colors || ['#08080C', '#FAF9F6', '#3B82F6'];
+  const fontStyle = product.visualData?.fonts?.primary || 'Inter Tight, bold modern sans-serif';
+
+  // Check if user required using Brand Assets for automated campaigns
+  const brandAssetUrls: string[] = [];
+  if (product.useBrandAssets === true) {
+    const creativesSnap = await db.collection('creatives')
+      .where('productId', '==', productId)
+      .get();
+    if (!creativesSnap.empty) {
+      creativesSnap.forEach(docSnap => {
+        const cData = docSnap.data();
+        if (cData.url) brandAssetUrls.push(cData.url);
+      });
+    }
+    if (brandAssetUrls.length === 0) {
+      console.warn('[executeAutoCampaignGeneration] Brand assets requested but 0 uploaded creatives found. Falling back to AI image generation.');
+    }
+  }
+
+  if (campaignData.dailyPosts && Array.isArray(campaignData.dailyPosts)) {
+    for (let i = 0; i < campaignData.dailyPosts.length; i++) {
+      const dp = campaignData.dailyPosts[i];
       const offset = dayOffsets[dp.day] || 0;
       const postDate = new Date(selectedStartDate + "T12:00:00Z");
       postDate.setDate(postDate.getDate() + offset);
-      return { ...dp, date: formatDate(postDate) };
-    });
+      dp.date = formatDate(postDate);
+
+      // Generate visual using OpenAI GPT Image 2 Medium + Logo stamping (or Brand Asset Editing)
+      const chosenAsset = brandAssetUrls.length > 0 ? brandAssetUrls[i % brandAssetUrls.length] : undefined;
+      const headline = dp.visualData?.headline || dp.contentType || `${product.name} — ${dp.day}`;
+      const subtext = dp.visualData?.subtext || product.tagline || product.description || 'Automated B2B Growth Engine';
+      const promptText = dp.visualData?.cinematicPrompt || dp.imagePrompt || `High-end executive photographic visual for ${product.name}, topic: ${headline}, 1:1 ratio, clean aesthetic`;
+
+      console.log(`[executeAutoCampaignGeneration] Generating AI visual for day ${dp.day} (${i + 1}/${campaignData.dailyPosts.length})...`);
+      const generatedImageUrl = await generateSingleCampaignImageBackend({
+        prompt: promptText,
+        headline,
+        subtext,
+        brandColors,
+        fontStyle,
+        brandAssetUrl: chosenAsset,
+        logoPosition: dp.visualData?.logoPosition || 'top-left'
+      }, brandLogoUrl);
+
+      dp.imageUrl = generatedImageUrl;
+      if (dp.platformVersions && Array.isArray(dp.platformVersions)) {
+        dp.platformVersions = dp.platformVersions.map((pv: any) => ({
+          ...pv,
+          imageUrl: generatedImageUrl
+        }));
+      }
+    }
   }
 
   const newCampaign = {
@@ -851,50 +1263,70 @@ Return the result in a JSON object with the following fields:
     ? crypto.randomUUID()
     : Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-    const activePlatforms = (product.targetPlatforms && Array.isArray(product.targetPlatforms) && product.targetPlatforms.length > 0)
-      ? product.targetPlatforms.map((p: string) => p.toLowerCase())
-      : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit'];
+  const activePlatforms = (product.targetPlatforms && Array.isArray(product.targetPlatforms) && product.targetPlatforms.length > 0)
+    ? product.targetPlatforms.map((p: string) => p.toLowerCase())
+    : ['linkedin', 'instagram', 'twitter', 'facebook', 'reddit'];
 
-    // Query uploaded Brand Assets from Firestore if available
-    const creativesSnap = await db.collection('creatives')
-      .where('productId', '==', productId)
-      .get();
+  // Query uploaded Brand Assets from Firestore if available
+  const creativesSnap = await db.collection('creatives')
+    .where('productId', '==', productId)
+    .get();
 
-    const brandAssetUrls: string[] = [];
-    if (!creativesSnap.empty) {
-      creativesSnap.forEach(docSnap => {
-        const cData = docSnap.data();
-        if (cData.url) brandAssetUrls.push(cData.url);
+  const brandAssetUrls: string[] = [];
+  if (!creativesSnap.empty) {
+    creativesSnap.forEach(docSnap => {
+      const cData = docSnap.data();
+      if (cData.url) brandAssetUrls.push(cData.url);
+    });
+  }
+
+  const brandLogoUrl = product.logoUrl || product.logoDarkUrl || product.logoLightUrl || undefined;
+  const brandColors = product.visualData?.colors || ['#08080C', '#FAF9F6', '#3B82F6'];
+  const fontStyle = product.visualData?.fonts?.primary || 'Inter Tight, bold modern sans-serif';
+
+  if (campaignData.dailyPosts && Array.isArray(campaignData.dailyPosts)) {
+    const updatedDailyPosts: any[] = [];
+    for (let idx = 0; idx < campaignData.dailyPosts.length; idx++) {
+      const dp = campaignData.dailyPosts[idx];
+      let filteredVersions = dp.platformVersions || [];
+      if (activePlatforms.length > 0) {
+        filteredVersions = filteredVersions.filter((pv: any) => {
+          const plat = (pv.platform || '').toLowerCase();
+          return activePlatforms.includes(plat) || (plat === 'x' && activePlatforms.includes('twitter')) || (plat === 'twitter' && activePlatforms.includes('x'));
+        });
+      }
+
+      const chosenAsset = (product.useBrandAssets === true && brandAssetUrls.length > 0) ? brandAssetUrls[idx % brandAssetUrls.length] : undefined;
+      const headline = dp.visualData?.headline || dp.contentType || `${product.name} — ${currentDayName}`;
+      const subtext = dp.visualData?.subtext || product.tagline || product.description || 'Automated B2B Growth Engine';
+      const promptText = dp.visualData?.cinematicPrompt || dp.imagePrompt || `High-end executive photographic visual for ${product.name}, topic: ${headline}, 1:1 ratio, clean aesthetic`;
+
+      console.log(`[executeAutoDailyPostGeneration] Generating AI visual for post (${idx + 1}/${campaignData.dailyPosts.length})...`);
+      const generatedImageUrl = await generateSingleCampaignImageBackend({
+        prompt: promptText,
+        headline,
+        subtext,
+        brandColors,
+        fontStyle,
+        brandAssetUrl: chosenAsset,
+        logoPosition: dp.visualData?.logoPosition || 'top-left'
+      }, brandLogoUrl);
+
+      filteredVersions = filteredVersions.map((pv: any) => ({
+        ...pv,
+        imageUrl: generatedImageUrl
+      }));
+
+      updatedDailyPosts.push({
+        ...dp,
+        day: currentDayName,
+        date: currentDate,
+        imageUrl: generatedImageUrl,
+        platformVersions: filteredVersions
       });
     }
-
-    if (campaignData.dailyPosts) {
-      campaignData.dailyPosts = campaignData.dailyPosts.map((dp: any, idx: number) => {
-        let filteredVersions = dp.platformVersions || [];
-        if (activePlatforms.length > 0) {
-          filteredVersions = filteredVersions.filter((pv: any) => {
-            const plat = (pv.platform || '').toLowerCase();
-            return activePlatforms.includes(plat) || (plat === 'x' && activePlatforms.includes('twitter')) || (plat === 'twitter' && activePlatforms.includes('x'));
-          });
-        }
-
-        const chosenAsset = brandAssetUrls.length > 0 ? brandAssetUrls[idx % brandAssetUrls.length] : undefined;
-        if (chosenAsset) {
-          filteredVersions = filteredVersions.map((pv: any) => ({
-            ...pv,
-            imageUrl: chosenAsset
-          }));
-        }
-
-        return {
-          ...dp,
-          day: currentDayName,
-          date: currentDate,
-          imageUrl: chosenAsset || dp.imageUrl,
-          platformVersions: filteredVersions
-        };
-      });
-    }
+    campaignData.dailyPosts = updatedDailyPosts;
+  }
 
   const newCampaign = {
     ...campaignData,
@@ -1293,9 +1725,9 @@ Return the result in a JSON object with the following fields:
           if (pt.inlineData) {
             const base64Data = pt.inlineData.data;
             const mimeType = pt.inlineData.mimeType || 'image/png';
-            
+
             const imageId = 'img_blog_' + Math.random().toString(36).substring(2, 10);
-            
+
             await saveImageLocalAndDb(imageId, base64Data, mimeType, blogData.blogImagePrompt);
 
             // Use relative path so the frontend resolves it correctly against the active origin
@@ -1375,7 +1807,7 @@ Return the result in a JSON object with the following fields:
     isOneDay: true,
     isBlog: true,
     isAutomated: true,
-    
+
     // Blog fields
     blogTitle: founderInputs.blogTitle,
     blogContent: blogData.blogContent,
@@ -1441,12 +1873,12 @@ Return the result in a JSON object with the following fields:
 
 async function executeAutoDailyGeneration(productId: string, automatePosts: boolean, automateBlogs: boolean) {
   console.log(`[executeAutoDailyGeneration] Triggered for product ${productId}. Automate Posts: ${automatePosts}, Automate Blogs: ${automateBlogs}`);
-  
+
   if (automatePosts) {
     console.log(`[executeAutoDailyGeneration] Starting automated post generation...`);
     await executeAutoDailyPostGeneration(productId);
   }
-  
+
   if (automateBlogs) {
     console.log(`[executeAutoDailyGeneration] Starting automated blog generation...`);
     await executeAutoDailyBlogGeneration(productId);
@@ -1468,7 +1900,7 @@ async function performBackendSocialTrendResearch(ai: any, topic: string, userId:
     
     Synthesize your findings into a concise list of 3-5 platform formatting guidelines and trend insights. Include specific tips on layout (e.g. paragraph spacing, formatting, use of negative space) and content strategy.
   `;
-  
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-pro-preview",
@@ -1477,7 +1909,7 @@ async function performBackendSocialTrendResearch(ai: any, topic: string, userId:
         tools: [{ googleSearch: {} }]
       }
     });
-    
+
     await logBackendTokenUsage(userId, "founder_post_research", "gemini-3.1-pro-preview", response.usageMetadata);
     return response.text || "";
   } catch (err) {
@@ -1724,7 +2156,7 @@ Return a JSON object containing:
               const base64Data = pt.inlineData.data;
               const mimeType = pt.inlineData.mimeType || 'image/png';
               const imageId = 'img_founder_' + Math.random().toString(36).substring(2, 10);
-              
+
               await saveImageLocalAndDb(imageId, base64Data, mimeType, postData.imagePrompt);
               imageUrl = `/api/whatsapp/images/${imageId}.png`;
               break;
@@ -1805,7 +2237,7 @@ Return a JSON object containing:
     };
 
     console.log(`[executeAutoFounderPostGeneration] Routing founder post ${newPostId} to approval system (branded: ${!!productData}).`);
-    
+
     // Check user email for notification
     let userEmail = 'founder@brandtopost.com';
     try {
@@ -1813,10 +2245,10 @@ Return a JSON object containing:
       if (uDoc.exists && uDoc.data()?.email) {
         userEmail = uDoc.data()!.email;
       }
-    } catch(e) {
+    } catch (e) {
       console.warn("Could not fetch user email for founder post approval:", e);
     }
-    
+
     await createAndSendApprovalRequest({
       userId,
       productId: productData ? productData.id : userId, // use userId if no specific product
@@ -2034,7 +2466,7 @@ setInterval(async () => {
         const result = await db.runTransaction(async (transaction) => {
           const scheduleRef = db!.collection('server_schedules').doc(productId);
           const scheduleSnap = await transaction.get(scheduleRef);
-          
+
           if (scheduleSnap.exists) {
             const schedData = scheduleSnap.data();
             // Horizontal container double-posting prevent defense
@@ -2046,12 +2478,12 @@ setInterval(async () => {
 
           const queueColl = db!.collection(`server_queues/${productId}/posts`).orderBy('createdAt', 'asc').limit(1);
           const queueSnap = await transaction.get(queueColl);
-          
+
           if (queueSnap.empty) return null;
-          
+
           const targetPostDoc = queueSnap.docs[0];
           const postData = targetPostDoc.data();
-          
+
           if (postData.processing) {
             console.log(`[Scheduler Concurrent Lock] Queue post ${targetPostDoc.id} is already locked by another container process.`);
             return null;
@@ -2060,7 +2492,7 @@ setInterval(async () => {
           // Atomically reserve the schedule post execution slot and set lock
           transaction.update(scheduleRef, { lastPostedDate: currentDateUtc });
           transaction.update(targetPostDoc.ref, { processing: true });
-          
+
           return {
             post: { id: targetPostDoc.id, ...postData },
             postRef: targetPostDoc.ref
@@ -2189,13 +2621,13 @@ const processingUserFounderPostIds = new Set<string>();
 let lastEmailCheckHour = -1;
 setInterval(async () => {
   if (!db) return;
-  
+
   const now = new Date();
   const hours = now.getUTCHours().toString().padStart(2, '0');
   const minutes = now.getUTCMinutes().toString().padStart(2, '0');
   const currentTimeUtc = `${hours}:${minutes}`;
   const currentDateUtc = now.toISOString().split('T')[0];
-  
+
   const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const currentDayName = weekdays[now.getUTCDay()];
 
@@ -2225,53 +2657,108 @@ setInterval(async () => {
         // Only trigger within a 2-minute window around the scheduled time to prevent immediate runs when enabling the agent
         const shouldRunToday = nowMinutes === trigMinutes || nowMinutes === (trigMinutes + 1) % 1440;
 
-      if (!shouldRunToday) {
-        continue;
-      }
+        if (!shouldRunToday) {
+          continue;
+        }
 
-      // Weekly Campaign Automation
-      if (product.automateWeeklyCampaigns) {
-        const triggerDay = product.automationWeeklyDay || "Monday";
-        if (currentDayName === triggerDay) {
-          // Check last weekly run date to avoid double-running and excessive DB reads
-          let needsGeneration = product.lastWeeklyRunDate !== currentDateUtc;
-          if (needsGeneration) {
-            // Additional safety check against DB (in case of server restarts)
-            const campaignsSnap = await db.collection('campaigns')
-              .where('productId', '==', product.id)
-              .orderBy('createdAt', 'desc')
-              .limit(10)
-              .get();
+        // Weekly Campaign Automation
+        if (product.automateWeeklyCampaigns) {
+          const triggerDay = product.automationWeeklyDay || "Monday";
+          if (currentDayName === triggerDay) {
+            // Check last weekly run date to avoid double-running and excessive DB reads
+            let needsGeneration = product.lastWeeklyRunDate !== currentDateUtc;
+            if (needsGeneration) {
+              // Additional safety check against DB (in case of server restarts)
+              const campaignsSnap = await db.collection('campaigns')
+                .where('productId', '==', product.id)
+                .orderBy('createdAt', 'desc')
+                .limit(10)
+                .get();
 
-            const weeklyCampaigns = campaignsSnap.docs.filter(doc => !doc.data().isOneDay);
-            if (weeklyCampaigns.length > 0) {
-              const lastCampaign = weeklyCampaigns[0].data();
-              const lastCreatedDate = lastCampaign.createdAt.split('T')[0];
-              if (lastCreatedDate === currentDateUtc) {
-                needsGeneration = false;
-                // Sync the field to avoid hitting DB again today
+              const weeklyCampaigns = campaignsSnap.docs.filter(doc => !doc.data().isOneDay);
+              if (weeklyCampaigns.length > 0) {
+                const lastCampaign = weeklyCampaigns[0].data();
+                const lastCreatedDate = lastCampaign.createdAt.split('T')[0];
+                if (lastCreatedDate === currentDateUtc) {
+                  needsGeneration = false;
+                  // Sync the field to avoid hitting DB again today
+                  await db.collection('products').doc(product.id).update({
+                    lastWeeklyRunDate: currentDateUtc
+                  });
+                }
+              }
+            }
+
+            if (needsGeneration) {
+              // Pre-update lastWeeklyRunDate immediately to prevent race conditions
+              await db.collection('products').doc(product.id).update({
+                lastWeeklyRunDate: currentDateUtc
+              });
+
+              console.log(`[Automation Agent] Triggering campaign generation for product ${product.id} automatically...`);
+              try {
+                await executeAutoCampaignGeneration(product.id);
+              } catch (err: any) {
+                console.error(`[Automation Agent] Generation failed for product ${product.id}:`, err);
+                // Log failure
+                const newLog = {
+                  timestamp: new Date().toISOString(),
+                  type: 'weekly_campaign',
+                  theme: 'N/A',
+                  focus: 'N/A',
+                  status: `Error: ${err?.message || 'Unknown error'}`
+                };
+                const currentLogs = product.automationLogs || [];
+                currentLogs.unshift(newLog);
                 await db.collection('products').doc(product.id).update({
+                  automationLogs: currentLogs.slice(0, 10),
                   lastWeeklyRunDate: currentDateUtc
                 });
               }
             }
           }
+        }
 
-          if (needsGeneration) {
-            // Pre-update lastWeeklyRunDate immediately to prevent race conditions
+        // Daily Post & Blog Automation
+        if (product.automateDailyPosts || product.automateDailyBlogs) {
+          let needsDailyGeneration = product.lastDailyRunDate !== currentDateUtc;
+          if (needsDailyGeneration) {
+            // Additional safety check against DB
+            const dailySnap = await db.collection('campaigns')
+              .where('productId', '==', product.id)
+              .where('isOneDay', '==', true)
+              .orderBy('createdAt', 'desc')
+              .limit(1)
+              .get();
+
+            if (!dailySnap.empty) {
+              const lastDaily = dailySnap.docs[0].data();
+              const lastCreatedDate = lastDaily.createdAt.split('T')[0];
+              if (lastCreatedDate === currentDateUtc) {
+                needsDailyGeneration = false;
+                // Sync the field
+                await db.collection('products').doc(product.id).update({
+                  lastDailyRunDate: currentDateUtc
+                });
+              }
+            }
+          }
+
+          if (needsDailyGeneration) {
+            // Pre-update lastDailyRunDate immediately to prevent race conditions during long-lived HTTP generation calls
             await db.collection('products').doc(product.id).update({
-              lastWeeklyRunDate: currentDateUtc
+              lastDailyRunDate: currentDateUtc
             });
 
-            console.log(`[Automation Agent] Triggering campaign generation for product ${product.id} automatically...`);
+            console.log(`[Automation Agent] Triggering daily generation for product ${product.id} automatically...`);
             try {
-              await executeAutoCampaignGeneration(product.id);
+              await executeAutoDailyGeneration(product.id, !!product.automateDailyPosts, !!product.automateDailyBlogs);
             } catch (err: any) {
-              console.error(`[Automation Agent] Generation failed for product ${product.id}:`, err);
-              // Log failure
+              console.error(`[Automation Agent] Daily generation failed for product ${product.id}:`, err);
+              // Log failure in database
               const newLog = {
                 timestamp: new Date().toISOString(),
-                type: 'weekly_campaign',
+                type: 'daily_content',
                 theme: 'N/A',
                 focus: 'N/A',
                 status: `Error: ${err?.message || 'Unknown error'}`
@@ -2280,69 +2767,14 @@ setInterval(async () => {
               currentLogs.unshift(newLog);
               await db.collection('products').doc(product.id).update({
                 automationLogs: currentLogs.slice(0, 10),
-                lastWeeklyRunDate: currentDateUtc
-              });
-            }
-          }
-        }
-      }
-
-      // Daily Post & Blog Automation
-      if (product.automateDailyPosts || product.automateDailyBlogs) {
-        let needsDailyGeneration = product.lastDailyRunDate !== currentDateUtc;
-        if (needsDailyGeneration) {
-          // Additional safety check against DB
-          const dailySnap = await db.collection('campaigns')
-            .where('productId', '==', product.id)
-            .where('isOneDay', '==', true)
-            .orderBy('createdAt', 'desc')
-            .limit(1)
-            .get();
-
-          if (!dailySnap.empty) {
-            const lastDaily = dailySnap.docs[0].data();
-            const lastCreatedDate = lastDaily.createdAt.split('T')[0];
-            if (lastCreatedDate === currentDateUtc) {
-              needsDailyGeneration = false;
-              // Sync the field
-              await db.collection('products').doc(product.id).update({
                 lastDailyRunDate: currentDateUtc
               });
             }
           }
         }
-
-        if (needsDailyGeneration) {
-          // Pre-update lastDailyRunDate immediately to prevent race conditions during long-lived HTTP generation calls
-          await db.collection('products').doc(product.id).update({
-            lastDailyRunDate: currentDateUtc
-          });
-
-          console.log(`[Automation Agent] Triggering daily generation for product ${product.id} automatically...`);
-          try {
-            await executeAutoDailyGeneration(product.id, !!product.automateDailyPosts, !!product.automateDailyBlogs);
-          } catch (err: any) {
-            console.error(`[Automation Agent] Daily generation failed for product ${product.id}:`, err);
-            // Log failure in database
-            const newLog = {
-              timestamp: new Date().toISOString(),
-              type: 'daily_content',
-              theme: 'N/A',
-              focus: 'N/A',
-              status: `Error: ${err?.message || 'Unknown error'}`
-            };
-            const currentLogs = product.automationLogs || [];
-            currentLogs.unshift(newLog);
-            await db.collection('products').doc(product.id).update({
-              automationLogs: currentLogs.slice(0, 10),
-              lastDailyRunDate: currentDateUtc
-            });
-          }
-        }
+      } finally {
+        processingProductIds.delete(product.id);
       }
-    } finally {
-      processingProductIds.delete(product.id);
-    }
     }
 
     // 2. Process Automated Founder Profile posts
@@ -2608,7 +3040,7 @@ async function sendBrandedEmail(options: SendEmailOptions) {
     Subject: ${subject}
     Title: ${title}
     CTA: ${ctaText} -> ${ctaUrl}`);
-    
+
     if (db) {
       await db.collection('admin_logs').add({
         timestamp: new Date().toISOString(),
@@ -2692,9 +3124,9 @@ async function publishItemInstantly(itemType: 'campaign' | 'post' | 'blog' | 'fo
           console.log(`[Publish Engine] Triggering blog webhook for product ${productId} -> ${config.webhook.url}`);
           fetch(config.webhook.url, {
             method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json', 
-              ...(config.webhook.secret ? { 'X-Webhook-Secret': config.webhook.secret } : {}) 
+            headers: {
+              'Content-Type': 'application/json',
+              ...(config.webhook.secret ? { 'X-Webhook-Secret': config.webhook.secret } : {})
             },
             body: JSON.stringify({ event: 'blog.published', article: blogDoc })
           }).catch(e => console.error('[Publish Engine] Webhook error:', e));
@@ -2806,7 +3238,7 @@ async function createAndSendApprovalRequest(options: {
   if (!requireEmailApproval) {
     console.log(`[Approval Engine] requireEmailApproval is OFF for product ${productId}. Auto-publishing instantly...`);
     await publishItemInstantly(itemType, itemData, productId);
-    
+
     // Send informational notification email
     sendBrandedEmail({
       to: userEmail,
@@ -2900,13 +3332,13 @@ async function runPeriodicEmailChecks() {
     const expiredSnap = await db.collection('approval_requests')
       .where('status', '==', 'pending')
       .get();
-    
+
     const nowIso = now.toISOString();
     for (const docSnap of expiredSnap.docs) {
       const reqData = docSnap.data();
       if (reqData.expiresAt && reqData.expiresAt <= nowIso) {
         console.log(`[Auto-Upload Worker] Request ${docSnap.id} (${reqData.itemType}: "${reqData.itemTitle}") expired after timeline. Auto-approving...`);
-        
+
         await db.collection('approval_requests').doc(docSnap.id).update({
           status: 'auto_approved',
           processedAt: nowIso
@@ -3070,7 +3502,7 @@ async function publishBlogToWordPress(settings: any, title: string, content: str
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
     cleanUrl = 'https://' + cleanUrl;
   }
-  
+
   const authHeader = `Basic ${Buffer.from(`${settings.wordpress.username.trim()}:${settings.wordpress.appPassword.trim()}`).toString('base64')}`;
   let featuredMediaId: number | null = null;
 
@@ -3078,7 +3510,7 @@ async function publishBlogToWordPress(settings: any, title: string, content: str
     try {
       let imageBuffer: Buffer | null = null;
       let mimeType = 'image/png';
-      
+
       if (imageUrl.startsWith('/api/whatsapp/images/')) {
         const imageId = imageUrl.split('/').pop()?.replace('.png', '');
         if (imageId) {
@@ -3247,7 +3679,7 @@ async function publishBlogToExternalSite(
     if (!settings.webhook || !settings.webhook.url) {
       throw new Error('Webhook integration URL is missing. Check settings.');
     }
-    
+
     const payload = {
       event: "blog.publish",
       campaignId: extraData.campaignId || null,
@@ -3265,25 +3697,25 @@ async function publishBlogToExternalSite(
       cta: extraData.cta || "",
       createdAt: new Date().toISOString()
     };
-    
+
     return await publishBlogToWebhook(settings, payload);
   } else if (settings.type === 'brandtopost') {
     if (!db) {
       throw new Error('Database connection is not available.');
     }
-    
+
     let slug = title
       .toLowerCase()
       .trim()
       .replace(/[^\w\s-]/g, '')
       .replace(/[\s_-]+/g, '-')
       .replace(/^-+|-+$/g, '');
-      
+
     const slugQuery = await db.collection('blogs').where('slug', '==', slug).get();
     if (!slugQuery.empty) {
       slug = `${slug}-${Math.random().toString(36).substring(2, 6)}`;
     }
-    
+
     const blogDoc = {
       title,
       slug,
@@ -3298,9 +3730,9 @@ async function publishBlogToExternalSite(
       publishedAt: new Date().toISOString(),
       status: 'published'
     };
-    
+
     const docRef = await db.collection('blogs').add(blogDoc);
-    
+
     return {
       success: true,
       url: `/blog/${slug}`,
@@ -3663,7 +4095,7 @@ async function startServer() {
           console.log(`[runWithRenderLock] Re-checking Chrome after installation. exists: ${hasInstall}, path: ${chromeExecutable}`);
         } catch (eInstall: any) {
           console.error(`[PUPPETEER POOL] Local Chrome auto-installation to ${installCacheDir} failed: ${eInstall.message}`);
-          
+
           // Fallback to /tmp/puppeteer-cache if main workspace install fails
           const fallbackCacheDir = '/tmp/puppeteer-cache';
           console.log(`[PUPPETEER POOL] Attempting fallback auto-installation to ${fallbackCacheDir}...`);
@@ -3674,7 +4106,7 @@ async function startServer() {
             });
             try {
               execSync(`chmod -R 755 ${fallbackCacheDir}`);
-            } catch (eChmod: any) {}
+            } catch (eChmod: any) { }
             chromeExecutable = findDynamicChrome();
             hasInstall = !!chromeExecutable;
             console.log(`[runWithRenderLock] Re-checking Chrome after fallback installation. exists: ${hasInstall}, path: ${chromeExecutable}`);
@@ -3687,7 +4119,7 @@ async function startServer() {
       const puppeteer = await import('puppeteer');
       if (!sharedBrowser || !sharedBrowser.isConnected()) {
         if (sharedBrowser) {
-          try { await sharedBrowser.close().catch(() => {}); } catch (_) {}
+          try { await sharedBrowser.close().catch(() => { }); } catch (_) { }
           sharedBrowser = null;
         }
         console.log(`[PUPPETEER POOL] Initializing background browser instance...`);
@@ -3716,7 +4148,7 @@ async function startServer() {
         result = await task(sharedBrowser);
       } catch (taskErr: any) {
         console.warn(`[PUPPETEER POOL] Task failed: ${taskErr.message}. Attempting browser reconnect and retry once...`);
-        try { await sharedBrowser?.close().catch(() => {}); } catch (_) {}
+        try { await sharedBrowser?.close().catch(() => { }); } catch (_) { }
         sharedBrowser = null;
         const launchOptions: any = {
           headless: true,
@@ -3747,7 +4179,7 @@ async function startServer() {
   // --- IP/User Rate Limiting Middleware for Critical Resource Protection ---
   const routeRateLimiter = (maxRequests: number, windowMs: number) => {
     const requests = new Map<string, number[]>();
-    
+
     // Memory leak protection - clean up stale entries every 5 minutes
     const pruneInterval = setInterval(() => {
       const now = Date.now();
@@ -3760,7 +4192,7 @@ async function startServer() {
         }
       }
     }, 5 * 60 * 1000);
-    
+
     // Safely prevent keeping Node process alive in local/CLI development
     if (pruneInterval.unref) {
       pruneInterval.unref();
@@ -3773,7 +4205,7 @@ async function startServer() {
       timestamps = timestamps.filter(t => now - t < windowMs);
       if (timestamps.length >= maxRequests) {
         console.warn(`[RATE LIMIT EXCEEDED] User/IP ${id} throttled on ${req.originalUrl}. limit: ${maxRequests} requests per ${windowMs / 1000}s`);
-        return res.status(429).json({ 
+        return res.status(429).json({
           error: 'Resource rate limit exceeded. Please wait a moment before executing this heavy command again.',
           retryAfterMs: windowMs - (now - timestamps[0])
         });
@@ -3916,7 +4348,7 @@ async function startServer() {
 
       const defaultReason = "The testing phase is over. Access to your account has been suspended by administration.";
       const userRef = db.collection('users').doc(targetUserId);
-      
+
       await userRef.set({
         isLocked: !!isLocked,
         lockReason: isLocked ? (lockReason || defaultReason) : null,
@@ -3994,10 +4426,10 @@ async function startServer() {
       const secondaryColor = visualData?.secondaryColor || dna?.visualData?.colors?.[1] || "#08080C";
       const safeVisualType = visualType || "custom-overlay";
       const headline = visualData?.headline || fallbackText || "Your text here";
-      
+
       const primaryFont = visualData?.fontFamily || dna?.visualData?.fonts?.primary || "Inter";
-      const fontFamily = primaryFont.includes(" ") && !primaryFont.includes("'") 
-        ? `'${primaryFont}'` 
+      const fontFamily = primaryFont.includes(" ") && !primaryFont.includes("'")
+        ? `'${primaryFont}'`
         : primaryFont;
 
       let selectedBlueprintId = "";
@@ -4032,11 +4464,11 @@ async function startServer() {
       // 1. Check if visualType directly matches a layout blueprint
       else if (LAYOUT_BLUEPRINTS[safeVisualType]) {
         selectedBlueprintId = safeVisualType;
-      } 
+      }
       // 2. Check if visualData.layoutId matches a layout blueprint
       else if (visualData?.layoutId && LAYOUT_BLUEPRINTS[visualData.layoutId]) {
         selectedBlueprintId = visualData.layoutId;
-      } 
+      }
       // 3. If "custom-overlay" is chosen but no specific layoutId is passed, run auto-rotation
       else if (safeVisualType === "custom-overlay") {
         const history = Array.isArray(recentLayoutHistory) ? recentLayoutHistory : [];
@@ -4058,64 +4490,64 @@ async function startServer() {
             fontFamily
           });
         } else {
-        // Fallback to legacy hardcoded templates for backwards compatibility
-        let resolvedTextPos = visualData?.layout?.textPosition || 'bottom';
-        if (safeVisualType === 'creative-story') {
-          resolvedTextPos = 'bottom';
-        } else if (safeVisualType === 'abstract-announcement') {
-          resolvedTextPos = 'middle';
-        } else if (safeVisualType === 'powerful-quote') {
-          resolvedTextPos = 'middle';
-        } else if (safeVisualType === 'data-infographic') {
-          resolvedTextPos = 'top';
-        }
-
-        let resolvedLogoPos = visualData?.layout?.logoPosition;
-        if (!resolvedLogoPos) {
-          resolvedLogoPos = resolvedTextPos === 'bottom' ? 'top-right' : 'bottom-right';
-        }
-
-        if (resolvedTextPos === 'bottom' && resolvedLogoPos.startsWith('bottom')) {
-          resolvedLogoPos = resolvedLogoPos.replace('bottom', 'top');
-        } else if (resolvedTextPos === 'top' && resolvedLogoPos.startsWith('top')) {
-          resolvedLogoPos = resolvedLogoPos.replace('top', 'bottom');
-        }
-
-        let logoStyles = 'bottom: 80px; right: 80px;';
-        const pos = resolvedLogoPos;
-        if (pos === 'top-left') logoStyles = 'top: 80px; left: 80px;';
-        if (pos === 'top-center') logoStyles = 'top: 80px; left: 50%; transform: translateX(-50%);';
-        if (pos === 'top-right') logoStyles = 'top: 80px; right: 80px;';
-        if (pos === 'middle-left') logoStyles = 'top: 50%; left: 80px; transform: translateY(-50%);';
-        if (pos === 'center') logoStyles = 'top: 50%; left: 50%; transform: translate(-50%, -50%);';
-        if (pos === 'middle-right') logoStyles = 'top: 50%; right: 80px; transform: translateY(-50%);';
-        if (pos === 'bottom-left') logoStyles = 'bottom: 80px; left: 80px;';
-        if (pos === 'bottom-center') logoStyles = 'bottom: 80px; left: 50%; transform: translateX(-50%);';
-        if (pos === 'bottom-right') logoStyles = 'bottom: 80px; right: 80px;';
-
-        const textShadowDeep = "0 8px 32px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.6)";
-        // customHtml is model-generated per daily post and reaches Puppeteer the
-        // same way rawHtml does — sanitize it on the same terms.
-        const customHtmlResult = sanitizeTemplateHtml(visualData?.customHtml || "");
-        if (customHtmlResult.violations.length > 0) {
-          console.warn("[/api/render-visual] customHtml sanitizer stripped unsafe markup:", customHtmlResult.violations);
-        }
-        let processedCustomHtml = customHtmlResult.html;
-        if (processedCustomHtml && activeLogo) {
-          const safeLogo = safeUrlOrEmpty(activeLogo);
-          if (safeLogo) {
-            processedCustomHtml = processedCustomHtml.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
-              const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
-              if (isLogo) {
-                return `<img${p1}src="${escapeHtmlAttr(safeLogo)}"${p3}>`;
-              }
-              return match;
-            });
+          // Fallback to legacy hardcoded templates for backwards compatibility
+          let resolvedTextPos = visualData?.layout?.textPosition || 'bottom';
+          if (safeVisualType === 'creative-story') {
+            resolvedTextPos = 'bottom';
+          } else if (safeVisualType === 'abstract-announcement') {
+            resolvedTextPos = 'middle';
+          } else if (safeVisualType === 'powerful-quote') {
+            resolvedTextPos = 'middle';
+          } else if (safeVisualType === 'data-infographic') {
+            resolvedTextPos = 'top';
           }
-        }
 
-        if (safeVisualType === "creative-story") {
-          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #111; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
+          let resolvedLogoPos = visualData?.layout?.logoPosition;
+          if (!resolvedLogoPos) {
+            resolvedLogoPos = resolvedTextPos === 'bottom' ? 'top-right' : 'bottom-right';
+          }
+
+          if (resolvedTextPos === 'bottom' && resolvedLogoPos.startsWith('bottom')) {
+            resolvedLogoPos = resolvedLogoPos.replace('bottom', 'top');
+          } else if (resolvedTextPos === 'top' && resolvedLogoPos.startsWith('top')) {
+            resolvedLogoPos = resolvedLogoPos.replace('top', 'bottom');
+          }
+
+          let logoStyles = 'bottom: 80px; right: 80px;';
+          const pos = resolvedLogoPos;
+          if (pos === 'top-left') logoStyles = 'top: 80px; left: 80px;';
+          if (pos === 'top-center') logoStyles = 'top: 80px; left: 50%; transform: translateX(-50%);';
+          if (pos === 'top-right') logoStyles = 'top: 80px; right: 80px;';
+          if (pos === 'middle-left') logoStyles = 'top: 50%; left: 80px; transform: translateY(-50%);';
+          if (pos === 'center') logoStyles = 'top: 50%; left: 50%; transform: translate(-50%, -50%);';
+          if (pos === 'middle-right') logoStyles = 'top: 50%; right: 80px; transform: translateY(-50%);';
+          if (pos === 'bottom-left') logoStyles = 'bottom: 80px; left: 80px;';
+          if (pos === 'bottom-center') logoStyles = 'bottom: 80px; left: 50%; transform: translateX(-50%);';
+          if (pos === 'bottom-right') logoStyles = 'bottom: 80px; right: 80px;';
+
+          const textShadowDeep = "0 8px 32px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.6)";
+          // customHtml is model-generated per daily post and reaches Puppeteer the
+          // same way rawHtml does — sanitize it on the same terms.
+          const customHtmlResult = sanitizeTemplateHtml(visualData?.customHtml || "");
+          if (customHtmlResult.violations.length > 0) {
+            console.warn("[/api/render-visual] customHtml sanitizer stripped unsafe markup:", customHtmlResult.violations);
+          }
+          let processedCustomHtml = customHtmlResult.html;
+          if (processedCustomHtml && activeLogo) {
+            const safeLogo = safeUrlOrEmpty(activeLogo);
+            if (safeLogo) {
+              processedCustomHtml = processedCustomHtml.replace(/<img([^>]+)src=["']([^"']*)["']([^>]*)>/gi, (match, p1, src, p3) => {
+                const isLogo = src.toLowerCase().includes('logo') || match.toLowerCase().includes('alt="logo"') || match.toLowerCase().includes("alt='logo'");
+                if (isLogo) {
+                  return `<img${p1}src="${escapeHtmlAttr(safeLogo)}"${p3}>`;
+                }
+                return match;
+              });
+            }
+          }
+
+          if (safeVisualType === "creative-story") {
+            htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #111; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
   ${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; z-index: 0;" />` : ''}
   <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 45%, rgba(0,0,0,0.1) 100%); z-index: 1;"></div>
   <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; padding: 80px 100px 80px 80px; display: flex; flex-direction: column; justify-content: flex-end; box-sizing: border-box; z-index: 10;">
@@ -4124,8 +4556,8 @@ async function startServer() {
   </div>
   ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
   </div>`;
-        } else if (safeVisualType === "abstract-announcement") {
-          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #080808; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
+          } else if (safeVisualType === "abstract-announcement") {
+            htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #080808; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
   <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; opacity: 0.9; background: radial-gradient(circle at top right, ${primaryColor}60, transparent 65%), radial-gradient(circle at bottom left, ${secondaryColor}90, ${primaryColor}30 85%); z-index: 1;"></div>
   ${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; opacity: 0.4; mix-blend-mode: overlay; z-index: 2;" />` : ''}
   <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.8) 100%); z-index: 3;"></div>
@@ -4135,47 +4567,47 @@ async function startServer() {
   </div>
   ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
   </div>`;
-        } else if (safeVisualType === "data-infographic") {
-          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #ffffff; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; padding: 100px; box-sizing: border-box;">
+          } else if (safeVisualType === "data-infographic") {
+            htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #ffffff; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; padding: 100px; box-sizing: border-box;">
   <div style="text-align: center; margin-bottom: 80px; z-index: 10;">
   <h2 style="color: #0f172a; font-weight: 900; margin: 0; line-height: 1.15; letter-spacing: -0.02em; font-size: clamp(48px, 6vw, 84px); text-wrap: balance; overflow-wrap: break-word;">${headline}</h2>
   ${visualData?.subtext ? `<p style="color: #475569; font-weight: 500; font-size: clamp(24px, 3vw, 36px); margin: 24px 0 0 0; text-wrap: balance; overflow-wrap: break-word;">${visualData.subtext}</p>` : ''}
   </div>
   <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; z-index: 10;">
-  ${(visualData?.stats?.length ? visualData.stats : [{label:"Stat A",value:"85%"},{label:"Stat B",value:"2.4x"}]).slice(0,4).map((s:any,i:number) => {
-    const bgs = ["#eff6ff", "#fff7ed", "#faf5ff", "#ecfdf5"];
-    const textColors = ["#1e3a8a", "#9a3412", "#6b21a8", "#065f46"];
-    return `<div style="border-radius: 32px; background: ${bgs[i%4]}; padding: 48px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-      <div style="font-size: clamp(24px, 3vw, 36px); font-weight: 600; margin-bottom: 12px; color: ${textColors[i%4]}; line-height: 1.2;">${s.label}</div>
-      <div style="font-size: clamp(64px, 8vw, 120px); font-weight: 900; line-height: 1; color: ${textColors[i%4]};">${s.value}</div>
+  ${(visualData?.stats?.length ? visualData.stats : [{ label: "Stat A", value: "85%" }, { label: "Stat B", value: "2.4x" }]).slice(0, 4).map((s: any, i: number) => {
+              const bgs = ["#eff6ff", "#fff7ed", "#faf5ff", "#ecfdf5"];
+              const textColors = ["#1e3a8a", "#9a3412", "#6b21a8", "#065f46"];
+              return `<div style="border-radius: 32px; background: ${bgs[i % 4]}; padding: 48px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+      <div style="font-size: clamp(24px, 3vw, 36px); font-weight: 600; margin-bottom: 12px; color: ${textColors[i % 4]}; line-height: 1.2;">${s.label}</div>
+      <div style="font-size: clamp(64px, 8vw, 120px); font-weight: 900; line-height: 1; color: ${textColors[i % 4]};">${s.value}</div>
     </div>`;
-  }).join('')}
+            }).join('')}
   </div>
   ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
   </div>`;
-        } else if (safeVisualType === "powerful-quote") {
-          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 100px; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; background: linear-gradient(135deg, ${secondaryColor}, #0a0a0a 80%); overflow: hidden;">
+          } else if (safeVisualType === "powerful-quote") {
+            htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 100px; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; background: linear-gradient(135deg, ${secondaryColor}, #0a0a0a 80%); overflow: hidden;">
   <div style="position: absolute; top: -50px; left: -50px; font-size: 800px; color: rgba(255,255,255,0.03); font-family: 'Playfair Display', serif; line-height: 1; z-index: 1;">"</div>
   <h2 style="color: white; font-weight: 800; line-height: 1.2; margin: 0; font-size: clamp(44px, 6vw, 84px); z-index: 10; text-shadow: ${textShadowDeep}; text-wrap: balance; overflow-wrap: break-word;">"${headline}"</h2>
   <div style="width: 100px; height: 6px; background-color: ${primaryColor}; margin: 64px 0 40px 0; z-index: 10; border-radius: 3px;"></div>
   <div style="color: #cbd5e1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; font-size: clamp(20px, 3vw, 32px); z-index: 10; text-wrap: balance; overflow-wrap: break-word;">${visualData?.subtext || dna?.name || "The Vision"}</div>
   ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
   </div>`;
-        } else {
-          htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #000; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
+          } else {
+            htmlContent = `<div style="width: 1080px; height: 1080px; position: relative; background: #000; overflow: hidden; font-family: 'Inter', system-ui, sans-serif;">
   ${imageUrl ? `<img src="${imageUrl}" style="position: absolute; top:0; left:0; width: 100%; height: 100%; object-fit: cover; z-index: 1;" />` : ''}
-  ${processedCustomHtml 
-    ? `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; mix-blend-mode: normal; z-index: 5;">${processedCustomHtml}</div>` 
-    : `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 40%, rgba(0,0,0,0.9) 100%); z-index: 2;"></div>
+  ${processedCustomHtml
+                ? `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; mix-blend-mode: normal; z-index: 5;">${processedCustomHtml}</div>`
+                : `<div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 40%, rgba(0,0,0,0.9) 100%); z-index: 2;"></div>
        <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 100px; text-align: center; box-sizing: border-box; z-index: 5;">
          <h2 style="color: white; font-weight: 800; line-height: 1.15; font-size: clamp(48px, 6vw, 90px); margin: 0 0 24px 0; text-shadow: ${textShadowDeep}; text-wrap: balance; overflow-wrap: break-word; width: 100%;">${headline}</h2>
          ${visualData?.subtext ? `<p style="color: #f3f4f6; font-size: clamp(24px, 3vw, 36px); font-weight: 500; margin: 0; text-shadow: 0 2px 8px rgba(0,0,0,0.8); text-wrap: balance; overflow-wrap: break-word;">${visualData.subtext}</p>` : ''}
        </div>`}
   ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><img src="${activeLogo}" style="max-height: 70px; max-width: 180px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));" /></div>` : ''}
   </div>`;
+          }
         }
       }
-    }
 
       const fullHtml = `<!DOCTYPE html>
 <html>
@@ -4201,15 +4633,15 @@ ${htmlContent}
           const page = await browser.newPage();
           try {
             await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
-            await page.setContent(targetHtml, { waitUntil: ['domcontentloaded', 'networkidle2'], timeout: 20000 }).catch(() => {});
-            
+            await page.setContent(targetHtml, { waitUntil: ['domcontentloaded', 'networkidle2'], timeout: 20000 }).catch(() => { });
+
             await page.evaluate(async () => {
               try {
                 await Promise.race([
                   document.fonts.ready,
                   new Promise(resolve => setTimeout(resolve, 3000))
                 ]);
-              } catch (_) {}
+              } catch (_) { }
 
               const elements = Array.from(document.querySelectorAll('*'));
               const imagePromises: Promise<any>[] = [];
@@ -4242,11 +4674,11 @@ ${htmlContent}
 
               await Promise.all(imagePromises);
             });
-            
+
             const buffer = await page.screenshot({ type: 'png' });
             return `data:image/png;base64,${Buffer.from(buffer).toString('base64')}`;
           } finally {
-            await page.close().catch(() => {});
+            await page.close().catch(() => { });
           }
         });
       };
@@ -4256,7 +4688,7 @@ ${htmlContent}
         renderResult = await executeRender(fullHtml);
       } catch (firstErr: any) {
         console.warn("[PUPPETEER POOL WARNING] Initial template render failed, attempting blueprint fallback:", firstErr?.message);
-        
+
         // If grounded-research AI HTML failed, build a guaranteed clean fallback HTML using selectLayout
         const fallbackBlueprint = LAYOUT_BLUEPRINTS[selectedBlueprintId] || selectLayout([]);
         const fallbackHtmlContent = fallbackBlueprint.buildHtml({
@@ -4330,23 +4762,23 @@ ${fallbackHtmlContent}
     const { model, contents, config } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
     console.log('key present:', !!process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY?.length);
-    
+
     if (!apiKey) {
       console.error('[AI Proxy] GEMINI_API_KEY is not set in process.env at request time.');
       return res.status(500).json({ error: 'Server API key not configured. Please configure GEMINI_API_KEY in the server environment.' });
     }
-    
+
     const abortController = new AbortController();
     let aborted = false;
-    
+
     const handleAbort = () => {
       aborted = true;
       console.log(`[AI Proxy] Connection closed by client. Aborting Gemini API call for model: ${model}`);
       abortController.abort();
     };
-    
+
     req.on('close', handleAbort);
-    
+
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
@@ -4357,17 +4789,17 @@ ${fallbackHtmlContent}
           abortSignal: abortController.signal
         }
       });
-      
+
       if (aborted) {
         throw new DOMException("The user aborted a request.", "AbortError");
       }
-      
+
       const responseData = {
         text: response.text,
         usageMetadata: response.usageMetadata,
         candidates: response.candidates
       };
-      
+
       res.json(responseData);
     } catch (error: any) {
       if (aborted || error.name === 'AbortError' || error.message?.includes('aborted') || error.message?.includes('Cancel')) {
@@ -4389,46 +4821,164 @@ ${fallbackHtmlContent}
 
   app.post('/api/ai/generate-campaign-images', requireAuth, routeRateLimiter(10, 60 * 1000), async (req, res) => {
     try {
-      const { prompts } = req.body;
+      const { prompts, logoUrl } = req.body;
       if (!Array.isArray(prompts) || prompts.length === 0) {
         return res.status(400).json({ error: "prompts array is required." });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: "Missing GEMINI_API_KEY." });
-      }
-      const ai = new GoogleGenAI({ apiKey });
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      const openaiModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+      const openaiQuality = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+      const geminiApiKey = process.env.GEMINI_API_KEY;
 
       const imageUrls: string[] = [];
 
       for (let i = 0; i < prompts.length; i++) {
-        const promptText = typeof prompts[i] === 'string' ? prompts[i] : prompts[i]?.prompt || `High quality photographic backdrop graphic #${i+1}`;
-        try {
-          const imgRes = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-image-preview',
-            contents: { parts: [{ text: promptText }] },
-            config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
-          });
+        const item = prompts[i];
+        const promptText = typeof item === 'string' ? item : item?.prompt || `High quality editorial photographic visual #${i + 1}`;
+        const headline = typeof item === 'object' ? item.headline : undefined;
+        const subtext = typeof item === 'object' ? item.subtext : undefined;
+        const brandColors = typeof item === 'object' && Array.isArray(item.brandColors) ? item.brandColors : undefined;
+        const fontStyle = typeof item === 'object' ? item.fontStyle : undefined;
+        const brandAssetUrl = typeof item === 'object' ? item.brandAssetUrl : undefined;
+        const logoPosition = (typeof item === 'object' && item.logoPosition) ? item.logoPosition : (req.body.logoPosition || 'top-left');
 
-          let generatedUrl = null;
-          if (imgRes?.candidates?.[0]?.content?.parts) {
-            for (const pt of imgRes.candidates[0].content.parts) {
-              if (pt.inlineData) {
-                const base64Data = pt.inlineData.data;
-                const mimeType = pt.inlineData.mimeType || 'image/png';
-                const imageId = 'img_camp_' + Math.random().toString(36).substring(2, 10);
-                await saveImageLocalAndDb(imageId, base64Data, mimeType, promptText);
-                generatedUrl = `/api/whatsapp/images/${imageId}.png`;
-                break;
+        let base64Data: string | null = null;
+        let mimeType = 'image/png';
+
+        // 1. Try OpenAI GPT Image 2 API if OPENAI_API_KEY is available
+        if (openaiApiKey) {
+          try {
+            const { colorDescriptor, typographyDescriptor } = translateBrandDNA(brandColors, fontStyle);
+            let formattedPrompt = `1:1 ratio square editorial visual post.\n`;
+            if (headline) formattedPrompt += `HEADLINE TEXT TO DISPLAY: "${headline}"\n`;
+            if (subtext) formattedPrompt += `SUBTEXT/BODY COPY: "${subtext}"\n`;
+            formattedPrompt += `VIVID BRAND COLOR & LIGHTING HARMONY: ${colorDescriptor}\n`;
+            formattedPrompt += `VISUAL TYPOGRAPHY DESIGN: ${typographyDescriptor}\n`;
+
+            const pos = logoPosition.toLowerCase().trim();
+            let spatialRule = `LAYOUT CONSTRAINT: Keep top-left corner (top 20% height, left 30% width) completely empty and free of headlines, body text, or graphic overlays for brand logo placement.\n`;
+            if (pos === 'top-right') {
+              spatialRule = `LAYOUT CONSTRAINT: Keep top-right corner (top 20% height, right 30% width) completely empty and free of headlines, body text, or graphic overlays for brand logo placement.\n`;
+            } else if (pos === 'bottom-left') {
+              spatialRule = `LAYOUT CONSTRAINT: Keep bottom-left corner (bottom 20% height, left 30% width) completely empty and free of headlines, body text, or graphic overlays for brand logo placement.\n`;
+            } else if (pos === 'bottom-right') {
+              spatialRule = `LAYOUT CONSTRAINT: Keep bottom-right corner (bottom 20% height, right 30% width) completely empty and free of headlines, body text, or graphic overlays for brand logo placement.\n`;
+            }
+            formattedPrompt += spatialRule;
+            formattedPrompt += `INSTRUCTIONS: Render crisp, perfectly legible headline & subtext with high-end modern B2B editorial typography. Place text cleanly outside the reserved logo area. Use executive visual aesthetics. No extraneous text.`;
+
+            if (brandAssetUrl && (brandAssetUrl.startsWith('http://') || brandAssetUrl.startsWith('https://') || brandAssetUrl.startsWith('data:image/'))) {
+              // Image Editing Mode using OpenAI Edits API
+              try {
+                let assetBuf: Buffer;
+                if (brandAssetUrl.startsWith('data:image/')) {
+                  assetBuf = Buffer.from(brandAssetUrl.split(',')[1], 'base64');
+                } else {
+                  const fetchAsset = await fetch(brandAssetUrl);
+                  assetBuf = Buffer.from(await fetchAsset.arrayBuffer());
+                }
+
+                const formData = new FormData();
+                const blob = new Blob([assetBuf], { type: 'image/png' });
+                formData.append('image', blob, 'source.png');
+                formData.append('prompt', formattedPrompt);
+                formData.append('model', openaiModel);
+                if (openaiModel.startsWith('gpt-image')) {
+                  formData.append('quality', openaiQuality);
+                } else {
+                  formData.append('response_format', 'b64_json');
+                }
+                formData.append('n', '1');
+                formData.append('size', '1024x1024');
+
+                const editRes = await fetch('https://api.openai.com/v1/images/edits', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${openaiApiKey}`
+                  },
+                  body: formData
+                });
+
+                if (editRes.ok) {
+                  const editData = await editRes.json();
+                  if (editData?.data?.[0]?.b64_json) {
+                    base64Data = editData.data[0].b64_json;
+                  }
+                } else {
+                  const errTxt = await editRes.text();
+                  console.error(`[generate-campaign-images] OpenAI Edit API failed HTTP ${editRes.status}:`, errTxt);
+                }
+              } catch (editErr) {
+                console.error('[generate-campaign-images] OpenAI Edit exception:', editErr);
               }
             }
+
+            // Fallback to standard OpenAI Image Generation if edit wasn't used or failed
+            if (!base64Data) {
+              const genRes = await fetch('https://api.openai.com/v1/images/generations', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${openaiApiKey}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  model: openaiModel,
+                  prompt: formattedPrompt,
+                  n: 1,
+                  size: '1024x1024',
+                  ...(openaiModel.startsWith('gpt-image') ? { quality: openaiQuality } : { response_format: 'b64_json' })
+                })
+              });
+
+              if (genRes.ok) {
+                const genData = await genRes.json();
+                if (genData?.data?.[0]?.b64_json) {
+                  base64Data = genData.data[0].b64_json;
+                }
+              } else {
+                const errTxt = await genRes.text();
+                console.error(`[generate-campaign-images] OpenAI Generations failed HTTP ${genRes.status}:`, errTxt);
+              }
+            }
+          } catch (oaiErr) {
+            console.error('[generate-campaign-images] OpenAI generation error:', oaiErr);
           }
-          imageUrls.push(generatedUrl || `https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80`);
-        } catch (e) {
-          console.warn(`[generate-campaign-images] Failed prompt #${i+1}:`, e);
-          imageUrls.push(`https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80`);
         }
+
+        // 2. Fallback to Gemini Imagen if OpenAI was not configured or failed
+        if (!base64Data && geminiApiKey) {
+          try {
+            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+            const fallbackPrompt = `${headline ? `Text headline: ${headline}. ` : ''}${promptText}`;
+            const imgRes = await ai.models.generateImages({
+              model: 'imagen-3.0-generate-001',
+              prompt: fallbackPrompt,
+              config: {
+                numberOfImages: 1,
+                aspectRatio: "1:1",
+                outputMimeType: "image/png"
+              }
+            });
+
+            if (imgRes?.generatedImages?.[0]?.image?.imageBytes) {
+              base64Data = imgRes.generatedImages[0].image.imageBytes;
+            }
+          } catch (gErr) {
+            console.warn('[generate-campaign-images] Gemini Imagen fallback error:', gErr);
+          }
+        }
+
+        // 3. Stamp Brand Logo on image if base64Data was generated
+        let generatedUrl: string | null = null;
+        if (base64Data) {
+          const stampedBase64 = await stampBrandLogoOnImage(base64Data, logoUrl, logoPosition);
+          const imageId = 'img_camp_' + Math.random().toString(36).substring(2, 10);
+          await saveImageLocalAndDb(imageId, stampedBase64, mimeType, promptText);
+          generatedUrl = `/api/whatsapp/images/${imageId}.png`;
+        }
+
+        imageUrls.push(generatedUrl || `https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80`);
       }
 
       res.json({ success: true, imageUrls });
@@ -4451,7 +5001,7 @@ ${fallbackHtmlContent}
       return res.status(500).json({ error: 'Server API key not configured.' });
     }
     console.log(`[STEP 2/6 SERVER] GEMINI_API_KEY check -> PASSED`);
-    
+
     try {
       const ai = new GoogleGenAI({ apiKey });
       const FOCUS_NICHES = [
@@ -4624,7 +5174,7 @@ CRITICAL DESIGN RULES:
             const nowIso = new Date().toISOString();
             for (const tpl of parsedData.discoveredTemplates) {
               const tplId = tpl.id && typeof tpl.id === 'string' && tpl.id.length > 3
-                ? tpl.id 
+                ? tpl.id
                 : `tpl_gemini_${Math.random().toString(36).substring(2, 10)}`;
               tpl.id = tplId;
               const docRef = db.collection('discovered_template_library').doc(tplId);
@@ -4715,14 +5265,14 @@ CRITICAL DESIGN RULES:
     try {
       const { enabled, timeUtc, productId } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const updates: any = {};
       if (enabled !== undefined) updates.enabled = enabled;
       if (timeUtc !== undefined) updates.timeUtc = timeUtc;
-      
+
       await setScheduleConfig(productId, updates);
       const newConfig = await getScheduleConfig(productId);
-      
+
       res.json({ success: true, config: newConfig });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -4733,14 +5283,14 @@ CRITICAL DESIGN RULES:
     try {
       const { text, campaignId, platform, productId, day, date, imageUrl } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const id = Math.random().toString(36).substring(7);
       await addToQueue({ id, text, campaignId, platform, productId, day, date, imageUrl });
-      
+
       if (req.cookies[`linkedin_token_${productId}`]) {
         await setToken(productId, 'linkedin', req.cookies[`linkedin_token_${productId}`]);
       }
-      
+
       const queue = await getPostQueue(productId);
       res.json({ success: true, queue });
     } catch (e: any) {
@@ -4763,14 +5313,14 @@ CRITICAL DESIGN RULES:
     try {
       const { campaignId, platform, productId, day } = req.body;
       if (!productId) return res.status(400).json({ error: 'productId required' });
-      
+
       const queue = await getPostQueue(productId);
       for (const q of queue) {
         if (q.campaignId === campaignId && q.platform === platform && (!day || q.day === day)) {
           await removeFromQueue(productId, q.id);
         }
       }
-      
+
       const newQueue = await getPostQueue(productId);
       res.json({ success: true, queue: newQueue });
     } catch (e: any) {
@@ -4797,6 +5347,7 @@ CRITICAL DESIGN RULES:
         automateDailyPosts: !!p.automateDailyPosts,
         automateDailyBlogs: !!p.automateDailyBlogs,
         automateWeeklyCampaigns: !!p.automateWeeklyCampaigns,
+        useBrandAssets: p.useBrandAssets,
         automationTimeUtc: p.automationTimeUtc || "14:00",
         automationWeeklyDay: p.automationWeeklyDay || "Monday",
         requireEmailApproval: p.requireEmailApproval !== false,
@@ -4810,12 +5361,13 @@ CRITICAL DESIGN RULES:
 
   app.post('/api/automation/config', requireAuth, async (req, res) => {
     try {
-      const { 
-        productId, 
-        enabled, 
-        automateDailyPosts, 
-        automateDailyBlogs, 
+      const {
+        productId,
+        enabled,
+        automateDailyPosts,
+        automateDailyBlogs,
         automateWeeklyCampaigns,
+        useBrandAssets,
         automationTimeUtc,
         automationWeeklyDay,
         requireEmailApproval,
@@ -4835,6 +5387,7 @@ CRITICAL DESIGN RULES:
       if (automateDailyPosts !== undefined) updates.automateDailyPosts = automateDailyPosts;
       if (automateDailyBlogs !== undefined) updates.automateDailyBlogs = automateDailyBlogs;
       if (automateWeeklyCampaigns !== undefined) updates.automateWeeklyCampaigns = automateWeeklyCampaigns;
+      if (useBrandAssets !== undefined) updates.useBrandAssets = useBrandAssets;
       if (automationTimeUtc !== undefined) updates.automationTimeUtc = automationTimeUtc;
       if (automationWeeklyDay !== undefined) updates.automationWeeklyDay = automationWeeklyDay;
       if (requireEmailApproval !== undefined) updates.requireEmailApproval = requireEmailApproval;
@@ -4855,15 +5408,15 @@ CRITICAL DESIGN RULES:
       if (!db) return res.status(500).json({ error: 'Database connection is not active' });
 
       console.log(`[Manual Automation Trigger] Spawning virtual Founder Agent for product ${productId}...`);
-      
+
       const productDoc = await db.collection('products').doc(productId).get();
       if (!productDoc.exists) return res.status(404).json({ error: 'Product not found' });
       const product = productDoc.data()!;
-      
+
       let generatedCampaign = null;
       if ((product.automateDailyPosts || product.automateDailyBlogs) && !product.automateWeeklyCampaigns) {
         await executeAutoDailyGeneration(productId, !!product.automateDailyPosts, !!product.automateDailyBlogs);
-        
+
         // Fetch the latest daily campaign created for this product
         const campaignSnap = await db.collection('campaigns')
           .where('productId', '==', productId)
@@ -4889,8 +5442,8 @@ CRITICAL DESIGN RULES:
   app.get('/api/auth/linkedin/url', (req, res) => {
     const clientId = process.env.LINKEDIN_CLIENT_ID || '';
     if (!clientId) {
-      return res.status(400).json({ 
-        error: 'LinkedIn OAuth is not configured. Please add "LINKEDIN_CLIENT_ID" in the Secrets panel in the Settings menu of AI Studio.' 
+      return res.status(400).json({
+        error: 'LinkedIn OAuth is not configured. Please add "LINKEDIN_CLIENT_ID" in the Secrets panel in the Settings menu of AI Studio.'
       });
     }
 
@@ -4900,13 +5453,10 @@ CRITICAL DESIGN RULES:
     const rawBaseUrl = process.env.APP_URL || `${protocol}://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/linkedin/callback`;
-    
+
     const stateStr = `state_${Math.random().toString(36).substring(7)}_${productId}`;
 
-    const isFounder = productId && productId.startsWith('founder_');
-    const scope = isFounder 
-      ? 'openid profile w_member_social email'
-      : 'openid profile w_member_social email w_organization_social r_organization_social';
+    const scope = 'openid profile w_member_social email w_organization_social r_organization_social';
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -4915,7 +5465,7 @@ CRITICAL DESIGN RULES:
       state: stateStr,
       scope: scope,
     });
-    
+
     res.json({ url: `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}` });
   });
 
@@ -4946,7 +5496,7 @@ CRITICAL DESIGN RULES:
           redirect_uri: redirectUri,
         })
       });
-      
+
       const tokenData = await tokenRes.json();
 
       if (tokenData.access_token) {
@@ -5058,12 +5608,14 @@ CRITICAL DESIGN RULES:
         }
       }
 
-      // 2. If headline or picture is missing, perform live grounded web search for LinkedIn profile details
-      if ((!profileHeadline || !profilePicture) && process.env.GEMINI_API_KEY) {
+      // 2. If headline is missing/generic or picture is missing, perform live grounded web search for LinkedIn profile details
+      const isGenericHeadline = !profileHeadline || profileHeadline.includes("User | Founder") || profileHeadline.includes("Founder & Executive") || profileHeadline.length < 5;
+      if ((isGenericHeadline || !profilePicture) && process.env.GEMINI_API_KEY) {
         try {
           const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-          const searchPrompt = `Perform a Google Search to find the exact public LinkedIn profile details for: "${profileName}" ${linkedinUrl ? `(${linkedinUrl})` : ''}.
-Extract their current professional title, past companies, and short bio/headline formatted exactly like a LinkedIn profile headline (e.g. "SWE-II @ Google | Ex @Flipkart, @Cisco and @Siemens | 230k+ @LinkedIn").
+          const searchPrompt = `Perform a Google Search to find the exact public LinkedIn profile headline and title for: "${profileName}" ${linkedinUrl ? `(${linkedinUrl})` : ''}.
+Extract their current professional title, past companies, and short bio/headline formatted exactly like a LinkedIn profile headline (e.g. "Founder & CEO @ Skigen AI | Ex @Flipkart, @Cisco and @Siemens | 230k+ @LinkedIn").
+Do NOT return "User | Founder" or generic text. Find their actual public bio/tagline from LinkedIn.
 Also search for their public LinkedIn profile avatar image URL if indexed.
 Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do NOT wrap in markdown code blocks.`;
 
@@ -5079,7 +5631,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           const match = textRes.match(/\{[\s\S]*\}/);
           if (match) {
             const parsed = JSON.parse(match[0]);
-            if (parsed.headline && parsed.headline.trim().length > 5) {
+            if (parsed.headline && parsed.headline.trim().length > 5 && !parsed.headline.includes("User | Founder")) {
               profileHeadline = parsed.headline.trim();
             }
             if (parsed.avatarUrl && parsed.avatarUrl.startsWith('http') && !profilePicture) {
@@ -5094,9 +5646,10 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
         }
       }
 
-      // Fallback headline if still empty
-      if (!profileHeadline) {
-        profileHeadline = userData?.role ? `${userData.role} | Founder` : "Founder & Executive • Daily Strategy";
+      // Fallback headline if still empty or generic
+      const validRole = userData?.role && userData.role !== "User" ? userData.role : null;
+      if (!profileHeadline || profileHeadline.includes("User | Founder")) {
+        profileHeadline = validRole ? `${validRole} | Founder` : "Founder & CEO • Daily Strategy & B2B Insights";
       }
 
       const linkedInProfile = {
@@ -5134,17 +5687,24 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           });
           if (userinfoRes.ok) {
             const info = await userinfoRes.json();
-            linkedInProfile = {
-              name: info.name || `${info.given_name || ''} ${info.family_name || ''}`.trim(),
-              picture: info.picture || null,
-              email: info.email || null,
-              headline: info.headline || info.localizedHeadline || info.vanityName || null,
-              sub: info.sub || null
-            };
             let targetUserId = productId;
             if (productId && productId.startsWith('founder_')) {
               targetUserId = productId.replace('founder_', '');
             }
+            let existingProfile: any = {};
+            if (db && targetUserId) {
+              const existingDoc = await db.collection('users').doc(targetUserId).get();
+              existingProfile = existingDoc.exists ? (existingDoc.data()?.linkedInProfile || {}) : {};
+            }
+            const cleanExistingHeadline = existingProfile.headline && !existingProfile.headline.includes("User | Founder") ? existingProfile.headline : null;
+
+            linkedInProfile = {
+              name: info.name || existingProfile.name || `${info.given_name || ''} ${info.family_name || ''}`.trim(),
+              picture: info.picture || existingProfile.picture || null,
+              email: info.email || existingProfile.email || null,
+              headline: info.headline || info.localizedHeadline || info.vanityName || cleanExistingHeadline || null,
+              sub: info.sub || existingProfile.sub || null
+            };
             if (db && targetUserId) {
               await db.collection('users').doc(targetUserId).set({ linkedInProfile }, { merge: true });
             }
@@ -5170,30 +5730,30 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       const aclsRes = await fetch('https://api.linkedin.com/v2/organizationAcls?q=roleAssignee', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (!aclsRes.ok) {
         throw new Error('Failed to fetch organizations');
       }
-      
+
       const aclsData = await aclsRes.json();
       const orgUrns = aclsData.elements?.map((el: any) => el.organization) || [];
-      
+
       if (orgUrns.length === 0) {
         return res.json({ organizations: [] });
       }
 
       // Extract IDs from URNs
       const orgIds = orgUrns.map((urn: string) => urn.split(':').pop());
-      
+
       // Fetch organization details
       const orgsRes = await fetch(`https://api.linkedin.com/v2/organizations?ids=List(${orgIds.join(',')})`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (!orgsRes.ok) {
         throw new Error('Failed to fetch organization details');
       }
-      
+
       const orgsData = await orgsRes.json();
       const organizations = Object.values(orgsData.results || {}).map((org: any) => ({
         id: org.id,
@@ -5252,7 +5812,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       if (!productId || !organizationUrn) {
         return res.status(400).json({ error: 'Missing productId or organizationUrn' });
       }
-      
+
       await setToken(productId, 'linkedin_org', organizationUrn);
       res.json({ success: true });
     } catch (e: any) {
@@ -5267,10 +5827,10 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       const { text, productId, imageUrl } = req.body;
       const token = await getToken(productId, 'linkedin') || req.cookies[`linkedin_token_${productId}`];
       if (!token) return res.status(401).json({ error: 'Not connected to LinkedIn' });
-      
+
       // Check if an organization is selected for this product
       const orgUrn = await getToken(productId, 'linkedin_org');
-      
+
       await publishPostToLinkedIn(token, text, imageUrl, orgUrn || undefined);
       res.json({ success: true });
     } catch (e: any) {
@@ -5384,7 +5944,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       if (!productId) return res.status(400).json({ error: 'productId is required' });
 
       const settings = await getBlogSettings(productId) || { type: 'none' };
-      
+
       const safeSettings = {
         type: settings.type || 'none',
         wordpress: settings.wordpress ? {
@@ -5561,7 +6121,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           if (pt.inlineData) {
             const base64Data = pt.inlineData.data;
             const mimeType = pt.inlineData.mimeType || 'image/png';
-            
+
             const imageId = 'img_blog_' + Math.random().toString(36).substring(2, 10);
             await saveImageLocalAndDb(imageId, base64Data, mimeType, newImagePrompt);
             newBlogImageUrl = `/api/whatsapp/images/${imageId}.png`;
@@ -5640,8 +6200,8 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
   app.get('/api/auth/facebook/url', (req, res) => {
     const clientId = process.env.FACEBOOK_CLIENT_ID || '';
     if (!clientId) {
-      return res.status(400).json({ 
-        error: 'Facebook OAuth is not configured. Please add "FACEBOOK_CLIENT_ID" in the Secrets panel in the Settings menu of AI Studio.' 
+      return res.status(400).json({
+        error: 'Facebook OAuth is not configured. Please add "FACEBOOK_CLIENT_ID" in the Secrets panel in the Settings menu of AI Studio.'
       });
     }
 
@@ -5649,7 +6209,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/facebook/callback`;
-    
+
     const stateStr = `state_${Math.random().toString(36).substring(7)}_${productId}`;
 
     const params = new URLSearchParams({
@@ -5658,7 +6218,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       state: stateStr,
       scope: 'public_profile,pages_manage_posts,pages_read_engagement',
     });
-    
+
     res.json({ url: `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}` });
   });
 
@@ -5718,8 +6278,8 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
   app.get('/api/auth/instagram/url', (req, res) => {
     const clientId = process.env.INSTAGRAM_CLIENT_ID || '';
     if (!clientId) {
-      return res.status(400).json({ 
-        error: 'Instagram OAuth is not configured. Please add "INSTAGRAM_CLIENT_ID" in the Secrets panel in the Settings menu of AI Studio.' 
+      return res.status(400).json({
+        error: 'Instagram OAuth is not configured. Please add "INSTAGRAM_CLIENT_ID" in the Secrets panel in the Settings menu of AI Studio.'
       });
     }
 
@@ -5727,7 +6287,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/instagram/callback`;
-    
+
     const stateStr = `state_${Math.random().toString(36).substring(7)}_${productId}`;
 
     const params = new URLSearchParams({
@@ -5737,7 +6297,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       response_type: 'code',
       state: stateStr,
     });
-    
+
     res.json({ url: `https://api.instagram.com/oauth/authorize?${params.toString()}` });
   });
 
@@ -5808,7 +6368,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       const { token, productId } = req.body;
       if (!token) return res.status(400).json({ error: 'Token is required' });
       if (!productId) return res.status(400).json({ error: 'Product ID is required' });
-      
+
       await setToken(productId, 'instagram', token);
       res.cookie(`instagram_token_${productId}`, token, {
         secure: true, sameSite: 'none', httpOnly: true, maxAge: 60 * 24 * 60 * 60 * 1000
@@ -5837,11 +6397,11 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     if (mode && token) {
       // Robust token match checks:
       const cleanIncomingToken = (token as string).replace(/^["']|["']$/g, '').trim();
-      const isMatch = token === cleanEnvToken || 
-                      token === rawEnvToken || 
-                      token === DEFAULT_TOKEN ||
-                      cleanIncomingToken === cleanEnvToken ||
-                      cleanIncomingToken === DEFAULT_TOKEN;
+      const isMatch = token === cleanEnvToken ||
+        token === rawEnvToken ||
+        token === DEFAULT_TOKEN ||
+        cleanIncomingToken === cleanEnvToken ||
+        cleanIncomingToken === DEFAULT_TOKEN;
 
       if (mode === 'subscribe' && isMatch) {
         console.log('[Webhook] Verification successful');
@@ -5923,7 +6483,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     try {
       const { botPhoneNumber } = req.body;
       if (!botPhoneNumber) return res.status(400).json({ error: 'Phone number is required' });
-      
+
       const cleanNumber = botPhoneNumber.replace(/\D/g, '');
       if (!cleanNumber) return res.status(400).json({ error: 'Invalid phone number format' });
 
@@ -5959,12 +6519,12 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     try {
       const { productId } = req.query as { productId: string };
       if (!productId) return res.status(400).json({ error: 'Product ID is required' });
-      
+
       const token = await getToken(productId, 'whatsapp');
       const phoneNumberId = await getToken(productId, 'whatsapp_phone_number_id');
       const webhookVerifyToken = await getToken(productId, 'whatsapp_webhook_verify_token');
       const botPhoneNumber = await getToken(productId, 'whatsapp_bot_number');
-      
+
       res.json({
         token: token || "",
         phoneNumberId: phoneNumberId || "",
@@ -5980,7 +6540,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     try {
       const logs: any[] = [];
       const tokens: any[] = [];
-      
+
       // Inject in-memory fallback logs
       globalWebhookPayloads.forEach(item => logs.push(item));
       globalBotReplies.forEach(item => {
@@ -5991,7 +6551,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           bodySnapshot: `Recipient: ${item.recipient} | Status: ${item.status} | Body: ${item.replyBody}` + (item.error ? ` | Error: ${JSON.stringify(item.error)}` : "")
         });
       });
-      
+
       if (db) {
         try {
           const snapshot = await db.collection('admin_logs').orderBy('timestamp', 'desc').limit(50).get();
@@ -6020,7 +6580,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           console.warn('[Admin Logs API] Firestore tokens fetch skipped/denied:', err.message);
         }
       }
-      
+
       // Load fallback tokens back to diagnostic console
       if (tokens.length === 0) {
         Object.keys(globalWhatsappTokens).forEach(pId => {
@@ -6040,7 +6600,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
         const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
         return timeB - timeA;
       });
-      
+
       res.json({
         success: true,
         summary: "Diagnostic server logs retrieved successfully.",
@@ -6087,12 +6647,12 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     try {
       const { productId, token, phoneNumberId, webhookVerifyToken, botPhoneNumber } = req.body;
       if (!productId) return res.status(400).json({ error: 'Product ID is required' });
-      
+
       await setToken(productId, 'whatsapp', token || "");
       await setToken(productId, 'whatsapp_phone_number_id', phoneNumberId || "");
       await setToken(productId, 'whatsapp_webhook_verify_token', webhookVerifyToken || "TROR_WEBHOOK_SECURE_KEY");
       await setToken(productId, 'whatsapp_bot_number', botPhoneNumber || "");
-      
+
       res.json({ success: true, message: 'WhatsApp credentials saved successfully' });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -6106,10 +6666,10 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       const { productId, to, type, text, imageUrl, templateName, languageCode } = req.body;
       if (!productId) return res.status(400).json({ error: 'Product ID is required' });
       if (!to) return res.status(400).json({ error: 'Recipient phone (to) is required' });
-      
+
       const token = await getToken(productId, 'whatsapp');
       const phoneNumberId = await getToken(productId, 'whatsapp_phone_number_id');
-      
+
       if (!token || !phoneNumberId) {
         console.log(`[WhatsApp Outbound Simulation] Mock sending message to ${to}:`, { type, text, imageUrl });
         return res.json({
@@ -6119,13 +6679,13 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           data: { to, type, text, imageUrl }
         });
       }
-      
+
       // Real Meta Cloud API Outbound Delivery
       let payload: any = {
         messaging_product: "whatsapp",
         to: to.replace(/[\s\+\-\(\)]/g, '')
       };
-      
+
       if (type === "template") {
         payload.type = "template";
         payload.template = {
@@ -6145,7 +6705,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           preview_url: false
         };
       }
-      
+
       const metaUrl = `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`;
       const metaResponse = await fetch(metaUrl, {
         method: "POST",
@@ -6155,12 +6715,12 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
         },
         body: JSON.stringify(payload)
       });
-      
+
       const metaData = await metaResponse.json();
       if (!metaResponse.ok) {
         throw new Error(metaData.error?.message || "Meta API Error");
       }
-      
+
       if (db) {
         await db.collection('admin_logs').add({
           timestamp: new Date().toISOString(),
@@ -6170,7 +6730,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           payloadType: type || "text"
         });
       }
-      
+
       res.json({ success: true, mode: "real-meta-graph", details: metaData });
     } catch (e: any) {
       console.error("[WhatsApp Outbound Error]", e.message);
@@ -6183,10 +6743,10 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
-    
+
     const defaultVerifyToken = 'TROR_WEBHOOK_SECURE_KEY';
     console.log('[WhatsApp Webhook Verification Check]', { mode, token });
-    
+
     if (mode === 'subscribe' && token) {
       if (token === defaultVerifyToken || token === process.env.WHATSAPP_VERIFY_TOKEN) {
         console.log('[WhatsApp Webhook] Verification successful');
@@ -6196,7 +6756,7 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
         return res.status(403).send('Forbidden verify token mismatch');
       }
     }
-    
+
     res.json({
       status: "active",
       message: "WhatsApp webhook is live and verifying signatures.",
@@ -6205,14 +6765,20 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
     });
   });
 
-  app.get('/api/whatsapp/images/:imageId.png', async (req, res) => {
+  const handleServeImage = async (req: any, res: any) => {
     try {
       const { imageId } = req.params;
-      
-      // Try serving from local disk first
+
+      // Try serving from local disk first (campaign_images then legacy whatsapp_images)
       try {
-        const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
-        const buffer = await fs.readFile(localPath);
+        const campaignPath = path.join(process.cwd(), 'public', 'campaign_images', `${imageId}.png`);
+        const legacyPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
+        let buffer: Buffer;
+        try {
+          buffer = await fs.readFile(campaignPath);
+        } catch {
+          buffer = await fs.readFile(legacyPath);
+        }
         res.writeHead(200, {
           'Content-Type': 'image/png',
           'Content-Length': buffer.length
@@ -6225,25 +6791,48 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
       if (!db) {
         return res.status(404).send('Database not initialized');
       }
-      const doc = await db.collection('whatsapp_images').doc(imageId).get();
+      let doc = await db.collection('campaign_images').doc(imageId).get();
+      if (!doc.exists) {
+        doc = await db.collection('whatsapp_images').doc(imageId).get();
+      }
       if (!doc.exists) {
         return res.status(404).send('Image not found');
       }
       const data = doc.data();
-      if (!data || !data.base64Data) {
+      if (!data) {
         return res.status(404).send('Image data missing');
       }
-      const buffer = Buffer.from(data.base64Data, 'base64');
-      res.writeHead(200, {
-        'Content-Type': data.mimeType || 'image/png',
-        'Content-Length': buffer.length
-      });
-      res.end(buffer);
-    } catch (e: any) {
-      console.error('[WhatsApp Image Serving Error]', e);
-      res.status(500).send('Internal Server Error');
+      if (data.base64Data) {
+        const buffer = Buffer.from(data.base64Data, 'base64');
+        res.writeHead(200, {
+          'Content-Type': data.mimeType || 'image/png',
+          'Content-Length': buffer.length
+        });
+        return res.end(buffer);
+      }
+      if (data.storageUrl) {
+        return res.redirect(data.storageUrl);
+      }
+      try {
+        const bucket = admin.storage().bucket('map-api-459818.firebasestorage.app');
+        const file = bucket.file(data.storagePath || `campaign_images/${imageId}.png`);
+        const [buffer] = await file.download();
+        res.writeHead(200, {
+          'Content-Type': data.mimeType || 'image/png',
+          'Content-Length': buffer.length
+        });
+        return res.end(buffer);
+      } catch (storageErr) {
+        return res.status(404).send('Image not found in storage');
+      }
+    } catch (err: any) {
+      console.error('[Serve Image Error]', err);
+      res.status(500).send('Failed to serve image');
     }
-  });
+  };
+
+  app.get('/api/campaign/images/:imageId.png', handleServeImage);
+  app.get('/api/whatsapp/images/:imageId.png', handleServeImage);
 
   function safeParseJSON(str: string): any {
     let cleaned = str.trim();
@@ -6270,8 +6859,8 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
 
     let htmlContent = "";
 
-    const activeLogo = businessProfile?.logoBase64 
-      ? `data:${businessProfile.logoMime || 'image/png'};base64,${businessProfile.logoBase64}` 
+    const activeLogo = businessProfile?.logoBase64
+      ? `data:${businessProfile.logoMime || 'image/png'};base64,${businessProfile.logoBase64}`
       : null;
 
     if (visualType === "creative-story") {
@@ -6302,9 +6891,9 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
         </div>
       `;
     } else if (visualType === "data-infographic") {
-      const stats = visualData?.stats?.length 
-        ? visualData.stats 
-        : [{label: "Excellent Quality", value: "100%"}, {label: "Service", value: "Premium"}];
+      const stats = visualData?.stats?.length
+        ? visualData.stats
+        : [{ label: "Excellent Quality", value: "100%" }, { label: "Service", value: "Premium" }];
       htmlContent = `
         <div style="position: absolute; top:0; left:0; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(12,15,18,0.3) 0%, rgba(12,15,18,0.92) 80%); z-index: 2;"></div>
         <div style="position: absolute; bottom: 240px; left: 75px; right: 75px; z-index: 10; display: flex; flex-direction: column;">
@@ -6314,15 +6903,15 @@ Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do N
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%;">
             ${stats.slice(0, 2).map((s: any, i: number) => {
-              const bgs = ["rgba(16, 185, 129, 0.15)", "rgba(59, 130, 246, 0.15)"];
-              const borderColor = i === 0 ? "rgba(16, 185, 129, 0.3)" : "rgba(59, 130, 246, 0.3)";
-              return `
+        const bgs = ["rgba(16, 185, 129, 0.15)", "rgba(59, 130, 246, 0.15)"];
+        const borderColor = i === 0 ? "rgba(16, 185, 129, 0.3)" : "rgba(59, 130, 246, 0.3)";
+        return `
                 <div style="border-radius: 20px; background: ${bgs[i % 2]}; border: 1.5px solid ${borderColor}; backdrop-filter: blur(8px); padding: 24px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                   <div style="font-size: 20px; font-weight: 600; margin-bottom: 8px; color: #ffffff; line-height: 1.2;">${s.label}</div>
                   <div style="font-size: 48px; font-weight: 900; line-height: 1; color: #10B981;">${s.value}</div>
                 </div>
               `;
-            }).join('')}
+      }).join('')}
           </div>
         </div>
       `;
@@ -6404,7 +6993,7 @@ ${TEMPLATE_CSP_META}
     try {
       const incomingPayload = req.body;
       console.log('[WhatsApp Webhook Post] Payload received:', JSON.stringify(incomingPayload, null, 2));
-      
+
       // Maintain in-memory logs
       globalWebhookPayloads.unshift({
         id: 'log_' + Math.random().toString(36).substring(2, 10),
@@ -6605,8 +7194,8 @@ ${TEMPLATE_CSP_META}
               // Detect if this image is intended to be their professional business branding logo
               let isLogoUpload = false;
               if (base64Data && (
-                /logo/i.test(textBody) || 
-                /set.*logo/i.test(textBody) || 
+                /logo/i.test(textBody) ||
+                /set.*logo/i.test(textBody) ||
                 /this is my logo/i.test(textBody) ||
                 /business logo/i.test(textBody) ||
                 /brand logo/i.test(textBody)
@@ -6668,10 +7257,10 @@ ${TEMPLATE_CSP_META}
 
               // Determine if this is a post creation or image upload turn that triggers background processing delay
               const isPostCreation = !!base64Data || /post/i.test(textBody) || /campaign/i.test(textBody) || /offer/i.test(textBody) || /creative/i.test(textBody) || /make/i.test(textBody) || /create/i.test(textBody);
-              
+
               if (isPostCreation) {
                 const waitMsgText = "Creating your post... This will take about a minute. Please hold on! ⏳✨";
-                
+
                 // Add this delay notification to the conversation history immediately so the Live Chat UI displays it live
                 conversationHistory.push(newUserMsg);
                 conversationHistory.push({ role: 'model', parts: [{ text: waitMsgText }] });
@@ -7004,7 +7593,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
                         subtext: parsedCampaign.cta || ""
                       };
                     }
-                  } catch (eHl) {}
+                  } catch (eHl) { }
                 }
 
                 if (!visualData) {
@@ -7073,7 +7662,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
                 if (bgBase64) {
                   try {
                     addLog(`Constructing premium HTML overlay canvas (Layout style: ${visualType})`);
-                    
+
                     const canvasHtml = generateBrandedCanvasHtml(
                       visualType,
                       visualData,
@@ -7089,7 +7678,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
                       try {
                         await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
                         await page.setContent(canvasHtml, { waitUntil: 'load', timeout: 25000 });
-                        
+
                         await page.evaluate(async () => {
                           await document.fonts.ready;
                           const images = Array.from(document.querySelectorAll('img'));
@@ -7101,13 +7690,13 @@ However, if they ask to make a campaign or send a product photo, and they have n
                             });
                           }));
                         });
-                        
+
                         addLog("Canvas markup processed. Screenshot capturing in progress...");
                         const buffer = await page.screenshot({ type: 'jpeg', quality: 92 });
                         addLog("Screenshot captured successfully!");
                         return buffer.toString('base64');
                       } finally {
-                        await page.close().catch(() => {});
+                        await page.close().catch(() => { });
                       }
                     });
 
@@ -7303,7 +7892,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
                   body: JSON.stringify(outboundPayload)
                 });
 
-                 const metaResData = await metaResponse.json();
+                const metaResData = await metaResponse.json();
                 if (!metaResponse.ok) {
                   console.error('[WhatsApp Outbound Webhook Send Error]', metaResData);
                   globalBotReplies.unshift({
@@ -7369,8 +7958,8 @@ However, if they ask to make a campaign or send a product photo, and they have n
   app.get('/api/auth/reddit/url', (req, res) => {
     const clientId = process.env.REDDIT_CLIENT_ID || '';
     if (!clientId) {
-      return res.status(400).json({ 
-        error: 'Reddit OAuth is not configured. Please add "REDDIT_CLIENT_ID" in the Secrets panel in the Settings menu of AI Studio.' 
+      return res.status(400).json({
+        error: 'Reddit OAuth is not configured. Please add "REDDIT_CLIENT_ID" in the Secrets panel in the Settings menu of AI Studio.'
       });
     }
 
@@ -7378,7 +7967,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
     const rawBaseUrl = process.env.APP_URL || `http://${req.headers.host}`;
     const baseUrl = rawBaseUrl.replace(/\/$/, '');
     const redirectUri = `${baseUrl}/api/auth/reddit/callback`;
-    
+
     const stateStr = `state_${Math.random().toString(36).substring(7)}_${productId}`;
 
     const params = new URLSearchParams({
@@ -7389,7 +7978,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
       duration: 'permanent',
       scope: 'identity submit',
     });
-    
+
     res.json({ url: `https://www.reddit.com/api/v1/authorize?${params.toString()}` });
   });
 
@@ -7411,7 +8000,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
       const authHeader = 'Basic ' + Buffer.from(`${process.env.REDDIT_CLIENT_ID}:${process.env.REDDIT_CLIENT_SECRET}`).toString('base64');
       const tokenRes = await fetch('https://www.reddit.com/api/v1/access_token', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Authorization': authHeader
         },
@@ -8199,7 +8788,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
       const contentType = response.headers.get('content-type') || 'image/png';
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      
+
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=86400');
@@ -8218,7 +8807,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
       return res.status(400).send('URL query parameter is required');
     }
     const safeFilename = typeof filename === 'string' && filename ? filename : 'logo.png';
-    
+
     try {
       // Fetch the remote logo directly from our backend
       const response = await fetch(url, {
@@ -8229,11 +8818,11 @@ However, if they ask to make a campaign or send a product photo, and they have n
       if (!response.ok) {
         throw new Error(`Remote host returned status code: ${response.status}`);
       }
-      
+
       const contentType = response.headers.get('content-type') || 'image/png';
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      
+
       // Set headers to trigger a direct file download
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeFilename)}"`);
@@ -8266,7 +8855,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
       console.log(`[api/scrape] Connection closed by client. Aborting Puppeteer page for URL: ${targetUrl}`);
       if (page) {
         try {
-          await page.close().catch(() => {});
+          await page.close().catch(() => { });
         } catch (err) {
           // ignore
         }
@@ -8287,12 +8876,12 @@ However, if they ask to make a campaign or send a product photo, and they have n
         try {
           console.log(`[api/scrape] Setting viewport for ${targetUrl}...`);
           await page.setViewport({ width: 1280, height: 800 });
-          
+
           if (aborted) {
             console.log(`[api/scrape] Abort detected before navigation.`);
             throw new DOMException("The user aborted a request.", "AbortError");
           }
-          
+
           console.log(`[api/scrape] Navigating to target URL: ${targetUrl}...`);
           await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(e => {
             if (aborted) {
@@ -8300,18 +8889,18 @@ However, if they ask to make a campaign or send a product photo, and they have n
             }
             console.error("[api/scrape] Goto timeout or error: ", e.message || e);
           });
-          
+
           if (aborted) {
             console.log(`[api/scrape] Abort detected after navigation.`);
             throw new DOMException("The user aborted a request.", "AbortError");
           }
-          
+
           console.log(`[api/scrape] Scrolling page to trigger lazy-loaded showcase assets...`);
           await page.evaluate(async () => {
             window.scrollBy(0, 1000);
             await new Promise(r => setTimeout(r, 400));
             window.scrollTo(0, 0);
-          }).catch(() => {});
+          }).catch(() => { });
 
           console.log(`[api/scrape] Evaluating page document to extract Brand DNA...`);
           const evaluationResult = await page.evaluate(new Function(`
@@ -8559,7 +9148,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
           }
 
           const subpageCandidates = new Map<string, { href: string; score: number }>();
-          
+
           if (targetOrigin) {
             for (const link of links) {
               try {
@@ -8593,7 +9182,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
                 if (!existing || existing.score < score) {
                   subpageCandidates.set(fullCleanUrl, { href: fullCleanUrl, score });
                 }
-              } catch (_) {}
+              } catch (_) { }
             }
           }
 
@@ -8617,17 +9206,17 @@ However, if they ask to make a campaign or send a product photo, and they have n
             try {
               subPageInstance = await browser.newPage();
               await subPageInstance.setViewport({ width: 1280, height: 800 });
-              
+
               // 7 seconds navigation timeout for subpages
               await subPageInstance.goto(sub.href, { waitUntil: 'domcontentloaded', timeout: 7000 });
-              
+
               if (aborted) break;
 
               await subPageInstance.evaluate(async () => {
                 window.scrollBy(0, 800);
                 await new Promise(r => setTimeout(r, 300));
                 window.scrollTo(0, 0);
-              }).catch(() => {});
+              }).catch(() => { });
 
               const subResult = await subPageInstance.evaluate(new Function(`
                 const textContent = document.body.innerText.substring(0, 10000);
@@ -8717,7 +9306,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
               console.error(`[api/scrape] Error crawling subpage ${sub.href}:`, e.message || e);
             } finally {
               if (subPageInstance) {
-                await subPageInstance.close().catch(() => {});
+                await subPageInstance.close().catch(() => { });
               }
             }
           }
@@ -8728,7 +9317,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
             let pathLabel = sub.url;
             try {
               pathLabel = new URL(sub.url).pathname;
-            } catch (_) {}
+            } catch (_) { }
             aggregatedTextContent += `\n\n--- SUBPAGE: ${pathLabel} ---\n${sub.textContent}`;
           }
 
@@ -8749,31 +9338,31 @@ However, if they ask to make a campaign or send a product photo, and they have n
             console.log(`[api/scrape] Closing page instance...`);
             const tempPage = page;
             page = null;
-            await tempPage.close().catch(() => {});
+            await tempPage.close().catch(() => { });
             console.log(`[api/scrape] Page instance closed.`);
           }
         }
       });
-      
+
       if (aborted) {
         throw new DOMException("The user aborted a request.", "AbortError");
       }
 
       console.log(`[api/scrape] Sorting and formatting extracted data...`);
       const extractedFonts = Object.entries(scrapeData.fontCounts || {})
-         .sort((a: [string, any], b: [string, any]) => (b[1] as number) - (a[1] as number))
-         .map(entry => entry[0])
-         .slice(0, 5);
-         
+        .sort((a: [string, any], b: [string, any]) => (b[1] as number) - (a[1] as number))
+        .map(entry => entry[0])
+        .slice(0, 5);
+
       const extractedColors = Object.entries(scrapeData.colorCounts || {})
-         .sort((a: [string, any], b: [string, any]) => (b[1] as number) - (a[1] as number))
-         .map(entry => entry[0])
-         .slice(0, 5);
-         
+        .sort((a: [string, any], b: [string, any]) => (b[1] as number) - (a[1] as number))
+        .map(entry => entry[0])
+        .slice(0, 5);
+
       const extractedBgColors = Object.entries(scrapeData.bgColorCounts || {})
-         .sort((a: [string, any], b: [string, any]) => (b[1] as number) - (a[1] as number))
-         .map(entry => entry[0])
-         .slice(0, 5);
+        .sort((a: [string, any], b: [string, any]) => (b[1] as number) - (a[1] as number))
+        .map(entry => entry[0])
+        .slice(0, 5);
 
       console.log(`[api/scrape] Extracted fonts:`, JSON.stringify(extractedFonts));
       console.log(`[api/scrape] Extracted colors:`, JSON.stringify(extractedColors));
@@ -8827,9 +9416,9 @@ However, if they ask to make a campaign or send a product photo, and they have n
     const rawAuth = (req.headers.authorization || "").trim();
     const bearerKey = rawAuth.toLowerCase().startsWith("bearer ") ? rawAuth.substring(7).trim() : rawAuth;
 
-    const providedKey = 
-      (req.headers["x-blog-api-key"] as string) || 
-      (req.headers["x-api-key"] as string) || 
+    const providedKey =
+      (req.headers["x-blog-api-key"] as string) ||
+      (req.headers["x-api-key"] as string) ||
       bearerKey ||
       (req.query.apiKey as string) ||
       (req.query.api_key as string) ||
@@ -8864,14 +9453,14 @@ However, if they ask to make a campaign or send a product photo, and they have n
     try {
       let payload = req.body;
       if (typeof payload === 'string') {
-        try { payload = JSON.parse(payload); } catch (_) {}
+        try { payload = JSON.parse(payload); } catch (_) { }
       }
       if (!payload || typeof payload !== 'object') payload = {};
 
       const authorized = await isValidBlogApiKey(req);
       if (!authorized) {
-        return res.status(401).json({ 
-          error: "Unauthorized: Invalid or missing API key. Provide key in X-Blog-Api-Key header, Authorization Bearer header, or ?api_key= URL parameter." 
+        return res.status(401).json({
+          error: "Unauthorized: Invalid or missing API key. Provide key in X-Blog-Api-Key header, Authorization Bearer header, or ?api_key= URL parameter."
         });
       }
 
@@ -8887,7 +9476,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
       const seoKeywords = payload.seoKeywords;
 
       // Robust Cover Image Extraction (supports coverImage, cover_image, image_url, featured_image, thumbnail, objects, & embedded <img> tags)
-      let rawImage = 
+      let rawImage =
         payload.coverImage || payload.cover_image || payload.coverImg ||
         payload.image || payload.image_url || payload.imageUrl || payload.featured_image || payload.featuredImage ||
         payload.thumbnail || payload.thumb || payload.banner || payload.header_image || payload.headerImage ||
@@ -8972,7 +9561,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
           console.warn("[Blog API] Firestore write warning (using server cache fallback):", fsErr);
         }
       }
-      
+
       serverBlogsCache.unshift(blogData);
       console.log(`[Blog API] Successfully published blog: "${title}" (ID: ${blogId})`);
 
@@ -9000,7 +9589,7 @@ However, if they ask to make a campaign or send a product photo, and they have n
           blogs = snapshot.docs
             .map(d => ({ id: d.id, ...d.data() }))
             .filter((b: any) => b.published === true);
-        } catch (_) {}
+        } catch (_) { }
       }
 
       const combinedMap = new Map();
@@ -9192,9 +9781,9 @@ as JSON.
 
     const avoidBlock = alreadyUsedDescriptors.length
       ? `\nThese composition_archetype / grid_layout_axis combinations are ALREADY USED elsewhere in this dataset. Do not repeat them -- use genuinely different mechanics:\n${alreadyUsedDescriptors
-          .slice(-30)
-          .map((d) => `- ${d}`)
-          .join("\n")}\n`
+        .slice(-30)
+        .map((d) => `- ${d}`)
+        .join("\n")}\n`
       : "";
 
     const prompt = `
@@ -9245,7 +9834,7 @@ above, not generic marketing language.
 
     const rawText = response?.text || "";
     const cleaned = rawText.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
-    
+
     try {
       const parsed = JSON.parse(cleaned);
       if (Array.isArray(parsed)) return parsed;
@@ -9270,7 +9859,7 @@ above, not generic marketing language.
     try {
       const channel = (req.query.channel as string) || 'linkedin';
       const outputDir = path.join(process.cwd(), 'output_templates');
-      
+
       const fileNames = [
         `${channel}_templates_60.json`,
         `${channel}_templates_20.json`,
@@ -9287,7 +9876,7 @@ above, not generic marketing language.
           if (Array.isArray(templates) && templates.length > 0) {
             return res.json({ success: true, channel, count: templates.length, templates });
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (db) {
@@ -9297,7 +9886,7 @@ above, not generic marketing language.
           if (templates.length > 0) {
             return res.json({ success: true, channel, count: templates.length, templates });
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       return res.json({ success: true, channel, count: 0, templates: [] });
@@ -9420,7 +10009,7 @@ CRITICAL DESIGN & CODE REQUIREMENTS:
       const jsonFileName = `${channel}_templates_${templates.length}.json`;
       const localFilePath = path.join(outputDir, jsonFileName);
       await fs.writeFile(localFilePath, JSON.stringify(templates, null, 2), 'utf-8');
-      
+
       // Also overwrite main channel json
       await fs.writeFile(path.join(outputDir, `${channel}_templates.json`), JSON.stringify(templates, null, 2), 'utf-8');
 
@@ -9639,7 +10228,7 @@ CRITICAL DESIGN & CODE REQUIREMENTS:
             await batch.commit();
             dbSavedCount += chunk.length;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       return res.json({
@@ -9674,8 +10263,16 @@ CRITICAL DESIGN & CODE REQUIREMENTS:
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const serverInstance = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  serverInstance.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[Server Warning] Port ${PORT} is already in use by a running process. Reusing existing instance.`);
+    } else {
+      console.error('[Server Error]', err);
+    }
   });
 }
 
@@ -9688,11 +10285,11 @@ async function publishPostToLinkedIn(token: string, text: string, imageUrl?: str
     const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
       headers: { Authorization: `Bearer ${token}` }
     });
-    
+
     if (!userRes.ok) {
       throw new Error('Failed to fetch user info from LinkedIn');
     }
-    
+
     const userData = await userRes.json();
     authorUrn = `urn:li:person:${userData.sub}`;
   }
@@ -9744,7 +10341,7 @@ async function publishPostToLinkedIn(token: string, text: string, imageUrl?: str
     // Prepare image data
     let imageBuffer: Buffer | ArrayBuffer;
     let contentType = 'image/jpeg';
-    
+
     if (validImageUrl.startsWith('data:')) {
       const matches = validImageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
       if (matches && matches.length === 3) {

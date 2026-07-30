@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { AgentFlipbook } from '../components/AgentFlipbook';
-import { RevolvingAgents } from '../components/RevolvingAgents';
-import '../components/AgentFlipbook.css';
+import { AgentSolitaireCards } from '../components/AgentSolitaireCards';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -22,40 +20,40 @@ import {
 
 const PLAN_AGENTS = {
   starter: [
-    { name: "Sarah", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png", active: true },
-    { name: "Alex", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png", active: true },
-    { name: "Chloe", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png", active: true },
-    { name: "Julian", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png", active: true },
-    { name: "Elena", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png", active: true },
-    { name: "Arthur", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png", active: false },
-    { name: "Maya", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png", active: false },
-    { name: "Zack", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png", active: false },
-    { name: "Victor", avatar: "/agents_img/Gemini_Generated_Image_victor.png", active: false },
-    { name: "Max", avatar: "/agents_img/Gemini_Generated_Image_max.png", active: false }
+    { name: "Sarah", avatar: "/agents_img/sarah.png", active: true },
+    { name: "Alex", avatar: "/agents_img/alex.png", active: true },
+    { name: "Chloe", avatar: "/agents_img/chloe.png", active: true },
+    { name: "Julian", avatar: "/agents_img/julian.png", active: true },
+    { name: "Elena", avatar: "/agents_img/elena.png", active: true },
+    { name: "Arthur", avatar: "/agents_img/arthur.png", active: false },
+    { name: "Maya", avatar: "/agents_img/maya.png", active: false },
+    { name: "Zack", avatar: "/agents_img/zack.png", active: false },
+    { name: "Victor", avatar: "/agents_img/victor.png", active: false },
+    { name: "Max", avatar: "/agents_img/max.png", active: false }
   ],
   growth: [
-    { name: "Sarah", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png", active: true },
-    { name: "Alex", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png", active: true },
-    { name: "Chloe", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png", active: true },
-    { name: "Julian", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png", active: true },
-    { name: "Elena", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png", active: true },
-    { name: "Arthur", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png", active: true },
-    { name: "Maya", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png", active: true },
-    { name: "Zack", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png", active: true },
-    { name: "Victor", avatar: "/agents_img/Gemini_Generated_Image_victor.png", active: false },
-    { name: "Max", avatar: "/agents_img/Gemini_Generated_Image_max.png", active: false }
+    { name: "Sarah", avatar: "/agents_img/sarah.png", active: true },
+    { name: "Alex", avatar: "/agents_img/alex.png", active: true },
+    { name: "Chloe", avatar: "/agents_img/chloe.png", active: true },
+    { name: "Julian", avatar: "/agents_img/julian.png", active: true },
+    { name: "Elena", avatar: "/agents_img/elena.png", active: true },
+    { name: "Arthur", avatar: "/agents_img/arthur.png", active: true },
+    { name: "Maya", avatar: "/agents_img/maya.png", active: true },
+    { name: "Zack", avatar: "/agents_img/zack.png", active: true },
+    { name: "Victor", avatar: "/agents_img/victor.png", active: false },
+    { name: "Max", avatar: "/agents_img/max.png", active: false }
   ],
   agency: [
-    { name: "Sarah", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png", active: true },
-    { name: "Alex", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png", active: true },
-    { name: "Chloe", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png", active: true },
-    { name: "Julian", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png", active: true },
-    { name: "Elena", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png", active: true },
-    { name: "Arthur", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png", active: true },
-    { name: "Maya", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png", active: true },
-    { name: "Zack", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png", active: true },
-    { name: "Victor", avatar: "/agents_img/Gemini_Generated_Image_victor.png", active: true },
-    { name: "Max", avatar: "/agents_img/Gemini_Generated_Image_max.png", active: true }
+    { name: "Sarah", avatar: "/agents_img/sarah.png", active: true },
+    { name: "Alex", avatar: "/agents_img/alex.png", active: true },
+    { name: "Chloe", avatar: "/agents_img/chloe.png", active: true },
+    { name: "Julian", avatar: "/agents_img/julian.png", active: true },
+    { name: "Elena", avatar: "/agents_img/elena.png", active: true },
+    { name: "Arthur", avatar: "/agents_img/arthur.png", active: true },
+    { name: "Maya", avatar: "/agents_img/maya.png", active: true },
+    { name: "Zack", avatar: "/agents_img/zack.png", active: true },
+    { name: "Victor", avatar: "/agents_img/victor.png", active: true },
+    { name: "Max", avatar: "/agents_img/max.png", active: true }
   ]
 };
 
@@ -666,7 +664,7 @@ export function LandingPage() {
                   name: "Sarah Chen", 
                   role: "Co-Founder • AIMLPARTNER", 
                   metric: "2-Min Monday Review",
-                  avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png"
+                  avatar: "/agents_img/sarah.png"
                 },
                 { 
                   name: "Marcus Vance", 
@@ -1346,11 +1344,8 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* 6. SCROLL-LOCKED CREATIVE TEAM FLIPBOOK */}
-      <AgentFlipbook />
-
-      {/* 6.5. REVOLVING 3D AGENTS CYLINDER (Hidden for now) */}
-      {/* <RevolvingAgents /> */}
+      {/* 6. AGENT SOLITAIRE CARDS */}
+      <AgentSolitaireCards />
 
       {/* 7. THE POST GROWTH METHODOLOGY (Editorial Timeline) */}
       <section className="w-full bg-[#FAF9F6] border-b border-slate-200/60 relative z-10">
@@ -1894,14 +1889,14 @@ export function LandingPage() {
                   <span className="text-[10px] text-[#7C3AED] font-sans uppercase tracking-wider block mb-4">Active Roster Specialists</span>
                   <div className="space-y-3">
                     {[
-                      { name: "Sarah", role: "Research & Strategy", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png" },
-                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png" },
-                      { name: "Chloe", role: "Visual Aesthetics", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png" },
-                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png" },
-                      { name: "Elena", role: "Publishing Router", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png" },
-                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png" },
-                      { name: "Maya", role: "Campaign Scheduler", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png" },
-                      { name: "Zack", role: "Objection Handling", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png" }
+                      { name: "Sarah", role: "Research & Strategy", avatar: "/agents_img/sarah.png" },
+                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "/agents_img/alex.png" },
+                      { name: "Chloe", role: "Visual Aesthetics", avatar: "/agents_img/chloe.png" },
+                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "/agents_img/julian.png" },
+                      { name: "Elena", role: "Publishing Router", avatar: "/agents_img/elena.png" },
+                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "/agents_img/arthur.png" },
+                      { name: "Maya", role: "Campaign Scheduler", avatar: "/agents_img/maya.png" },
+                      { name: "Zack", role: "Objection Handling", avatar: "/agents_img/zack.png" }
                     ].map((agent, i) => (
                       <div key={i} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
@@ -1945,16 +1940,16 @@ export function LandingPage() {
                   <span className="text-[10px] text-slate-400 font-sans uppercase tracking-wider block mb-4">Active Roster Specialists</span>
                   <div className="space-y-3">
                     {[
-                      { name: "Sarah", role: "Research & Strategy", avatar: "/agents_img/Gemini_Generated_Image_93efim93efim93ef.png" },
-                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "/agents_img/Gemini_Generated_Image_5ru7d25ru7d25ru7.png" },
-                      { name: "Chloe", role: "Visual Aesthetics", avatar: "/agents_img/Gemini_Generated_Image_zbywuuzbywuuzbyw.png" },
-                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "/agents_img/Gemini_Generated_Image_d6k1gd6k1gd6k1gd.png" },
-                      { name: "Elena", role: "Publishing Router", avatar: "/agents_img/Gemini_Generated_Image_ge8higge8higge8h.png" },
-                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "/agents_img/Gemini_Generated_Image_u72h5uu72h5uu72h.png" },
-                      { name: "Maya", role: "Campaign Scheduler", avatar: "/agents_img/Gemini_Generated_Image_ultre0ultre0ultr.png" },
-                      { name: "Zack", role: "Objection Handling", avatar: "/agents_img/Gemini_Generated_Image_wow9hxwow9hxwow9.png" },
-                      { name: "Victor", role: "WhatsApp Commander", avatar: "/agents_img/Gemini_Generated_Image_victor.png" },
-                      { name: "Max", role: "Autopilot Monitor", avatar: "/agents_img/Gemini_Generated_Image_max.png" }
+                      { name: "Sarah", role: "Research & Strategy", avatar: "/agents_img/sarah.png" },
+                      { name: "Alex", role: "Copywriter & Hook Spec", avatar: "/agents_img/alex.png" },
+                      { name: "Chloe", role: "Visual Aesthetics", avatar: "/agents_img/chloe.png" },
+                      { name: "Julian", role: "Graphics & Logo Layout", avatar: "/agents_img/julian.png" },
+                      { name: "Elena", role: "Publishing Router", avatar: "/agents_img/elena.png" },
+                      { name: "Arthur", role: "Voice & DNA Clone", avatar: "/agents_img/arthur.png" },
+                      { name: "Maya", role: "Campaign Scheduler", avatar: "/agents_img/maya.png" },
+                      { name: "Zack", role: "Objection Handling", avatar: "/agents_img/zack.png" },
+                      { name: "Victor", role: "WhatsApp Commander", avatar: "/agents_img/victor.png" },
+                      { name: "Max", role: "Autopilot Monitor", avatar: "/agents_img/max.png" }
                     ].map((agent, i) => (
                       <div key={i} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">

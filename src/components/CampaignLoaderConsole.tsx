@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useMemo } from "react";
 import { ProductDNA } from "../types";
 
 // -----------------------------------------------
@@ -108,25 +108,6 @@ export const CampaignLoaderConsole: React.FC<CampaignLoaderConsoleProps> = ({
     []
   );
 
-  const brandName = activeProduct?.name || "the brand";
-  const enemy = activeProduct?.enemy || "manual inefficiency";
-  const hellState = activeProduct?.hellState || "wasted hours";
-  const heavenState = activeProduct?.heavenState || "streamlined growth";
-  const uniqueMechanism = activeProduct?.uniqueMechanism || "AI specialist agents";
-  const objections = activeProduct?.objections || "setup complexity";
-  const tone = activeProduct?.tone || "professional";
-  const colors = activeProduct?.visualData?.colors?.join(", ") || "#7C3AED, #FAF9F6";
-  const fonts = activeProduct?.visualData?.fonts
-    ? `${activeProduct.visualData.fonts.primary} / ${activeProduct.visualData.fonts.secondary}`
-    : "Inter / Outfit";
-  const visualStyle = activeProduct?.visualStyle || "modern clean aesthetic";
-  const website = activeProduct?.website || "your site";
-
-  const [meetingLog, setMeetingLog] = useState<{ agent: string; text: string }[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
-  const dialogueIndexRef = useRef(0);
-  const lastPhaseRef = useRef<string | null>(null);
-
   const activeAgentId = useMemo(() => {
     const s = generationStatus.toLowerCase();
     if (s.includes("research") || s.includes("gathering market") || s.includes("market intelligence") || s.includes("crawl") || s.includes("scraping") || s.includes("extracting")) return "sarah";
@@ -142,51 +123,6 @@ export const CampaignLoaderConsole: React.FC<CampaignLoaderConsoleProps> = ({
     if (pct <= 0.9) return "chloe";
     return "julian";
   }, [generationStatus, generationStep, generationTotal]);
-
-  const dialogueScript = useMemo(() => [
-    { agentId: "sarah", phase: "sarah", text: `Radar active on "${focus || "target niche"}". Wait, do humans actually purchase to satisfy feelings? Intriguing.` },
-    { agentId: "sarah", phase: "sarah", text: `I crawled competitor headers and they look like robotic templates! Let's build a gap around: "${hellState}".` },
-    { agentId: "sarah", phase: "sarah", text: `Objections mapped: "${objections}". Sending parameters down to Arthur's calibration deck.` },
-    { agentId: "arthur", phase: "arthur", text: `Calibrating voice clone for ${brandName}. Let's tune tone rules: "${tone}".` },
-    { agentId: "arthur", phase: "arthur", text: `We are targeting the status quo: "${enemy}". Alex, focus copy on our mechanism: "${uniqueMechanism}".` },
-    { agentId: "alex", phase: "arthur", text: `Yes, Arthur. Spacing out text. I promise not to write 'delve' or 'synergize' like a robot!` },
-    { agentId: "alex", phase: "alex", text: `Drafting weekly posts for channels: ${selectedChannels.join(", ")}. Highlighting the shift into: "${heavenState}".` },
-    { agentId: "alex", phase: "alex", text: `LinkedIn copy done. Generous line spacing included. Ready for Chloe's visual check.` },
-    { agentId: "chloe", phase: "alex", text: `Creative rules loaded. Using brand colors: [${colors}] and fonts: ${fonts}.` },
-    { agentId: "chloe", phase: "chloe", text: `Style is locked to: "${visualStyle}". Setting bounding margins. Julian, trigger press rollers.` },
-    { agentId: "julian", phase: "julian", text: `Headless press room active. Stamping brand logo for ${website} at safe borders.` },
-    { agentId: "julian", phase: "julian", text: `Visual card template finalized. Anti-alias shaders applied. Dispatching card on conveyor!` },
-  ], [focus, hellState, objections, brandName, tone, enemy, uniqueMechanism, selectedChannels, heavenState, colors, fonts, visualStyle, website]);
-
-  const pushLog = useCallback((agentId: string, text: string) => {
-    const agentObj = agents.find(a => a.id === agentId);
-    setMeetingLog(prev => [...prev, { agent: agentObj?.name || agentId, text }]);
-  }, [agents]);
-
-  useEffect(() => {
-    const currentPhase = activeAgentId;
-    if (currentPhase !== lastPhaseRef.current) {
-      lastPhaseRef.current = currentPhase;
-      dialogueIndexRef.current = 0;
-    }
-
-    const phaseMessages = dialogueScript.filter(m => m.phase === currentPhase);
-    const idx = dialogueIndexRef.current;
-
-    if (idx < phaseMessages.length) {
-      const msg = phaseMessages[idx];
-      const timer = setTimeout(() => {
-        pushLog(msg.agentId, msg.text);
-        dialogueIndexRef.current = idx + 1;
-      }, idx === 0 ? 1000 : 4500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [activeAgentId, dialogueScript, pushLog]);
-
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [meetingLog]);
 
   return (
     <div className="flex flex-col bg-[#FAF9F6] text-[#08080C] rounded-xl border border-slate-900/10 overflow-hidden relative shadow-sm">
@@ -209,10 +145,10 @@ export const CampaignLoaderConsole: React.FC<CampaignLoaderConsoleProps> = ({
         />
       </div>
 
-      <div className="flex flex-col lg:flex-row min-h-[600px] border-t border-slate-900/10">
-        {/* Left Arena: HTML/CSS Schematic Dashboard with Blueprint Theme */}
+      <div className="w-full min-h-[550px] border-t border-slate-900/10">
+        {/* Arena: HTML/CSS Schematic Dashboard with Blueprint Theme */}
         <div 
-          className="flex-1 relative bg-[#FAF9F6] p-6 flex flex-col items-center justify-center min-h-[500px] overflow-hidden"
+          className="w-full relative bg-[#FAF9F6] p-6 flex flex-col items-center justify-center min-h-[550px] overflow-hidden"
           style={{
             backgroundImage: "radial-gradient(circle, rgba(15, 23, 42, 0.08) 1px, transparent 1px)",
             backgroundSize: "24px 24px"
@@ -225,14 +161,17 @@ export const CampaignLoaderConsole: React.FC<CampaignLoaderConsoleProps> = ({
           </div>
 
           {/* Connected Agent Flow Diagram */}
-          <div className="w-full max-w-4xl flex flex-col items-center gap-10 z-10 relative px-4">
+          <div className="w-full max-w-5xl flex flex-col items-center gap-10 z-10 relative px-4">
             
-            {/* The Synthesis Center Hub */}
+            {/* The Synthesis Center Hub - Tror Avatar */}
             <div className="relative flex flex-col items-center">
-              <div className="w-24 h-24 rounded-full bg-white border border-slate-900/10 flex items-center justify-center shadow-md relative z-20">
-                <div className="w-16 h-16 rounded-full bg-indigo-50 border border-indigo-500/10 flex items-center justify-center">
-                  <div className="w-6 h-6 rounded-full bg-indigo-600 animate-ping absolute opacity-30" />
-                  <span className="text-[10px] font-bold text-indigo-600 tracking-wider font-mono">B2P CORE</span>
+              <div className="w-24 h-24 rounded-full bg-white border border-slate-900/10 flex items-center justify-center shadow-md relative z-20 p-1">
+                <div className="w-full h-full rounded-full overflow-hidden border border-indigo-500/20 relative flex items-center justify-center bg-indigo-50">
+                  <img
+                    src="/B2P AVATAR.png"
+                    alt="Tror Avatar"
+                    className="w-full h-full object-cover rounded-full"
+                  />
                 </div>
               </div>
               <div className="h-6 w-px bg-slate-900/10 relative z-10" />
@@ -296,48 +235,8 @@ export const CampaignLoaderConsole: React.FC<CampaignLoaderConsoleProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Right Panel: Sleek Timeline Log */}
-        <div className="lg:w-80 border-t lg:border-t-0 lg:border-l border-slate-900/10 flex flex-col bg-white z-10 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)]">
-          <div className="px-4 py-3 border-b border-slate-900/10 bg-[#FAF9F6]">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block font-mono">
-              Dialogue logs
-            </span>
-          </div>
-          <div className="flex-1 p-4 overflow-y-auto space-y-3.5 max-h-[550px]">
-            {meetingLog.length === 0 && (
-              <p className="text-[11px] text-slate-400 italic text-center py-6 select-none font-mono">
-                Handshaking with office motherboard...
-              </p>
-            )}
-            {meetingLog.map((log, idx) => {
-              const robotObj = agents.find(r => r.name === log.agent);
-              return (
-                <div key={idx} className="flex items-start space-x-2.5 animate-fadeIn">
-                  {robotObj ? (
-                    <img
-                      src={robotObj.avatar}
-                      alt={robotObj.name}
-                      className="w-6 h-6 rounded-md object-cover border border-slate-200 mt-0.5"
-                    />
-                  ) : (
-                    <div className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center mt-0.5 border border-slate-200">
-                      <span className="text-[9px] font-mono text-slate-400">🤖</span>
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0 bg-[#FAF9F6] border border-slate-900/5 rounded-xl px-3 py-2 text-[11px] leading-relaxed">
-                    <span className="font-bold text-slate-800 block mb-0.5 font-display">
-                      {log.agent}
-                    </span>
-                    <p className="text-slate-600 font-sans">{log.text}</p>
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={logEndRef} />
-          </div>
-        </div>
       </div>
     </div>
   );
 };
+

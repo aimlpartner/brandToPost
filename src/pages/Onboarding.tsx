@@ -845,12 +845,28 @@ export function Onboarding() {
 
     setIsApproving(true);
     try {
-      const campaignToSave = {
+      const campaignToSave = JSON.parse(JSON.stringify({
         ...draftCampaign,
         userId: user.uid,
         productName: dna.name,
         productLogoUrl: activeProduct?.logoUrl || null
-      };
+      }));
+
+      // Strip heavy HTML from saved documents to avoid Firestore 1MB limits
+      campaignToSave.dailyPosts?.forEach((dp: any) => {
+        if (dp.visualData) {
+          delete dp.visualData.customHtml;
+          delete dp.visualData.renderedHtml;
+          delete dp.visualData.rawHtml;
+        }
+        dp.platformVersions?.forEach((pv: any) => {
+          if (pv.visualData) {
+            delete pv.visualData.customHtml;
+            delete pv.visualData.renderedHtml;
+            delete pv.visualData.rawHtml;
+          }
+        });
+      });
 
       // Save to Firestore
       await setDoc(doc(db, "campaigns", draftCampaign.id), campaignToSave);
@@ -945,13 +961,12 @@ export function Onboarding() {
         {/* Wizard Panel wrapper */}
         <div className="w-full bg-white/90 border border-slate-200/80 shadow-[0_30px_70px_rgba(15,23,42,0.06)] rounded-3xl overflow-hidden flex flex-col min-h-[500px] backdrop-blur-md">
           {/* Progress Indicator */}
-          {step <= 4 && (
+          {step <= 3 && (
             <div className="w-full border-b border-slate-200/60 bg-slate-50/50 p-4 flex items-center justify-around text-xs font-sans font-semibold text-slate-500">
               {[
                 { label: "1. Scan Brand", s: 1 },
                 { label: "2. Refine DNA", s: 2 },
-                { label: "3. Brand Assets", s: 3 },
-                { label: "4. Setup Campaign", s: 4 }
+                { label: "3. Brand Assets", s: 3 }
               ].map((item) => (
                 <div
                   key={item.s}
@@ -1451,324 +1466,18 @@ export function Onboarding() {
                 </button>
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => setStep(4)}
+                    onClick={handleSkipOnboarding}
                     className="text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-xl px-4 py-2.5 transition-all cursor-pointer"
                   >
                     Skip Upload
                   </button>
                   <button
-                    onClick={() => setStep(4)}
+                    onClick={handleSkipOnboarding}
                     className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold px-6 py-2.5 rounded-xl shadow-lg flex items-center gap-1.5 transition-all text-xs cursor-pointer"
                   >
-                    Next Step <ArrowRight className="w-4 h-4" />
+                    Complete Setup <CheckCircle2 className="w-4 h-4" />
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: Campaign Setup Form (Generated theme chips) */}
-          {step === 4 && (
-            <div className="p-6 sm:p-10 flex flex-col justify-between flex-1">
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-2xl font-bold font-display text-slate-800 mb-2">Create First Weekly Campaign</h2>
-                  <p className="text-sm text-slate-500 font-light">
-                    Specify the target focus parameters for your campaign.
-                  </p>
-                </div>
-
-                <form onSubmit={handleGenerateCampaignOnboarding} className="space-y-6">
-                  {/* Theme suggestion chips */}
-                  {dna.recommendedThemes && dna.recommendedThemes.length > 0 && (
-                    <div className="space-y-2.5">
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Suggested Campaign Angles (Select to autofill)
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {dna.recommendedThemes.slice(0, 4).map((theme: string, idx: number) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleThemeChipClick(theme)}
-                            className={`px-3 py-1.5 rounded-full border text-[11px] transition-all text-left cursor-pointer ${
-                              selectedTheme === theme
-                                ? "bg-[#7C3AED] border-[#7C3AED] text-white font-semibold shadow-md shadow-[#7C3AED]/20 scale-[1.02]"
-                                : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200/60 hover:text-slate-800"
-                            }`}
-                          >
-                            {theme}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                        Target Industry
-                      </label>
-                      <input
-                        type="text"
-                        value={industry}
-                        onChange={(e) => setIndustry(e.target.value)}
-                        placeholder="e.g. B2B Software / Fintech"
-                        className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                        Sub-category / Niche
-                      </label>
-                      <input
-                        type="text"
-                        value={subcategory}
-                        onChange={(e) => setSubcategory(e.target.value)}
-                        placeholder="e.g. Subscription Analytics & Churn"
-                        className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all"
-                        required
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                        Campaign Focus Topic / Angle
-                      </label>
-                      <input
-                        type="text"
-                        value={focusTopic}
-                        onChange={(e) => setFocusTopic(e.target.value)}
-                        placeholder="e.g. The hidden costs of manual database syncs"
-                        className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-slate-800 focus:outline-none focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/10 py-3 px-4 rounded-xl placeholder:text-slate-400 text-sm font-medium transition-all"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* Channels & Ratio config */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/40 p-5 rounded-2xl border border-slate-200/60">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                        Target Social Platforms
-                      </label>
-                      <div className="flex items-center gap-3">
-                        {[
-                          { name: "Instagram", isLocked: true, lockedReason: "🔒 Soon" },
-                          { name: "Facebook", isLocked: true, lockedReason: "🔒 Soon" },
-                          { name: "LinkedIn", isLocked: true, lockedReason: "🔒 Founder Only" },
-                          { name: "X", isLocked: true, lockedReason: "🔒 Soon" },
-                          { name: "Reddit", isLocked: true, lockedReason: "🔒 Soon" }
-                        ].map((ch) => {
-                          const isSel = selectedChannels.includes(ch.name);
-                          return (
-                            <button
-                              key={ch.name}
-                              type="button"
-                              disabled={ch.isLocked}
-                              onClick={() => {
-                                if (ch.isLocked) return;
-                                if (isSel) {
-                                  setSelectedChannels(selectedChannels.filter((c) => c !== ch.name));
-                                } else {
-                                  setSelectedChannels([...selectedChannels, ch.name]);
-                                }
-                              }}
-                              className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
-                                ch.isLocked
-                                  ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-75"
-                                  : isSel
-                                  ? "bg-[#7C3AED]/10 border-[#7C3AED] text-[#7C3AED] cursor-pointer"
-                                  : "bg-white border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100/60 cursor-pointer"
-                              }`}
-                            >
-                              {ch.name} {ch.isLocked && <span className="text-[10px] text-amber-600 font-bold ml-1">{ch.lockedReason}</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                  </div>
-
-                  <div className="mt-8 flex items-center justify-between border-t border-slate-200/60 pt-5">
-                    <button
-                      type="button"
-                      onClick={() => setStep(3)}
-                      className="px-5 py-2.5 bg-slate-200 text-slate-700 rounded-xl hover:bg-slate-350/80 transition-colors text-xs font-semibold cursor-pointer"
-                    >
-                      Previous
-                    </button>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={handleSkipOnboarding}
-                        className="text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-xl px-4 py-2.5 transition-all cursor-pointer"
-                      >
-                        Skip Campaign
-                      </button>
-                      <button
-                        type="submit"
-                        className="bg-[#7C3AED] hover:bg-[#6D28D9] hover:shadow-[#7C3AED]/20 text-white font-bold px-7 py-3 rounded-xl shadow-lg flex items-center gap-2 active:scale-[0.98] transition-all text-xs cursor-pointer"
-                      >
-                        Generate Campaign <ArrowRight className="w-4 h-4 animate-pulse" />
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 5: Campaign Loading & Wait Screen (Console logs) */}
-          {step === 5 && (
-            <div className="flex-grow flex flex-col justify-between p-6 sm:p-10 bg-slate-50/50 min-h-[400px]">
-              <div className="space-y-6">
-                <div className="flex items-center gap-4 border-b border-slate-200/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl bg-[#7C3AED] flex items-center justify-center shadow-lg relative shrink-0">
-                    <Loader2 className="w-5 h-5 text-white animate-spin" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold font-display text-slate-800">Generating Social Campaign</h2>
-                    <p className="text-xs text-[#7C3AED] font-semibold font-mono tracking-wider uppercase">
-                      Running Tror Marketing Pipeline
-                    </p>
-                  </div>
-                </div>
-
-                {/* Console Log - Contained in a sleek obsidian shell */}
-                <div className="bg-slate-950 border border-slate-900 rounded-2xl p-5 shadow-inner">
-                  <div className="space-y-3 font-mono text-[11px] text-slate-300 max-h-[180px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
-                    {genLogs.map((log, i) => (
-                      <div
-                        key={i}
-                        className={`transition-all ${
-                          log.startsWith(">") ? "text-[#a78bfa] ml-3 font-semibold" : "text-slate-400"
-                        }`}
-                      >
-                        <span className="text-slate-600 mr-2">[{String(i + 1).padStart(2, "0")}]</span>
-                        {log}
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-1.5 mt-2 text-[#a78bfa]">
-                      <div className="w-1 h-3 bg-[#a78bfa] animate-pulse" />
-                      Assembling assets & copy...
-                    </div>
-                    <div ref={genLogsEndRef} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-slate-200/60 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-800">Hang tight! This takes about 60 seconds.</p>
-                  <p className="text-xs text-slate-500">
-                    We are researching the topic and drafting daily post versions per platform.
-                  </p>
-                </div>
-                <div className="text-[#7C3AED] font-mono font-bold text-sm bg-[#7C3AED]/10 border border-[#7C3AED]/20 px-3.5 py-1.5 rounded-xl shrink-0">
-                  Step {genProgress < 40 ? 1 : genProgress < 75 ? 2 : 3} of 3
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 6: Campaign Complete / Preview & Approval */}
-          {step === 6 && (
-            <div className="p-6 sm:p-10 flex flex-col justify-between flex-1">
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 border-b border-slate-200/80 pb-4">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
-                    <CheckCircle2 className="w-6 h-6 animate-bounce" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold font-display text-slate-800">Campaign Generated successfully!</h2>
-                    <p className="text-sm text-slate-500">
-                      Your campaign is ready for approval. Review the summary of weekly posts below.
-                    </p>
-                  </div>
-                </div>
-
-                {draftCampaign && (
-                  <div className="border border-slate-200 bg-slate-50/50 p-6 rounded-2xl space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-b border-slate-200/60 pb-4">
-                      <div>
-                        <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider">
-                          Campaign Theme
-                        </span>
-                        <span className="text-sm font-semibold text-slate-800 mt-0.5 block">
-                          {draftCampaign.theme}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider">
-                          Audience Segment
-                        </span>
-                        <span className="text-sm font-semibold text-slate-800 mt-0.5 block">
-                          {draftCampaign.targetAudience}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider">
-                          Confidence Score
-                        </span>
-                        <span className="text-sm font-bold text-emerald-600 mt-0.5 block">
-                          {draftCampaign.confidenceScore}% Relevance
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <span className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider">
-                        Weekly Post Schedule Preview
-                      </span>
-                      <div className="space-y-2">
-                        {draftCampaign.dailyPosts?.map((dp: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200 hover:border-[#7C3AED]/35 transition-colors"
-                          >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                              <span className="text-xs font-bold text-[#7C3AED] font-mono w-20 shrink-0">
-                                {dp.day}
-                              </span>
-                              <span className="text-xs text-slate-700 truncate max-w-sm sm:max-w-md">
-                                {dp.platformVersions?.[0]?.copy || "Post copy generated."}
-                              </span>
-                            </div>
-                            <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-500 px-2 py-0.5 rounded shrink-0">
-                              {dp.contentType}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-8 flex items-center justify-between border-t border-slate-200/80 pt-5">
-                <div className="flex items-center gap-2 text-slate-500 text-xs">
-                  <HeartHandshake className="w-4 h-4 text-[#7C3AED]" />
-                  <span>Approving auto-queues posts & drafts campaign workspace.</span>
-                </div>
-                <button
-                  onClick={handleApproveCampaign}
-                  disabled={isApproving}
-                  className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold px-7 py-3 rounded-xl shadow-lg flex items-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs cursor-pointer"
-                >
-                  {isApproving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Synchronizing...
-                    </>
-                  ) : (
-                    <>
-                      Approve & Enter App <Sparkles className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
               </div>
             </div>
           )}
