@@ -23,7 +23,8 @@ import {
   Layers,
   HeartHandshake,
   LogOut,
-  Pencil
+  Pencil,
+  Check
 } from "lucide-react";
 import { researchProductDNA, researchFocus, generateCampaign } from "../services/geminiService";
 import { db } from "../firebase";
@@ -187,6 +188,7 @@ export function Onboarding() {
   // 5: Campaign Loading & Wait Screen
   // 6: Campaign Complete / Approve Screen
   const [step, setStep] = useState<number>(1);
+  const [onboardingMode, setOnboardingMode] = useState<'personal' | 'marketing' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
 
@@ -958,8 +960,97 @@ export function Onboarding() {
           </div>
         )}
 
-        {/* Wizard Panel wrapper */}
-        <div className="w-full bg-white/90 border border-slate-200/80 shadow-[0_30px_70px_rgba(15,23,42,0.06)] rounded-3xl overflow-hidden flex flex-col min-h-[500px] backdrop-blur-md">
+        {onboardingMode === null ? (
+          <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
+            {/* Card 1: Personal Branding */}
+            <div
+              onClick={() => navigate('/onboarding/personal')}
+              className="group relative bg-[#FAF9F6] border border-slate-900/10 hover:border-[#7C3AED]/40 rounded-3xl p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer text-left overflow-hidden"
+            >
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-[#08080C] text-white flex items-center justify-center mb-6 shadow-sm group-hover:scale-105 transition-transform">
+                  <Volume2 className="w-6 h-6 text-[#FAF9F6]" />
+                </div>
+                <h2 className="text-2xl font-bold text-[#08080C] tracking-tight mb-3">
+                  Start Personal Branding
+                </h2>
+                <p className="text-sm text-slate-600 leading-relaxed mb-6 font-normal">
+                  Build your personal brand authority, voice DNA, and LinkedIn growth engine.
+                </p>
+                <div className="space-y-3 mb-8">
+                  <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-700">
+                    <Check className="w-4 h-4 text-[#7C3AED]" />
+                    <span>Clone your authentic founder voice & writing style</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-700">
+                    <Check className="w-4 h-4 text-[#7C3AED]" />
+                    <span>Connect promotional, affiliate, or owned brands</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-700">
+                    <Check className="w-4 h-4 text-[#7C3AED]" />
+                    <span>Generate LinkedIn posts (Broetry, Guerrilla & Professional)</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/onboarding/personal');
+                }}
+                className="w-full py-3.5 px-5 rounded-xl bg-[#08080C] text-[#FAF9F6] font-semibold text-xs flex items-center justify-center gap-2 group-hover:bg-[#7C3AED] transition-colors shadow-sm cursor-pointer"
+              >
+                <span>Start Personal Branding</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
+
+            {/* Card 2: Brand Marketing */}
+            <div
+              onClick={() => setOnboardingMode('marketing')}
+              className="group relative bg-[#FAF9F6] border border-slate-900/10 hover:border-[#2583EB]/40 rounded-3xl p-8 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer text-left overflow-hidden"
+            >
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-[#08080C] text-white flex items-center justify-center mb-6 shadow-sm group-hover:scale-105 transition-transform">
+                  <Globe className="w-6 h-6 text-[#FAF9F6]" />
+                </div>
+                <h2 className="text-2xl font-bold text-[#08080C] tracking-tight mb-3">
+                  Start Your Brand Marketing
+                </h2>
+                <p className="text-sm text-slate-600 leading-relaxed mb-6 font-normal">
+                  Extract company brand DNA, generate multi-channel campaigns, and automate marketing.
+                </p>
+                <div className="space-y-3 mb-8">
+                  <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-700">
+                    <Check className="w-4 h-4 text-[#2583EB]" />
+                    <span>Crawl and analyze your company website</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-700">
+                    <Check className="w-4 h-4 text-[#2583EB]" />
+                    <span>Generate multi-platform visual campaigns</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-700">
+                    <Check className="w-4 h-4 text-[#2583EB]" />
+                    <span>Automate company blog posts and schedule</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOnboardingMode('marketing');
+                }}
+                className="w-full py-3.5 px-5 rounded-xl bg-[#08080C] text-[#FAF9F6] font-semibold text-xs flex items-center justify-center gap-2 group-hover:bg-[#2583EB] transition-colors shadow-sm cursor-pointer"
+              >
+                <span>Start Brand Marketing</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Existing wizard content */
+          <div className="w-full bg-white/90 border border-slate-200/80 shadow-[0_30px_70px_rgba(15,23,42,0.06)] rounded-3xl overflow-hidden flex flex-col min-h-[500px] backdrop-blur-md">
           {/* Progress Indicator */}
           {step <= 3 && (
             <div className="w-full border-b border-slate-200/60 bg-slate-50/50 p-4 flex items-center justify-around text-xs font-sans font-semibold text-slate-500">
@@ -1481,7 +1572,8 @@ export function Onboarding() {
               </div>
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

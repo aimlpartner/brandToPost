@@ -15,7 +15,7 @@ export function ProtectedRoute() {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  const isOnboardingPath = location.pathname === '/onboarding';
+  const isOnboardingPath = location.pathname.startsWith('/onboarding');
 
   const localOnboarded = localStorage.getItem(`onboardingCompleted_${user.uid}`) === 'true';
   const isUserOnboarded = userProfile?.onboarded || localOnboarded;

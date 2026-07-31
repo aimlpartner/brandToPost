@@ -19,6 +19,17 @@ import {
 
 
 
+const COMPANY_LOGOS = [
+  { name: "MINIM", src: "/MINIM-logo-primary.png", className: "h-4 sm:h-5 md:h-6" },
+  { name: "AIMLPARTNER", src: "/aimlpartner_logo.png", className: "h-7 sm:h-9 md:h-10" },
+  { name: "SUPERHERO GYM", src: "/superherogym_logo.png", className: "h-5 sm:h-6 md:h-7" },
+  { name: "WEAREKNWN", src: "/weareknwn_logo.png", className: "h-4 sm:h-5 md:h-6" },
+  { name: "AVENOIR", src: "/avenoirlogo.png", className: "h-7 sm:h-9 md:h-11" },
+  { name: "GVRG INDUSTRIES", src: "/gvrgindustrieslogo.png", className: "h-6 sm:h-8 md:h-9" },
+  { name: "LOHIA TRADERS", src: "/lohiatraderslogo.png", className: "h-6 sm:h-8 md:h-9" },
+  { name: "EQUESTRIAN", src: "/equestrianlogo.png", className: "h-6 sm:h-8 md:h-9" },
+];
+
 const PLAN_AGENTS = {
   starter: [
     { name: "Sarah", avatar: "/agents_img/sarah.png", active: true },
@@ -417,10 +428,10 @@ export function LandingPage() {
         </div>
       </nav>
 
-      {/* 2. PROFESSIONAL HERO SECTION (Dark Theme Contrast - Left-Aligned & Mirror Video Background) */}
-      <section data-nav-theme="dark" className="relative w-full min-h-screen pt-36 pb-24 px-6 lg:px-8 flex items-center bg-[#08080C] border-b border-slate-950 overflow-hidden">
+      {/* 2. PROFESSIONAL HERO SECTION (Dark Theme Contrast - Left-Aligned & Single Viewport) */}
+      <section data-nav-theme="dark" className="relative w-full h-screen overflow-hidden bg-[#08080C] border-b border-slate-950 px-6 lg:px-8 pt-28 pb-8 flex flex-col justify-between">
         
-        {/* Mirror Background Video (Horizontal flip using scaleX(-1)) */}
+        {/* Background Video */}
         <div className="absolute inset-0 z-0 pointer-events-none select-none">
           <video 
             autoPlay 
@@ -428,7 +439,6 @@ export function LandingPage() {
             muted 
             playsInline 
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: 'scaleX(-1)' }}
           >
             <source src="/hero-section-vid.mp4" type="video/mp4" />
           </video>
@@ -436,26 +446,27 @@ export function LandingPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-slate-950/40 to-transparent" />
         </div>
 
-        {/* Hero Copy Content Container */}
-        <div className="max-w-7xl mx-auto w-full relative z-10 text-left">
-          <div className="max-w-3xl space-y-6">
+        {/* Hero Copy Content Container (Vertically Centered in Available Viewport Space) */}
+        <div className="max-w-7xl mx-auto w-full relative z-10 text-left flex-1 flex flex-col justify-center">
+          <div className="max-w-3xl space-y-5 lg:space-y-6">
             
             {/* Main Headline */}
             <h1 
-              className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extralight tracking-tight leading-[1.1] font-display"
-              style={{ color: '#FFFFFF', fontWeight: 200 }}
+              className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[1.12] font-display"
+              style={{ color: '#FFFFFF', fontWeight: 600 }}
             >
-              If Your Content Could Be Anyone’s, <br />
-              <span style={{ color: '#C084FC', fontWeight: 300 }}>Your Brand Is No One’s.</span>
+              If Your Content <br />
+              Could Be Anyone’s, <br />
+              <span style={{ color: '#C084FC', fontWeight: 600 }}>Your Brand Is No One’s.</span>
             </h1>
             
             {/* Subheadline */}
-            <p className="text-base sm:text-xl font-light leading-relaxed max-w-2xl pt-2" style={{ color: '#E2E8F0' }}>
+            <p className="text-base sm:text-xl font-light leading-relaxed max-w-2xl pt-1" style={{ color: '#E2E8F0' }}>
               Agents transform your ideas, expertise, and brand DNA into daily content for your profile, your company, and your clients.
             </p>
             
             {/* Action CTAs */}
-            <div className="flex flex-col sm:flex-row justify-start items-center gap-4 pt-3">
+            <div className="flex flex-col sm:flex-row justify-start items-center gap-4 pt-2">
               <Link to="/login?mode=signup" className="group flex items-center justify-center gap-2 px-7 py-3.5 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-semibold text-sm transition-all shadow-sm w-full sm:w-auto text-center">
                 Start Your Brand DNA
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
@@ -476,32 +487,22 @@ export function LandingPage() {
               </a>
             </div>
 
-            {/* Clean Corporate Founder Mode Callout Banner */}
-            <div className="pt-2">
-              <Link 
-                to="/master-founder" 
-                className="inline-flex items-center gap-2.5 px-4 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 text-xs font-normal text-slate-300 hover:text-white transition-all group shadow-sm"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]" />
-                <span>Building a personal founder brand?</span>
-                <span className="text-[#C084FC] font-semibold group-hover:underline flex items-center gap-1">
-                  Try Founder Mode <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                </span>
-              </Link>
-            </div>
           </div>
+        </div>
 
-          {/* Trusted Company Logos Row (Spreads Across Full Max-W-7XL Width) */}
-          <div className="pt-10 sm:pt-14 border-t border-white/10 mt-12 sm:mt-16 w-full max-w-7xl">
-            <span className="text-[11px] font-mono tracking-widest text-slate-500 uppercase block mb-6 text-left">TRUSTED BY FOUNDERS & CATEGORY LEADERS</span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 items-center justify-items-center gap-8 sm:gap-12 lg:gap-16">
-              <img src="/MINIM-logo-primary.png" alt="MINIM" className="max-h-10 sm:max-h-14 md:max-h-16 lg:max-h-20 w-auto object-contain brightness-125 hover:opacity-100 opacity-80 transition-opacity" />
-              <img src="/aimlpartner_logo.png" alt="AIMLPARTNER" className="max-h-12 sm:max-h-16 md:max-h-20 lg:max-h-24 w-auto object-contain brightness-125 hover:opacity-100 opacity-80 transition-opacity" />
-              <img src="/superherogym_logo.png" alt="SUPERHERO GYM" className="max-h-11 sm:max-h-15 md:max-h-18 lg:max-h-22 w-auto object-contain brightness-125 hover:opacity-100 opacity-80 transition-opacity" />
-              <img src="/weareknwn_logo.png" alt="WEAREKNWN" className="max-h-10 sm:max-h-14 md:max-h-16 lg:max-h-20 w-auto object-contain brightness-125 hover:opacity-100 opacity-80 transition-opacity" />
-            </div>
+        {/* Trusted Company Logos Carousel Strip (Anchored at Bottom of Viewport) */}
+        <div className="w-full max-w-7xl mx-auto relative z-10 pt-4 pb-2 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_5%,black_95%,transparent)]">
+          <div className="animate-marquee flex items-center gap-8 sm:gap-12 lg:gap-16 shrink-0">
+            {[...COMPANY_LOGOS, ...COMPANY_LOGOS].map((logo, idx) => (
+              <div key={idx} className="flex-shrink-0 min-w-[130px] sm:min-w-[160px] h-12 sm:h-16 flex items-center justify-center px-4">
+                <img 
+                  src={logo.src} 
+                  alt={logo.name} 
+                  className={`${logo.className} w-auto object-contain brightness-0 invert opacity-85 hover:opacity-100 transition-all duration-300`} 
+                />
+              </div>
+            ))}
           </div>
-
         </div>
       </section>
 

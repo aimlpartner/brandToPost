@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { IndividualLayout } from "./components/IndividualLayout";
 import { LandingPage } from "./pages/LandingPage";
 import { Waitlist } from "./pages/Waitlist";
 import { Dashboard } from "./pages/Dashboard";
@@ -23,6 +24,11 @@ import { WhatsAppLogin } from "./pages/WhatsAppLogin";
 import { WhatsAppDashboard } from "./pages/WhatsAppDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import { MasterFounder } from "./pages/MasterFounder";
+import { PersonalBrandingOnboarding } from "./pages/PersonalBrandingOnboarding";
+import { IndividualOverview } from "./pages/individual/IndividualOverview";
+import { IndividualCreator } from "./pages/individual/IndividualCreator";
+import { IndividualVoice } from "./pages/individual/IndividualVoice";
+import { IndividualLinkedIn } from "./pages/individual/IndividualLinkedIn";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -39,7 +45,6 @@ import { InstagramTemplateCollector } from "./pages/InstagramTemplateCollector";
 import { XTemplateCollector } from "./pages/XTemplateCollector";
 import { CampaignTemplateTest } from "./pages/CampaignTemplateTest";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { UniversalFloatingThemeToggle } from "./components/UniversalFloatingThemeToggle";
 
 export default function App() {
   return (
@@ -99,6 +104,18 @@ export default function App() {
                     </ProductProvider>
                   }
                 />
+                <Route
+                  path="/onboarding/personal"
+                  element={<PersonalBrandingOnboarding />}
+                />
+                {/* Individual Persona Routes */}
+                <Route path="/individual" element={<IndividualLayout />}>
+                  <Route index element={<IndividualOverview />} />
+                  <Route path="creator" element={<IndividualCreator />} />
+                  <Route path="voice" element={<IndividualVoice />} />
+                  <Route path="linkedin" element={<IndividualLinkedIn />} />
+                </Route>
+                <Route path="/individual-dashboard" element={<Navigate to="/individual" replace />} />
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route
                   path="/dashboard"
@@ -122,7 +139,6 @@ export default function App() {
               <Route path="*" element={<NotFound />} />
             </Routes>
             <CookieConsent />
-            <UniversalFloatingThemeToggle />
           </BrowserRouter>
         </AuthProvider>
       </ThemeProvider>

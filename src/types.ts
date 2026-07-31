@@ -249,3 +249,48 @@ export interface ApprovalRequest {
   processedAt?: string;
 }
 
+export interface PersonalBrandItem {
+  id: string;
+  url: string;
+  website?: string;
+  name: string;
+  description?: string;
+  positioning?: string;
+  industry?: string;
+  targetAudience?: string;
+  brandType: 'owned' | 'promotional';
+  customPromotionalUrl?: string;
+  researchedAt?: string;
+}
+
+export interface PersonalBrandingProfile {
+  id: string;
+  userId: string;
+  founderName: string;
+  founderDescription: string;
+  founderVoiceFileName?: string;
+  founderVoiceFileData?: string;
+  voiceDna?: {
+    personaName: string;
+    behavioralTraits: string[];
+    communicationStyle: string[];
+    coreValues: string[];
+    decisionHeuristics: string[];
+    synthesizedAt: string;
+    targetIndustry?: string;
+    targetAudience?: string;
+    vision?: string;
+    mission?: string;
+    goal?: string;
+    contentPillars?: string[];
+  };
+  includeBrands: boolean;
+  brandType?: 'owned' | 'promotional';
+  brands: PersonalBrandItem[];
+  socialConnections?: {
+    linkedinConnected?: boolean;
+    linkedinOrganizationId?: string;
+    linkedinOrganizationName?: string;
+  };
+  updatedAt?: string;
+}

@@ -18,6 +18,7 @@ import {
   safeUrlOrEmpty,
   TEMPLATE_CSP_META,
 } from './src/lib/sanitizeTemplateHtml';
+import { personalBrandingRouter } from './src/server/routes/personalBrandingRoutes';
 
 // --- Stdio / Stdin EEXIST Error Workaround for Restricted Hosting Environments (like cPanel/Passenger) ---
 try {
@@ -4332,6 +4333,9 @@ async function startServer() {
       res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
   };
+
+  // --- Modular Personal Branding API ---
+  app.use('/api/personal-branding', requireAuth, personalBrandingRouter);
 
   // --- Admin API: Lock / Unlock User Account ---
   app.post('/api/admin/users/lock', async (req, res) => {

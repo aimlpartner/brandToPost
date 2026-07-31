@@ -167,6 +167,10 @@ service cloud.firestore {
       match /founder_posts/{postId} {
         allow read, write: if isOwner(userId);
       }
+
+      match /personalBranding/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     match /products/{productId} {
