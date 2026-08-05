@@ -84,10 +84,14 @@ export function UniversalNavbar({ forcedTheme }: UniversalNavbarProps) {
 
             <Link to="/blog" className={`text-sm font-medium transition-colors duration-300 ${isDarkNavbar ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-950'}`}>Blog</Link>
             <Link to="/login" className={`text-sm font-medium transition-colors hidden md:block duration-300 ${isDarkNavbar ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-950'}`}>Sign In</Link>
-            <ThemeToggle variant="icon" />
             <Link to="/login?mode=signup" className="px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all hover:bg-[#6D28D9] bg-[#7C3AED] text-white shadow-sm whitespace-nowrap">
               Start free trial
             </Link>
+
+            {/* Utility Theme Toggle — Far Right Border Separated */}
+            <div className={`border-l pl-3 sm:pl-4 flex items-center ${isDarkNavbar ? 'border-white/15' : 'border-slate-300'}`}>
+              <ThemeToggle variant="icon" />
+            </div>
           </div>
         </div>
       </div>
