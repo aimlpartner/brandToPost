@@ -2962,16 +2962,27 @@ export function Campaigns() {
       {showModal &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-0 sm:p-4">
-            <div className="bg-white w-full sm:max-w-4xl overflow-hidden flex flex-col h-full sm:h-auto sm:max-h-[90vh] shadow-[0_25px_60px_rgba(15,23,42,0.18)] !rounded-none sm:!rounded-[22px] border-0 sm:border border-slate-200">
-               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
-                <h2 className="text-lg font-bold text-slate-800 font-display">
+            <div className={cn(
+              "bg-white w-full overflow-hidden flex flex-col h-full sm:h-auto sm:max-h-[92vh] shadow-[0_25px_60px_rgba(15,23,42,0.18)] transition-all duration-300 !rounded-none sm:!rounded-[22px] border-0 sm:border border-slate-200",
+              modalStep === 4 ? "sm:max-w-5xl lg:max-w-6xl bg-[#08080C] text-white" : "sm:max-w-4xl"
+            )}>
+               <div className={cn(
+                "flex items-center justify-between px-6 py-4 border-b transition-colors",
+                modalStep === 4 ? "bg-[#0D0D12] border-slate-800/80 text-white" : "bg-slate-50/80 border-slate-100 text-slate-800"
+              )}>
+                <h2 className={cn("text-lg font-bold font-display flex items-center gap-2", modalStep === 4 ? "text-white" : "text-slate-800")}>
                   {modalStep === 1 && "Campaign Focus"}
-                  {modalStep === 4 && "Campaign Boardroom"}
+                  {modalStep === 4 && (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                      <span>Campaign Boardroom</span>
+                    </>
+                  )}
                   {modalStep === 5 && "Review Campaign"}
                 </h2>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                  className={cn("transition-colors", modalStep === 4 ? "text-slate-400 hover:text-white" : "text-slate-400 hover:text-slate-600")}
                 >
                   <X className="h-5 w-5" />
                 </button>

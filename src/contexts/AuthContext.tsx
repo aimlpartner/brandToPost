@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth, googleProvider, facebookProvider, appleProvider } from '../firebase';
-import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { logSilentError } from '../lib/firestore-error';
 
 interface AuthProfile {
   name: string;
   role: string;
   onboarded: boolean;
+  purpose?: 'individual' | 'brand';
+  accountType?: 'individual' | 'brand';
   isLocked?: boolean;
   lockReason?: string;
   createdAt?: string;
@@ -122,7 +124,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               return;
             }
 
-            setUserProfile(data as AuthProfile);
+            const profileData = { ...data } as AuthProfile;
+            const localAccountType = localStorage.getItem(`accountType_${currentUser.uid}`);
+            if (!profileData.accountType && !profileData.purpose) {
+              if (localAccountType === 'individual' || localAccountType === 'brand') {
+                profileData.accountType = localAccountType;
+                profileData.purpose = localAccountType;
+                updateDoc(userRef, { accountType: localAccountType, purpose: localAccountType }).catch(() => {});
+              } else {
+                try {
+                  const pbSnap = await getDoc(doc(db, 'users', currentUser.uid, 'personalBranding', 'profile'));
+                  if (pbSnap.exists()) {
+                    profileData.accountType = 'individual';
+                    profileData.purpose = 'individual';
+                    localStorage.setItem(`accountType_${currentUser.uid}`, 'individual');
+                    updateDoc(userRef, { accountType: 'individual', purpose: 'individual' }).catch(() => {});
+                  } else {
+                    profileData.accountType = 'brand';
+                    profileData.purpose = 'brand';
+                    localStorage.setItem(`accountType_${currentUser.uid}`, 'brand');
+                    updateDoc(userRef, { accountType: 'brand', purpose: 'brand' }).catch(() => {});
+                  }
+                } catch (err) {
+                  // fallback
+                }
+              }
+            } else {
+              const determinedType = (profileData.accountType === 'individual' || profileData.purpose === 'individual') ? 'individual' : 'brand';
+              localStorage.setItem(`accountType_${currentUser.uid}`, determinedType);
+            }
+            setUserProfile(profileData);
             setLoading(false);
 
             // Trigger Welcome email if it hasn't been sent yet

@@ -66,20 +66,22 @@ export function Login() {
         sessionStorage.removeItem('oauth_in_progress');
       }
 
+      const localAccountType = user ? localStorage.getItem(`accountType_${user.uid}`) : null;
+      const isIndividual = userProfile?.accountType === 'individual' || userProfile?.purpose === 'individual' || localAccountType === 'individual';
+      const targetDashboard = isIndividual ? '/individual' : '/dashboard';
+
       if (userProfile?.onboarded) {
         if (mode === 'signup') {
           setMsg('An account already exists with this profile. Logging you in...');
           const timer = setTimeout(() => {
-            navigate('/dashboard');
+            navigate(targetDashboard);
           }, 2000);
           return () => clearTimeout(timer);
         } else {
-          navigate('/dashboard');
+          navigate(targetDashboard);
         }
-      } else if (hasActioned.current) {
-        navigate('/dashboard');
       } else {
-        // If the user loaded the login page with an existing session that is NOT onboarded,
+        // If the user loaded the login page with a session that is NOT onboarded,
         // redirect them to onboarding so they can complete it.
         navigate('/onboarding');
       }

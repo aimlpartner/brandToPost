@@ -19,7 +19,7 @@ import {
   safeUrlOrEmpty,
   TEMPLATE_CSP_META,
 } from "../lib/sanitizeTemplateHtml";
-import { synthesizeFounderAgent, generateGeneralFounderPost, generateFounderTopicSuggestions, generateBrandedFounderPost, researchVisualTrends } from "../services/geminiService";
+import { synthesizeFounderAgent, generateGeneralFounderPost, generateFounderTopicSuggestions, generateBrandedFounderPost, researchVisualTrends, generateImageViaProxy } from "../services/geminiService";
 import { CustomTimePicker } from "../components/CustomTimePicker";
 import { PlusPenIcon } from "../components/PlusPenIcon";
 import { PostPreviewModal } from "../components/PostPreviewModal";
@@ -853,8 +853,137 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
       let resolvedLayoutId: string = selectedPrebuiltTemplate !== "auto" ? selectedPrebuiltTemplate : "editorial-left";
       let reportData: any = null;
 
-      // STEP 1: Determine Visual Template FIRST (Before Copy & Image Gen)
-      if (selectedPrebuiltTemplate !== "auto") {
+      // NEW WORKFLOW: Check if using Dynamic AI Research (auto) vs Prebuilt Template
+      if (selectedPrebuiltTemplate === "auto") {
+        // --- DYNAMIC AI RESEARCH ("AUTO") MODE ---
+        // STEP 1: Content generation FIRST as usual
+        let resolvedLayoutId = "auto-ai-visual";
+        console.log(`[STUDIO AUTO STEP 1/4] Calling content generation FIRST...`);
+        setGeneratorLogs(p => [...p, "Drafting organic social copy & visual hook first..."]);
+        
+        if (postScope === "general") {
+          result = await generateGeneralFounderPost({
+            topic: postTopic,
+            attachmentStyle: "image-overlay",
+            founderAgent: userProfile.founderAgentSynthesized,
+            userId: user?.uid,
+            layoutId: resolvedLayoutId
+          });
+        } else {
+          targetProduct = products.find(p => p.id === selectedManualBrands[0]) || products[0];
+          result = await generateBrandedFounderPost({
+            topic: postTopic,
+            attachmentStyle: "image-overlay",
+            founderAgent: userProfile.founderAgentSynthesized,
+            product: targetProduct,
+            userId: user?.uid,
+            layoutId: resolvedLayoutId
+          });
+        }
+
+        if (!result) {
+          throw new Error("Content generation returned null.");
+        }
+
+        console.log(`[STUDIO AUTO STEP 2/4] Content generation -> PASSED (Headline: "${result.headline}"). Now conducting 1-style grounded research...`);
+        setGeneratorLogs(p => [...p, `✓ Drafted content & hook ("${result.headline || 'Key Insight'}"). Researching 1-style visual trend...`]);
+
+        // STEP 2: 1-Style Grounding Research on Founder Post Templates SECOND
+        try {
+          reportData = await researchVisualTrends({ singleStyle: true });
+          if (reportData?.discoveredTemplates?.length > 0) {
+            reportData.discoveredTemplates = reportData.discoveredTemplates.map((dt: any, idx: number) => ({
+              ...dt,
+              id: dt.id && typeof dt.id === 'string' ? dt.id : `dynamic-fallback-${Date.now()}-${idx}`
+            }));
+            setTrendReport(reportData);
+            resolvedLayoutId = "auto-ai-visual";
+            setSelectedTemplateId("auto-ai-visual");
+            setGeneratorLogs(p => [...p, `✓ Discovered grounded visual trend: [${reportData.discoveredTemplates[0].name}].`]);
+          }
+        } catch (resErr: any) {
+          console.error("[STUDIO AUTO STEP 2/4] 1-Style Trend Research -> FAILED:", resErr);
+        }
+
+        // STEP 3: Direct GPT-2 Image Medium THIRD (Send research + content to GPT-2 medium)
+        console.log(`[STUDIO AUTO STEP 3/4] Generating direct GPT-2 image with 1-style visual grounding...`);
+        setGeneratorLogs(p => [...p, "🎨 Sending grounded visual trend & content to GPT-2 Image Medium..."]);
+        
+        const topTrend = reportData?.discoveredTemplates?.[0] || {
+          name: "High-Contrast Executive Card",
+          visualStylePrompt: "High-contrast B2B founder editorial visual with executive dark-mode lighting, minimal modern typography, and structured negative space.",
+          primaryColor: "#7C3AED",
+          secondaryColor: "#08080C"
+        };
+
+        const stylePrompt = topTrend.visualStylePrompt || topTrend.whyViral || "High-contrast B2B founder editorial visual card";
+        const directPrompt = `B2B Founder Social Post Graphic about: ${postTopic}.
+Visual Concept & Subject: A modern editorial B2B graphic representing ${postTopic}.
+Style & Aesthetic: ${stylePrompt}.
+Headline text to display: "${result.headline || 'Key Founder Insight'}".
+Subtext / secondary theme: "${result.subtext || 'Value-driven lesson'}".
+Brand Color Palette: Primary ${topTrend.primaryColor || '#7C3AED'}, Secondary ${topTrend.secondaryColor || '#08080C'}.
+Style: Professional 1:1 editorial graphic, zero stock photo slop, dark-mode executive aesthetic.`;
+
+        let directImageUrl: string | null = null;
+        try {
+          directImageUrl = await generateImageViaProxy({
+            prompt: directPrompt,
+            headline: result.headline || undefined,
+            subtext: result.subtext || undefined
+          }, user?.uid, targetProduct?.id, targetProduct?.logoUrl);
+        } catch (imgErr) {
+          console.warn("[STUDIO AUTO STEP 3/4] Direct GPT-2 image generation fallback:", imgErr);
+        }
+
+        const finalImageUrl = directImageUrl || result.imageUrl || STOCK_IMAGES[0].url;
+        console.log(`[STUDIO AUTO STEP 3/4] Direct GPT-2 Image -> PASSED (${directImageUrl ? 'Direct GPT-2' : 'Fallback Image'})`);
+        setGeneratorLogs(p => [...p, "✓ Directly generated AI visual graphic successfully!"]);
+
+        let finalCopy = result.postCopy || "";
+        if (postScope === "branded" && targetProduct) {
+          const website = targetProduct.website || targetProduct.url || targetProduct.domain;
+          if (website) {
+            const formattedLink = website.startsWith('http') ? website : `https://${website}`;
+            if (!finalCopy.includes(website) && !finalCopy.includes(formattedLink)) {
+              finalCopy = `${finalCopy.trim()}\n\n🔗 ${formattedLink}`;
+            }
+          }
+        }
+
+        setGeneratedPostCopy(finalCopy);
+        setGeneratedHeadline(result.headline || "Key Founder Insight");
+        setGeneratedSubtext(result.subtext || "Value-driven lesson");
+        setGeneratedImageUrl(finalImageUrl);
+        setHasGeneratedOutput(true);
+        setApprovedTemplateId(null);
+        setApprovedTemplateImageUrl(null);
+
+        // STEP 4: Save post to Firestore history
+        console.log(`[STUDIO AUTO STEP 4/4] Saving generated post to Firestore...`);
+        const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
+        const newPost = {
+          id: newPostId,
+          userId: user?.uid || null,
+          postCopy: finalCopy,
+          imageUrl: finalImageUrl,
+          headline: result.headline || null,
+          subtext: result.subtext || null,
+          imagePrompt: directPrompt,
+          layoutId: "auto-ai-visual",
+          approvedTemplateImage: null,
+          createdAt: new Date().toISOString(),
+          status: "scheduled",
+          topic: result.headline || postTopic || null,
+          isBranded: postScope === "branded",
+          productId: targetProduct?.id || null
+        };
+        await setDoc(doc(db, "users", user!.uid, "founder_posts", newPostId), newPost);
+        await fetchAutomatedPosts();
+        console.log(`[STUDIO AUTO STEP 4/4] Save to Firestore -> PASSED (Post ID: ${newPostId})`);
+        console.log(`======================================================\n`);
+      } else {
+        // --- PRE-SELECTED TEMPLATE MODE (e.g. "x-tweet-card") ---
         console.log(`[STUDIO STEP 1/4] Prebuilt template selected: "${selectedPrebuiltTemplate}". SKIPPING live template research!`);
         setGeneratorLogs(p => [...p, `⚡ Prebuilt Template selected: [${selectedPrebuiltTemplate}]. Skipping live research to save tokens...`]);
 
@@ -868,121 +997,87 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
         reportData = { summary: "Prebuilt Template Selection", viralPick: chosen, discoveredTemplates: prebuiltList };
         setTrendReport(reportData);
         setSelectedTemplateId(chosen.id);
-        resolvedLayoutId = chosen.id;
-      } else {
-        console.log(`[STUDIO STEP 1/4] Querying researchVisualTrends() FIRST...`);
-        setGeneratorLogs(p => [...p, "🔍 Querying live market trend research engine via Gemini 3.1 Pro..."]);
-        try {
-          reportData = await researchVisualTrends();
-          if (reportData?.discoveredTemplates?.length > 0) {
-            reportData.discoveredTemplates = reportData.discoveredTemplates.map((dt: any, idx: number) => ({
-              ...dt,
-              id: dt.id && typeof dt.id === 'string' ? dt.id : `dynamic-fallback-${Date.now()}-${idx}`
-            }));
-            setTrendReport(reportData);
-            const topId = reportData.discoveredTemplates[0].id;
-            resolvedLayoutId = topId;
-            setSelectedTemplateId(topId);
+        const resolvedLayoutId = chosen.id;
 
-            if (user) {
-              for (const dt of reportData.discoveredTemplates) {
-                if (dt.rawHtml && typeof dt.rawHtml === 'string' && dt.rawHtml.trim().length > 30) {
-                  const tplRef = doc(db, "users", user.uid, "saved_templates", dt.id);
-                  setDoc(tplRef, {
-                    ...dt,
-                    savedAt: new Date().toISOString(),
-                    source: "master-founder-research"
-                  }, { merge: true }).catch(err => console.warn("Failed to auto-save template to library:", err));
-                }
+        // STEP 2: Generate Post Copy & Image with Layout Context
+        if (postScope === "general") {
+          console.log(`[STUDIO STEP 2/4] Calling generateGeneralFounderPost with layout: "${resolvedLayoutId}"...`);
+          setGeneratorLogs(p => [...p, "Drafting organic social copy & visual hook..."]);
+          result = await generateGeneralFounderPost({
+            topic: postTopic,
+            attachmentStyle: "image-overlay",
+            founderAgent: userProfile.founderAgentSynthesized,
+            userId: user?.uid,
+            layoutId: resolvedLayoutId
+          });
+        } else {
+          targetProduct = products.find(p => p.id === selectedManualBrands[0]) || products[0];
+          console.log(`[STUDIO STEP 2/4] Calling generateBrandedFounderPost for brand: "${targetProduct?.name}" with layout: "${resolvedLayoutId}"...`);
+          setGeneratorLogs(p => [...p, `Drafting branded copy for: ${targetProduct?.name || 'Selected Product'}...`]);
+          result = await generateBrandedFounderPost({
+            topic: postTopic,
+            attachmentStyle: "image-overlay",
+            founderAgent: userProfile.founderAgentSynthesized,
+            product: targetProduct,
+            userId: user?.uid,
+            layoutId: resolvedLayoutId
+          });
+        }
+
+        if (result) {
+          console.log(`[STUDIO STEP 3/4] Copy & backdrop image generation -> PASSED (Headline: "${result.headline}")`);
+          setGeneratorLogs(p => [...p, "✓ Copy and backdrop image generated successfully."]);
+          
+          let finalCopy = result.postCopy || "";
+          if (postScope === "branded" && targetProduct) {
+            const website = targetProduct.website || targetProduct.url || targetProduct.domain;
+            if (website) {
+              const formattedLink = website.startsWith('http') ? website : `https://${website}`;
+              if (!finalCopy.includes(website) && !finalCopy.includes(formattedLink)) {
+                finalCopy = `${finalCopy.trim()}\n\n🔗 ${formattedLink}`;
               }
             }
-
-            const isStaticFallback = ["editorial-left", "contrarian-card", "framed-mockup", "brutalist-hero", "quote-spotlight", "stat-billboard"].includes(topId);
-            setGeneratorLogs(p => [...p, `✓ Synthesized ${reportData.discoveredTemplates.length} visual trends (${isStaticFallback ? 'Static Fallback' : 'Dynamic AI'}). Saved to Template Library! Top choice: [${reportData.discoveredTemplates[0].name}]`]);
           }
-        } catch (resErr: any) {
-          console.error("[STUDIO STEP 1/4] Visual Trend Research -> FAILED with exception:", resErr);
-        }
-      }
-
-      // STEP 2: Generate Post Copy & Image with Layout Context
-      if (postScope === "general") {
-        console.log(`[STUDIO STEP 2/4] Calling generateGeneralFounderPost with layout: "${resolvedLayoutId}"...`);
-        setGeneratorLogs(p => [...p, "Drafting organic social copy & visual hook..."]);
-        result = await generateGeneralFounderPost({
-          topic: postTopic,
-          attachmentStyle: "image-overlay",
-          founderAgent: userProfile.founderAgentSynthesized,
-          userId: user?.uid,
-          layoutId: resolvedLayoutId
-        });
-      } else {
-        targetProduct = products.find(p => p.id === selectedManualBrands[0]) || products[0];
-        console.log(`[STUDIO STEP 2/4] Calling generateBrandedFounderPost for brand: "${targetProduct?.name}" with layout: "${resolvedLayoutId}"...`);
-        setGeneratorLogs(p => [...p, `Drafting branded copy for: ${targetProduct?.name || 'Selected Product'}...`]);
-        result = await generateBrandedFounderPost({
-          topic: postTopic,
-          attachmentStyle: "image-overlay",
-          founderAgent: userProfile.founderAgentSynthesized,
-          product: targetProduct,
-          userId: user?.uid,
-          layoutId: resolvedLayoutId
-        });
-      }
-
-      if (result) {
-        console.log(`[STUDIO STEP 3/4] Copy & backdrop image generation -> PASSED (Headline: "${result.headline}")`);
-        setGeneratorLogs(p => [...p, "✓ Copy and backdrop image generated successfully."]);
-        
-        let finalCopy = result.postCopy || "";
-        if (postScope === "branded" && targetProduct) {
-          const website = targetProduct.website || targetProduct.url || targetProduct.domain;
-          if (website) {
-            const formattedLink = website.startsWith('http') ? website : `https://${website}`;
-            if (!finalCopy.includes(website) && !finalCopy.includes(formattedLink)) {
-              finalCopy = `${finalCopy.trim()}\n\n🔗 ${formattedLink}`;
-            }
+          
+          setGeneratedPostCopy(finalCopy);
+          setGeneratedHeadline(result.headline || "Key Founder Insight");
+          setGeneratedSubtext(result.subtext || "Value-driven lesson");
+          if (result.imageUrl) {
+            setGeneratedImageUrl(result.imageUrl);
           }
+
+          setHasGeneratedOutput(true);
+
+          // Reset approval state for the new draft
+          setApprovedTemplateId(null);
+          setApprovedTemplateImageUrl(null);
+
+          // STEP 4: Save post to Firestore history
+          console.log(`[STUDIO STEP 4/4] Saving generated post to Firestore with layoutId: "${resolvedLayoutId}"...`);
+          const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
+          const newPost = {
+            id: newPostId,
+            userId: user?.uid || null,
+            postCopy: finalCopy,
+            imageUrl: result.imageUrl || STOCK_IMAGES[0].url,
+            headline: result.headline || null,
+            subtext: result.subtext || null,
+            imagePrompt: result.imagePrompt || null,
+            layoutId: resolvedLayoutId || "editorial-left",
+            approvedTemplateImage: null,
+            createdAt: new Date().toISOString(),
+            status: "scheduled",
+            topic: result.headline || postTopic || null,
+            isBranded: postScope === "branded",
+            productId: targetProduct?.id || null
+          };
+          await setDoc(doc(db, "users", user!.uid, "founder_posts", newPostId), newPost);
+          await fetchAutomatedPosts();
+          console.log(`[STUDIO STEP 4/4] Save to Firestore -> PASSED (Post ID: ${newPostId})`);
+          console.log(`======================================================\n`);
+        } else {
+          console.error(`[STUDIO STEP 2/5] Copy generation returned null result -> FAILED`);
         }
-        
-        setGeneratedPostCopy(finalCopy);
-        setGeneratedHeadline(result.headline || "Key Founder Insight");
-        setGeneratedSubtext(result.subtext || "Value-driven lesson");
-        if (result.imageUrl) {
-          setGeneratedImageUrl(result.imageUrl);
-        }
-
-        setHasGeneratedOutput(true);
-
-        // Reset approval state for the new draft
-        setApprovedTemplateId(null);
-        setApprovedTemplateImageUrl(null);
-
-        // STEP 4: Save post to Firestore history
-        console.log(`[STUDIO STEP 4/4] Saving generated post to Firestore with layoutId: "${resolvedLayoutId}"...`);
-        const newPostId = 'fpost_' + Math.random().toString(36).substring(2, 11);
-        const newPost = {
-          id: newPostId,
-          userId: user?.uid || null,
-          postCopy: finalCopy,
-          imageUrl: result.imageUrl || STOCK_IMAGES[0].url,
-          headline: result.headline || null,
-          subtext: result.subtext || null,
-          imagePrompt: result.imagePrompt || null,
-          layoutId: resolvedLayoutId || "editorial-left",
-          approvedTemplateImage: null,
-          createdAt: new Date().toISOString(),
-          status: "scheduled",
-          topic: result.headline || postTopic || null,
-          isBranded: postScope === "branded",
-          productId: targetProduct?.id || null
-        };
-        await setDoc(doc(db, "users", user!.uid, "founder_posts", newPostId), newPost);
-        await fetchAutomatedPosts();
-        console.log(`[STUDIO STEP 4/4] Save to Firestore -> PASSED (Post ID: ${newPostId})`);
-        console.log(`======================================================\n`);
-      } else {
-        console.error(`[STUDIO STEP 2/5] Copy generation returned null result -> FAILED`);
       }
     } catch (err: any) {
       console.error(`[STUDIO handleGeneratePostStudio EXCEPTION] -> FAILED:`, err);
@@ -2884,144 +2979,269 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
                 
                 {/* LEFT COLUMN: Visual Studio Canvas Preview (Top) & Discovered Visual Trends (Bottom) */}
                 <div className="space-y-6">
-                  {/* Visual Engine Live Interactive Render Canvas (iframe Sandbox) */}
-                  <BentoCard span={1}>
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <Palette className="h-4 w-4 text-violet-650" />
-                        <h3 className="text-sm font-bold text-slate-800 tracking-tight">Visual Studio Canvas Preview</h3>
+                  {/* Visual Engine Live Interactive Render Canvas (iframe Sandbox) or Direct AI Visual Card */}
+                  {selectedPrebuiltTemplate === "auto" ? (
+                    <BentoCard span={1}>
+                      <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Wand2 className="h-4 w-4 text-violet-650" />
+                          <h3 className="text-sm font-bold text-slate-800 tracking-tight">Direct AI Visual Studio (GPT-2 Image Medium)</h3>
+                        </div>
+                        {hasGeneratedOutput && (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-violet-100 text-violet-800 uppercase">
+                            Grounded Trend: {trendReport?.discoveredTemplates?.[0]?.name || "AI Grounded"}
+                          </span>
+                        )}
                       </div>
-                      {hasGeneratedOutput && (
-                        <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-100 text-amber-800 uppercase">
-                          Layout: {selectedTemplateId}
-                        </span>
+
+                      {isGeneratingPost && (
+                        <div className="aspect-square bg-slate-955 border border-slate-850 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-3">
+                          <Loader2 className="h-8 w-8 text-violet-400 animate-spin mb-2" />
+                          <span className="text-xs font-bold text-slate-200 font-mono">Synthesizing Content & 1-Style Visual Grounding...</span>
+                          <div className="space-y-1 font-mono text-[10px] text-slate-400 max-w-xs">
+                            {generatorLogs.map((log, idx) => (
+                              <p key={idx} className={log.startsWith("✓") ? "text-emerald-400 font-semibold" : ""}>{log}</p>
+                            ))}
+                          </div>
+                        </div>
                       )}
-                    </div>
 
-                    {isGeneratingPost && (
-                      <div className="aspect-square bg-slate-955 border border-slate-850 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-3">
-                        <Loader2 className="h-8 w-8 text-violet-400 animate-spin mb-2" />
-                        <span className="text-xs font-bold text-slate-200 font-mono">Synthesizing Visual Draft & Researching Trends...</span>
-                        <div className="space-y-1 font-mono text-[10px] text-slate-400 max-w-xs">
-                          {generatorLogs.map((log, idx) => (
-                            <p key={idx} className={log.startsWith("✓") ? "text-emerald-400 font-semibold" : ""}>{log}</p>
-                          ))}
+                      {!hasGeneratedOutput && !isGeneratingPost && (
+                        <div className="aspect-square bg-slate-50 border border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-8 text-center space-y-3">
+                          <Sparkles className="h-8 w-8 text-slate-300 animate-pulse" />
+                          <span className="text-xs font-bold text-slate-700">Direct AI Visual Generation</span>
+                          <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs font-light">
+                            Synthesizes copy first, researches 1 single visual trend, and generates your 1:1 image directly via our GPT-2 Image Medium without inline HTML/CSS templates.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setIsTopicModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
+                          >
+                            <PlusPenIcon className="h-3.5 w-3.5 text-violet-650" />
+                            <span>+ New Post</span>
+                          </button>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {!hasGeneratedOutput && !isGeneratingPost && (
-                      <div className="aspect-square bg-slate-50 border border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-8 text-center space-y-3">
-                        <Sparkles className="h-8 w-8 text-slate-300 animate-pulse" />
-                        <span className="text-xs font-bold text-slate-700">Visual Graphic Canvas</span>
-                        <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs font-light">
-                          Draft a post to trigger live trend research. The auto-selected layout, backdrop image, and text overlay will render here.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsTopicModalOpen(true)}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
-                        >
-                          <PlusPenIcon className="h-3.5 w-3.5 text-violet-650" />
-                          <span>+ New Post</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {hasGeneratedOutput && !isGeneratingPost && (
-                      <div className="space-y-4">
-                        {/* Live Canvas Preview via Iframe Renderer */}
-                        <div className="relative w-[360px] h-[360px] rounded-xl border border-slate-200 shadow overflow-hidden bg-slate-950 shrink-0 mx-auto">
-                          <iframe
-                            id="visual-studio-canvas-preview"
-                            title="Visual Template Preview Renderer"
-                            srcDoc={fullHtml}
-                            // allow-same-origin (so the parent can read
-                            // contentDocument for toJpeg export) WITHOUT
-                            // allow-scripts — model-generated template markup must
-                            // never execute against this origin.
-                            sandbox="allow-same-origin"
-                            className="absolute origin-top-left border-none pointer-events-none"
-                            style={{
-                              width: "1080px",
-                              height: "1080px",
-                              transform: "scale(0.333333)"
-                            }}
-                          />
-                        </div>
-
-                        {/* Brand DNA & Color Harmony Swatches */}
-                        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                              Brand Harmony:
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="h-4 w-4 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: primaryColor }} title="Primary Accent Color" />
-                              <span className="h-4 w-4 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: secondaryColor }} title="Secondary Backdrop Color" />
+                      {hasGeneratedOutput && !isGeneratingPost && (
+                        <div className="space-y-4">
+                          <div className="relative w-full aspect-square rounded-2xl border border-slate-200 shadow-md overflow-hidden bg-slate-950 group">
+                            <img src={generatedImageUrl || STOCK_IMAGES[0].url} alt="Direct AI Generated Founder Visual" className="w-full h-full object-cover" />
+                            <div className="absolute top-3 left-3 bg-black/75 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5">
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              <span className="text-[10px] font-bold text-white tracking-wide">
+                                {trendReport?.discoveredTemplates?.[0]?.name || "Grounded Visual Trend"}
+                              </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 text-[10px] text-slate-600 font-semibold">
-                            <Type className="h-3 w-3 text-slate-400" />
-                            <span>{fontFamily}</span>
+                          {trendReport?.discoveredTemplates?.[0] && (
+                            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-1.5 text-left">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Grounded Visual Trend Insight:</span>
+                                <span className="text-[9px] font-mono font-semibold text-violet-600 bg-violet-50 px-2 py-0.5 rounded border border-violet-150">
+                                  {trendReport.discoveredTemplates[0].sourceTrend || "LinkedIn / X Trend"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-700 leading-relaxed font-light">
+                                {trendReport.discoveredTemplates[0].whyViral || trendReport.discoveredTemplates[0].visualStylePrompt || "High-converting dark mode visual style."}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(generatedPostCopy);
+                                setCopied(true);
+                                setTimeout(() => setCopied(false), 2000);
+                              }}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-sm cursor-pointer"
+                            >
+                              {copied ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span className="text-emerald-600">Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3.5 w-3.5 text-slate-500" />
+                                  <span>Copy Post Copy</span>
+                                </>
+                              )}
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(generatedImageUrl);
+                                  const blob = await response.blob();
+                                  const url = window.URL.createObjectURL(blob);
+                                  const link = document.createElement('a');
+                                  link.download = `founder-visual-gpt2-${Date.now()}.png`;
+                                  link.href = url;
+                                  link.click();
+                                  window.URL.revokeObjectURL(url);
+                                } catch (err) {
+                                  console.error("Failed to download image:", err);
+                                  const link = document.createElement('a');
+                                  link.download = `founder-visual-gpt2-${Date.now()}.png`;
+                                  link.href = generatedImageUrl;
+                                  link.target = "_blank";
+                                  link.click();
+                                }
+                              }}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-violet-650 hover:bg-violet-700 border border-violet-700 transition shadow-sm cursor-pointer"
+                            >
+                              <Download className="h-3.5 w-3.5 text-white" />
+                              <span>Download AI Image</span>
+                            </button>
                           </div>
                         </div>
+                      )}
+                    </BentoCard>
+                  ) : (
+                    <BentoCard span={1}>
+                      <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Palette className="h-4 w-4 text-violet-650" />
+                          <h3 className="text-sm font-bold text-slate-800 tracking-tight">Visual Studio Canvas Preview</h3>
+                        </div>
+                        {hasGeneratedOutput && (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-100 text-amber-800 uppercase">
+                            Layout: {selectedTemplateId}
+                          </span>
+                        )}
+                      </div>
 
-                        {/* Post Action Buttons */}
-                        <div className="flex items-center gap-2 pt-1">
+                      {isGeneratingPost && (
+                        <div className="aspect-square bg-slate-955 border border-slate-850 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-3">
+                          <Loader2 className="h-8 w-8 text-violet-400 animate-spin mb-2" />
+                          <span className="text-xs font-bold text-slate-200 font-mono">Synthesizing Visual Draft & Researching Trends...</span>
+                          <div className="space-y-1 font-mono text-[10px] text-slate-400 max-w-xs">
+                            {generatorLogs.map((log, idx) => (
+                              <p key={idx} className={log.startsWith("✓") ? "text-emerald-400 font-semibold" : ""}>{log}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {!hasGeneratedOutput && !isGeneratingPost && (
+                        <div className="aspect-square bg-slate-50 border border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-8 text-center space-y-3">
+                          <Sparkles className="h-8 w-8 text-slate-300 animate-pulse" />
+                          <span className="text-xs font-bold text-slate-700">Visual Graphic Canvas</span>
+                          <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs font-light">
+                            Draft a post to trigger live trend research. The auto-selected layout, backdrop image, and text overlay will render here.
+                          </p>
                           <button
                             type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(generatedPostCopy);
-                              setCopied(true);
-                              setTimeout(() => setCopied(false), 2000);
-                            }}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-sm cursor-pointer"
+                            onClick={() => setIsTopicModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
                           >
-                            {copied ? (
-                              <>
-                                <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                <span className="text-emerald-600">Copied!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3.5 w-3.5 text-slate-500" />
-                                <span>Copy Post Copy</span>
-                              </>
-                            )}
-                          </button>
-                          
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const iframe = document.querySelector('iframe[title="Visual Template Preview Renderer"]') as HTMLIFrameElement;
-                                const iframeBody = iframe?.contentDocument?.body || null;
-
-                                const dataUrl = await captureTemplateAsJpeg();
-
-                                const link = document.createElement('a');
-                                link.download = `founder-visual-${Date.now()}.jpg`;
-                                link.href = dataUrl;
-                                link.click();
-                              } catch (err) {
-                                console.error("Failed to download image:", err);
-                                alert("Failed to download visual image.");
-                              }
-                            }}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-sm cursor-pointer"
-                          >
-                            <Download className="h-3.5 w-3.5 text-slate-500" />
-                            <span>Download Image</span>
+                            <PlusPenIcon className="h-3.5 w-3.5 text-violet-650" />
+                            <span>+ New Post</span>
                           </button>
                         </div>
-                      </div>
-                    )}
-                  </BentoCard>
+                      )}
+
+                      {hasGeneratedOutput && !isGeneratingPost && (
+                        <div className="space-y-4">
+                          {/* Live Canvas Preview via Iframe Renderer */}
+                          <div className="relative w-[360px] h-[360px] rounded-xl border border-slate-200 shadow overflow-hidden bg-slate-950 shrink-0 mx-auto">
+                            <iframe
+                              id="visual-studio-canvas-preview"
+                              title="Visual Template Preview Renderer"
+                              srcDoc={fullHtml}
+                              // allow-same-origin (so the parent can read
+                              // contentDocument for toJpeg export) WITHOUT
+                              // allow-scripts — model-generated template markup must
+                              // never execute against this origin.
+                              sandbox="allow-same-origin"
+                              className="absolute origin-top-left border-none pointer-events-none"
+                              style={{
+                                width: "1080px",
+                                height: "1080px",
+                                transform: "scale(0.333333)"
+                              }}
+                            />
+                          </div>
+
+                          {/* Brand DNA & Color Harmony Swatches */}
+                          <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                Brand Harmony:
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="h-4 w-4 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: primaryColor }} title="Primary Accent Color" />
+                                <span className="h-4 w-4 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: secondaryColor }} title="Secondary Backdrop Color" />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-[10px] text-slate-600 font-semibold">
+                              <Type className="h-3 w-3 text-slate-400" />
+                              <span>{fontFamily}</span>
+                            </div>
+                          </div>
+
+                          {/* Post Action Buttons */}
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(generatedPostCopy);
+                                setCopied(true);
+                                setTimeout(() => setCopied(false), 2000);
+                              }}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-sm cursor-pointer"
+                            >
+                              {copied ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span className="text-emerald-600">Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3.5 w-3.5 text-slate-500" />
+                                  <span>Copy Post Copy</span>
+                                </>
+                              )}
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const iframe = document.querySelector('iframe[title="Visual Template Preview Renderer"]') as HTMLIFrameElement;
+                                  const iframeBody = iframe?.contentDocument?.body || null;
+
+                                  const dataUrl = await captureTemplateAsJpeg();
+
+                                  const link = document.createElement('a');
+                                  link.download = `founder-visual-${Date.now()}.jpg`;
+                                  link.href = dataUrl;
+                                  link.click();
+                                } catch (err) {
+                                  console.error("Failed to download image:", err);
+                                  alert("Failed to download visual image.");
+                                }
+                              }}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 transition shadow-sm cursor-pointer"
+                            >
+                              <Download className="h-3.5 w-3.5 text-slate-500" />
+                              <span>Download Image</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </BentoCard>
+                  )}
 
                   {/* 6 Discovered Visual Templates Grid (Grounded Web Trends) */}
-                  {trendReport && trendReport.discoveredTemplates?.length > 0 && (
+                  {selectedPrebuiltTemplate !== "auto" && trendReport && trendReport.discoveredTemplates?.length > 0 && (
                     <div className="border border-amber-200/80 bg-gradient-to-b from-amber-50/40 via-white to-amber-50/10 rounded-2xl p-5 shadow-xs text-left space-y-4">
                       <div className="flex items-center justify-between pb-3 border-b border-amber-200/60">
                         <div className="flex items-center gap-2">
@@ -3123,96 +3343,164 @@ Content Pillars: ${p.contentPillars?.join(", ") || "N/A"}
 
                 {/* RIGHT COLUMN: Edit Live Copy Section (Top) & Founder Posts History Feed (Bottom) */}
                 <div className="space-y-6">
-                  {/* Edit Live Copy Section (Auto-Populated & Live Editable) */}
-                  {hasGeneratedOutput ? (
-                    <BentoCard span={1} className="animate-in fade-in duration-300">
-                      <SectionTitle icon={FileText} title="Edit Live Copy (Auto-Populated)" iconColor="text-violet-650" />
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Visual Headline / Hook (Overlay Text)
-                          </label>
-                          <input
-                            type="text"
-                            value={generatedHeadline}
-                            onChange={(e) => setGeneratedHeadline(e.target.value)}
-                            placeholder="Headline visual hook..."
-                            className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Visual Subtext (Supporting Lesson)
-                          </label>
-                          <input
-                            type="text"
-                            value={generatedSubtext}
-                            onChange={(e) => setGeneratedSubtext(e.target.value)}
-                            placeholder="Supporting subtext detail..."
-                            className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs text-slate-700 outline-none transition-colors"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                            Full Post Text Copy
-                          </label>
-                          <textarea
-                            rows={6}
-                            value={generatedPostCopy}
-                            onChange={(e) => setGeneratedPostCopy(e.target.value)}
-                            placeholder="Full post copywriting..."
-                            className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl p-3 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors font-light"
-                          />
-                        </div>
-
-                        {/* AI-Generated Visual Backdrop Section */}
-                        <div className="pt-3 border-t border-slate-100 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                              Generated Visual Backdrop Image (Auto-Populated)
+                  {/* Edit Live Copy Section (Auto-Populated & Live Editable) or Direct AI Copy Section */}
+                  {selectedPrebuiltTemplate !== "auto" ? (
+                    hasGeneratedOutput ? (
+                      <BentoCard span={1} className="animate-in fade-in duration-300">
+                        <SectionTitle icon={FileText} title="Edit Live Copy (Auto-Populated)" iconColor="text-violet-650" />
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Visual Headline / Hook (Overlay Text)
                             </label>
-                            <span className="text-[9px] font-mono font-semibold text-violet-600 bg-violet-50 px-2 py-0.5 rounded border border-violet-150">
-                              Imagen AI
-                            </span>
+                            <input
+                              type="text"
+                              value={generatedHeadline}
+                              onChange={(e) => setGeneratedHeadline(e.target.value)}
+                              placeholder="Headline visual hook..."
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors"
+                            />
                           </div>
 
-                          {generatedImageUrl ? (
-                            <div className="relative rounded-xl overflow-hidden border border-slate-200 aspect-video shadow-sm bg-slate-900 group">
-                              <img src={generatedImageUrl} alt="AI Generated Backdrop" className="w-full h-full object-cover" />
-                              <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center p-3 text-center">
-                                <span className="text-[10px] text-white font-medium">Auto-applied as backdrop for the visual template overlay.</span>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Visual Subtext (Supporting Lesson)
+                            </label>
+                            <input
+                              type="text"
+                              value={generatedSubtext}
+                              onChange={(e) => setGeneratedSubtext(e.target.value)}
+                              placeholder="Supporting subtext detail..."
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs text-slate-700 outline-none transition-colors"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Full Post Text Copy
+                            </label>
+                            <textarea
+                              rows={6}
+                              value={generatedPostCopy}
+                              onChange={(e) => setGeneratedPostCopy(e.target.value)}
+                              placeholder="Full post copywriting..."
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl p-3 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors font-light"
+                            />
+                          </div>
+
+                          {/* AI-Generated Visual Backdrop Section */}
+                          <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                Generated Visual Backdrop Image (Auto-Populated)
+                              </label>
+                              <span className="text-[9px] font-mono font-semibold text-violet-600 bg-violet-50 px-2 py-0.5 rounded border border-violet-150">
+                                Imagen AI
+                              </span>
+                            </div>
+
+                            {generatedImageUrl ? (
+                              <div className="relative rounded-xl overflow-hidden border border-slate-200 aspect-video shadow-sm bg-slate-900 group">
+                                <img src={generatedImageUrl} alt="AI Generated Backdrop" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center p-3 text-center">
+                                  <span className="text-[10px] text-white font-medium">Auto-applied as backdrop for the visual template overlay.</span>
+                                </div>
                               </div>
-                            </div>
-                          ) : (
-                            <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center bg-slate-50 text-slate-400 text-xs font-light">
-                              Backdrop image generated by Imagen AI will appear here upon post drafting.
-                            </div>
-                          )}
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center bg-slate-50 text-slate-400 text-xs font-light">
+                                Backdrop image generated by Imagen AI will appear here upon post drafting.
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </BentoCard>
+                      </BentoCard>
+                    ) : (
+                      <BentoCard span={1}>
+                        <SectionTitle icon={FileText} title="Edit Live Copy (Auto-Populated)" iconColor="text-violet-650" />
+                        <div className="py-12 px-4 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-3">
+                          <FileText className="h-8 w-8 text-slate-300 mx-auto" />
+                          <span className="text-xs font-bold text-slate-700 block">No Post Drafted Yet</span>
+                          <p className="text-[11px] text-slate-400 max-w-xs mx-auto font-light leading-relaxed">
+                            Click "Configure Post Topic & Scope" to choose a topic and draft a post. Live headline, subtext, and body copy will appear here for editing.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setIsTopicModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
+                          >
+                            <PlusPenIcon className="h-3.5 w-3.5 text-violet-650" />
+                            <span>Configure Post Topic & Scope</span>
+                          </button>
+                        </div>
+                      </BentoCard>
+                    )
                   ) : (
-                    <BentoCard span={1}>
-                      <SectionTitle icon={FileText} title="Edit Live Copy (Auto-Populated)" iconColor="text-violet-650" />
-                      <div className="py-12 px-4 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-3">
-                        <FileText className="h-8 w-8 text-slate-300 mx-auto" />
-                        <span className="text-xs font-bold text-slate-700 block">No Post Drafted Yet</span>
-                        <p className="text-[11px] text-slate-400 max-w-xs mx-auto font-light leading-relaxed">
-                          Click "Configure Post Topic & Scope" to choose a topic and draft a post. Live headline, subtext, and body copy will appear here for editing.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsTopicModalOpen(true)}
-                          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
-                        >
-                          <PlusPenIcon className="h-3.5 w-3.5 text-violet-650" />
-                          <span>Configure Post Topic & Scope</span>
-                        </button>
-                      </div>
-                    </BentoCard>
+                    hasGeneratedOutput ? (
+                      <BentoCard span={1} className="animate-in fade-in duration-300">
+                        <SectionTitle icon={FileText} title="Synthesized Post Copy (Direct AI Mode)" iconColor="text-violet-650" />
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Visual Headline / Hook
+                            </label>
+                            <input
+                              type="text"
+                              value={generatedHeadline}
+                              onChange={(e) => setGeneratedHeadline(e.target.value)}
+                              placeholder="Headline visual hook..."
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition-colors"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Visual Subtext (Supporting Theme)
+                            </label>
+                            <input
+                              type="text"
+                              value={generatedSubtext}
+                              onChange={(e) => setGeneratedSubtext(e.target.value)}
+                              placeholder="Supporting subtext detail..."
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl px-3 py-2 text-xs text-slate-700 outline-none transition-colors"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Full Post Text Copy
+                            </label>
+                            <textarea
+                              rows={8}
+                              value={generatedPostCopy}
+                              onChange={(e) => setGeneratedPostCopy(e.target.value)}
+                              placeholder="Full post copywriting..."
+                              className="w-full bg-slate-50 border border-slate-200 focus:border-[#7C3AED] rounded-xl p-3 text-xs text-slate-800 outline-none leading-relaxed resize-none transition-colors font-light"
+                            />
+                          </div>
+                        </div>
+                      </BentoCard>
+                    ) : (
+                      <BentoCard span={1}>
+                        <SectionTitle icon={FileText} title="Synthesized Post Copy (Direct AI Mode)" iconColor="text-violet-650" />
+                        <div className="py-12 px-4 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-3">
+                          <FileText className="h-8 w-8 text-slate-300 mx-auto" />
+                          <span className="text-xs font-bold text-slate-700 block">No Post Drafted Yet</span>
+                          <p className="text-[11px] text-slate-400 max-w-xs mx-auto font-light leading-relaxed">
+                            Click "Configure Post Topic & Scope" to draft your post. The synthesized copy will appear here while your visual renders directly via GPT-2 Image Medium.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setIsTopicModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-violet-650 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition mt-2 cursor-pointer"
+                          >
+                            <PlusPenIcon className="h-3.5 w-3.5 text-violet-650" />
+                            <span>Configure Post Topic & Scope</span>
+                          </button>
+                        </div>
+                      </BentoCard>
+                    )
                   )}
 
                   {/* Singular Latest Generated Founder Post in Creation View */}

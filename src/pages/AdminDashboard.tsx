@@ -68,6 +68,7 @@ function getInitials(name: string): string {
 
 export default function AdminDashboard() {
  const { user, loading: authLoading } = useAuth();
+ const isAdmin = user?.email === 'garvitbansal2303@gmail.com';
  const [activeTab, setActiveTab] = useState<'tokens' | 'errors' | 'whatsapp' | 'users' | 'blogs'>('users');
  const [logs, setLogs] = useState<TokenLog[]>([]);
  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
@@ -84,9 +85,35 @@ export default function AdminDashboard() {
  const [userFetchError, setUserFetchError] = useState<string | null>(null);
 
  // User Brand DNA Modal State
- const [allProducts, setAllProducts] = useState<any[]>([]);
- const [userProductsMap, setUserProductsMap] = useState<Record<string, any[]>>({});
- const [selectedUserModal, setSelectedUserModal] = useState<any | null>(null);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [userProductsMap, setUserProductsMap] = useState<Record<string, any[]>>({});
+  const [selectedUserModal, setSelectedUserModal] = useState<any | null>(null);
+  const [userGenerations, setUserGenerations] = useState<{ campaigns: any[], products: any[] } | null>(null);
+  const [loadingGenerations, setLoadingGenerations] = useState(false);
+
+  useEffect(() => {
+    if (selectedUserModal?.id && isAdmin) {
+      const fetchGenerations = async () => {
+        setLoadingGenerations(true);
+        try {
+          const res = await fetch(`/api/admin/users/${selectedUserModal.id}/generations`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              setUserGenerations({ campaigns: data.campaigns || [], products: data.products || [] });
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch user generations", err);
+        } finally {
+          setLoadingGenerations(false);
+        }
+      };
+      fetchGenerations();
+    } else {
+      setUserGenerations(null);
+    }
+  }, [selectedUserModal, isAdmin]);
 
  // WhatsApp System States
  const [leads, setLeads] = useState<any[]>([]);
@@ -112,9 +139,6 @@ export default function AdminDashboard() {
  const [blogStatus, setBlogStatus] = useState<'draft' | 'published'>('draft');
  const [blogTags, setBlogTags] = useState('');
  const [isSavingBlog, setIsSavingBlog] = useState(false);
-
- // Check if user is admin
- const isAdmin = user?.email === 'garvitbansal2303@gmail.com';
 
   useEffect(() => {
     if (!isAdmin || activeTab !== 'blogs') return;
@@ -457,6 +481,35 @@ export default function AdminDashboard() {
       console.error("Failed to update user lock state:", err);
       logSilentError(err as Error, { context: "toggleUserLock", targetUserId });
       alert(`Failed to update lock status: ${err.message}`);
+    }
+  };
+
+
+  const handleDeleteUser = async (targetUserId: string, userEmail?: string) => {
+    const confirmDelete = confirm(`⚠️ DANGER: Are you sure you want to permanently DELETE the account and all associated data for ${userEmail || targetUserId}? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch('/api/admin/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminEmail: user?.email,
+          targetUserId
+        })
+      });
+
+      if (res.ok) {
+        setUsers(prev => prev.filter(u => u.id !== targetUserId));
+        alert(`Successfully deleted account ${userEmail || targetUserId} and their generations.`);
+      } else {
+        const errorData = await res.json();
+        alert(`Failed to delete user: ${errorData.error}`);
+      }
+    } catch (err: any) {
+      console.error("Failed to delete user:", err);
+      logSilentError(err as Error, { context: "deleteUser", targetUserId });
+      alert(`Failed to delete user: ${err.message}`);
     }
   };
 
@@ -1184,24 +1237,33 @@ export default function AdminDashboard() {
                               </td>
                               <td className="py-3 px-2 text-right">
                                 {u.email !== 'garvitbansal2303@gmail.com' && u.role !== 'Admin' && (
-                                  <button
-                                    onClick={() => handleToggleUserLock(u.id, !!u.isLocked, u.email)}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm inline-flex items-center gap-1 ${
-                                      u.isLocked
-                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                        : 'bg-rose-600 hover:bg-rose-700 text-white'
-                                    }`}
-                                  >
-                                    {u.isLocked ? (
-                                      <>
-                                        <Unlock className="w-3.5 h-3.5" /> Unlock
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Lock className="w-3.5 h-3.5" /> Lock & Log Out
-                                      </>
-                                    )}
-                                  </button>
+                                  <div className="flex justify-end items-center gap-2">
+                                    <button
+                                      onClick={() => handleToggleUserLock(u.id, !!u.isLocked, u.email)}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm inline-flex items-center gap-1 ${
+                                        u.isLocked
+                                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                          : 'bg-rose-600 hover:bg-rose-700 text-white'
+                                      }`}
+                                    >
+                                      {u.isLocked ? (
+                                        <>
+                                          <Unlock className="w-3.5 h-3.5" /> Unlock
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Lock className="w-3.5 h-3.5" /> Lock & Log Out
+                                        </>
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteUser(u.id, u.email)}
+                                      className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors border border-red-200 cursor-pointer shadow-sm"
+                                      title="Delete User Account"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
@@ -2262,6 +2324,57 @@ export default function AdminDashboard() {
                               <Layers className="w-3 h-3 text-slate-400" /> <span className="font-semibold">Visual Style:</span> {b.visualStyle}
                             </div>
                           )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent Generations Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 font-display">
+                      <FileText className="w-4 h-4 text-[#7C3AED]" /> Recent Generations
+                    </h4>
+                  </div>
+
+                  {loadingGenerations ? (
+                    <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-100 flex flex-col items-center justify-center">
+                      <RefreshCw className="w-8 h-8 text-slate-300 animate-spin mb-2" />
+                      <p className="text-xs font-medium text-slate-500">Fetching generations...</p>
+                    </div>
+                  ) : !userGenerations?.campaigns?.length ? (
+                    <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs font-medium text-slate-500">No campaigns or posts generated yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {userGenerations.campaigns.map((camp: any) => (
+                        <div key={camp.id} className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm flex gap-4">
+                          <div className="w-16 h-16 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0">
+                            {camp.imageUrls?.[0] ? (
+                              <img src={camp.imageUrls[0]} alt="Campaign visual" className="w-full h-full object-cover" />
+                            ) : camp.visualPrompt ? (
+                              <div className="w-full h-full flex items-center justify-center bg-purple-50 text-purple-300">
+                                <Sparkles className="w-6 h-6" />
+                              </div>
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                <FileText className="w-6 h-6" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <h5 className="font-bold text-slate-800 text-sm truncate">{camp.name || 'Untitled Campaign'}</h5>
+                            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2 font-mono">
+                              <span>{camp.platform || 'Multi-platform'}</span>
+                              {camp.createdAt && <span>• {new Date(camp.createdAt).toLocaleDateString()}</span>}
+                            </div>
+                            <p className="text-xs text-slate-600 mt-2 line-clamp-2">
+                              {camp.postContent || camp.generatedCopy || camp.objective || 'No content preview available'}
+                            </p>
+                          </div>
                         </div>
                       ))}
                     </div>

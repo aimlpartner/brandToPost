@@ -212,11 +212,14 @@ export function PersonalBrandingOnboarding() {
         merge: true,
       });
       localStorage.setItem(`onboardingCompleted_${user.uid}`, 'true');
+      localStorage.setItem(`accountType_${user.uid}`, 'individual');
       await setDoc(
         doc(db, 'users', user.uid),
         {
           uid: user.uid,
           onboarded: true,
+          purpose: 'individual',
+          accountType: 'individual',
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
@@ -225,6 +228,8 @@ export function PersonalBrandingOnboarding() {
       navigate('/individual', { replace: true });
     } catch (err: any) {
       console.error('Failed to save PersonalBranding profile:', err);
+      localStorage.setItem(`onboardingCompleted_${user.uid}`, 'true');
+      localStorage.setItem(`accountType_${user.uid}`, 'individual');
       setError('Failed to save profile. Proceeding to dashboard...');
       navigate('/individual', { replace: true });
     }
@@ -448,6 +453,37 @@ export function PersonalBrandingOnboarding() {
                         </div>
                       </div>
 
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 border-b border-slate-100 text-left">
+                        <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-3.5">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                            Target Industry
+                          </label>
+                          <input
+                            type="text"
+                            value={voiceDna.targetIndustry || ''}
+                            onChange={(e) =>
+                              setVoiceDna((prev: any) => ({ ...prev, targetIndustry: e.target.value }))
+                            }
+                            placeholder="e.g. B2B SaaS & Tech"
+                            className="w-full bg-white border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-1.5 text-xs text-slate-800 outline-none"
+                          />
+                        </div>
+                        <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-3.5">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                            Target Audience
+                          </label>
+                          <input
+                            type="text"
+                            value={voiceDna.targetAudience || ''}
+                            onChange={(e) =>
+                              setVoiceDna((prev: any) => ({ ...prev, targetAudience: e.target.value }))
+                            }
+                            placeholder="e.g. Founders, CMOs, Tech Leaders"
+                            className="w-full bg-white border border-slate-200 focus:border-[#7C3AED] rounded-lg px-3 py-1.5 text-xs text-slate-800 outline-none"
+                          />
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
                         <EditableVoiceField
                           label="Communication Style"
@@ -498,6 +534,24 @@ export function PersonalBrandingOnboarding() {
                           }
                         />
                       </div>
+
+                      {voiceDna.contentPillars && (
+                        <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-4 text-left">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                            Recommended Content Pillars
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {voiceDna.contentPillars.map((p: string, i: number) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs font-semibold shadow-2xs"
+                              >
+                                # {p}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex justify-end gap-3">

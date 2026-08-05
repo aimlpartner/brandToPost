@@ -1768,6 +1768,7 @@ export interface RawDiscoveredTemplate {
   viralityScore: string;
   whyViral: string;
   isLightBg: boolean;
+  visualStylePrompt?: string;
   rawHtml?: string;
 }
 
@@ -1782,7 +1783,7 @@ export interface VisualTrendReport {
   discoveredTemplates: RawDiscoveredTemplate[];
 }
 
-export async function researchVisualTrends(): Promise<VisualTrendReport> {
+export async function researchVisualTrends(options?: { singleStyle?: boolean }): Promise<VisualTrendReport> {
   const FOCUS_NICHES = [
     "AI agent tooling & B2B SaaS",
     "developer tools & cloud infrastructure",
@@ -1793,7 +1794,7 @@ export async function researchVisualTrends(): Promise<VisualTrendReport> {
   ];
   const focusNiche = FOCUS_NICHES[Math.floor(Math.random() * FOCUS_NICHES.length)];
   console.log(`\n------------------------------------------------------`);
-  console.log(`[STEP 1/5 CLIENT] Triggering researchVisualTrends() for lens: [${focusNiche}] -> PASSED`);
+  console.log(`[STEP 1/5 CLIENT] Triggering researchVisualTrends() for lens: [${focusNiche}] (singleStyle: ${!!options?.singleStyle}) -> PASSED`);
 
   try {
     console.log(`[STEP 2/5 CLIENT] Fetching Firebase auth user ID token...`);
@@ -1807,7 +1808,7 @@ export async function researchVisualTrends(): Promise<VisualTrendReport> {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
       },
-      body: JSON.stringify({ focusNiche })
+      body: JSON.stringify({ focusNiche, singleStyle: options?.singleStyle })
     });
 
     console.log(`[STEP 4/5 CLIENT] Server HTTP response status: ${res.status} ${res.statusText} -> ${res.ok ? 'PASSED' : 'FAILED'}`);
@@ -1915,6 +1916,7 @@ export async function researchVisualTrends(): Promise<VisualTrendReport> {
         viralityScore: "99/100",
         whyViral: "Highest converting social proof layout on LinkedIn & X",
         isLightBg: false,
+        visualStylePrompt: "High-contrast B2B founder editorial visual with executive dark-mode lighting, minimal modern typography, and structured negative space.",
         rawHtml: `<div style="width: 1080px; height: 1080px; background: #000000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; padding: 80px 85px;">
           <div>
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px;">

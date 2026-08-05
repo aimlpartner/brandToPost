@@ -875,11 +875,14 @@ export function Onboarding() {
 
       // Mark Onboarding Complete in local storage & Firestore User Profile
       localStorage.setItem(`onboardingCompleted_${user.uid}`, "true");
+      localStorage.setItem(`accountType_${user.uid}`, "brand");
       const profileDoc: any = {
         uid: user.uid,
         name: user.displayName || "User",
         role: "User",
         onboarded: true,
+        purpose: "brand",
+        accountType: "brand",
       };
       if (userProfile?.createdAt) {
         profileDoc.createdAt = userProfile.createdAt;
@@ -904,11 +907,14 @@ export function Onboarding() {
     if (!user) return;
     try {
       localStorage.setItem(`onboardingCompleted_${user.uid}`, "true");
+      localStorage.setItem(`accountType_${user.uid}`, "brand");
       const profileDoc: any = {
         uid: user.uid,
         name: user.displayName || "User",
         role: "User",
         onboarded: true,
+        purpose: "brand",
+        accountType: "brand",
       };
       if (userProfile?.createdAt) {
         profileDoc.createdAt = userProfile.createdAt;

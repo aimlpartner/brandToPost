@@ -65,10 +65,41 @@
 .animate-marquee {
   display: flex;
   width: max-content;
-  animation: marquee 25s linear infinite;
+  animation: marquee 28s linear infinite;
 }
 .animate-marquee:hover {
   animation-play-state: paused;
+}
+
+@keyframes marquee-reverse {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0%); }
+}
+
+.animate-marquee-reverse {
+  display: flex;
+  width: max-content;
+  animation: marquee-reverse 28s linear infinite;
+}
+.animate-marquee-reverse:hover {
+  animation-play-state: paused;
+}
+
+/* Universal cursor pointer rule for all interactive buttons and links */
+button,
+a,
+[role="button"],
+input[type="submit"],
+input[type="button"],
+input[type="reset"],
+select {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 html, body {

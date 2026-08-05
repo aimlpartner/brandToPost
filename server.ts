@@ -468,13 +468,109 @@ function translateBrandDNA(brandColors?: string[], fontStyle?: string): { colorD
   return { colorDescriptor, typographyDescriptor };
 }
 
+function generateFallbackBrandedCanvas(
+  headline: string,
+  subtext: string,
+  primaryColor: string,
+  secondaryColor: string,
+  logoUrl?: string
+): string {
+  const cleanHeadline = (headline || "EXECUTIVE FOUNDER INSIGHT").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const cleanSubtext = (subtext || "").replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const primary = primaryColor || "#7C3AED";
+
+  const logoSvg = logoUrl
+    ? `<img src="${logoUrl}" style="height:42px;object-fit:contain;" />`
+    : `<div style="color:${primary};font-weight:900;font-size:20px;letter-spacing:0.15em;">BRAND TOPIC</div>`;
+
+  const rawHtml = `<div xmlns="http://www.w3.org/1999/xhtml" style="width:1080px;height:1080px;background:#08080c;display:flex;flex-direction:column;justify-content:space-between;padding:90px;box-sizing:border-box;font-family:'Inter',sans-serif;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
+    <div style="position:absolute;top:-150px;right:-150px;width:600px;height:600px;background:${primary};opacity:0.12;filter:blur(110px);border-radius:50%;"></div>
+    <div style="position:relative;z-index:10;display:flex;flex-direction:column;gap:36px;">
+      <div style="display:inline-block;background:${primary}22;color:${primary};font-size:14px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;padding:8px 20px;border-radius:100px;border:1px solid ${primary}44;width:fit-content;">FOUNDER PERSPECTIVE</div>
+      <h2 style="color:#ffffff;font-weight:850;font-size:52px;line-height:1.22;margin:0;letter-spacing:-0.02em;">${cleanHeadline}</h2>
+      ${cleanSubtext ? `<p style="color:#94a3b8;font-weight:500;font-size:24px;line-height:1.5;margin:0;">${cleanSubtext}</p>` : ''}
+    </div>
+    <div style="position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding-top:44px;border-top:1px solid rgba(255,255,255,0.12);">
+      ${logoSvg}
+      <div style="width:48px;height:4px;background:${primary};border-radius:2px;"></div>
+    </div>
+  </div>`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080">
+    <foreignObject width="1080" height="1080">
+      ${rawHtml}
+    </foreignObject>
+  </svg>`;
+
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+}
+
+async function executeOpenAIImageGeneration(
+  openaiApiKey: string,
+  prompt: string,
+  modelPref?: string,
+  qualityPref?: string
+): Promise<string | null> {
+  const modelsToTry: string[] = [];
+  const configuredModel = modelPref || process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+  if (configuredModel && !modelsToTry.includes(configuredModel)) modelsToTry.push(configuredModel);
+  if (!modelsToTry.includes('gpt-image-2')) modelsToTry.push('gpt-image-2');
+  if (!modelsToTry.includes('dall-e-3')) modelsToTry.push('dall-e-3');
+
+  for (const modelName of modelsToTry) {
+    try {
+      const payload: any = {
+        model: modelName,
+        prompt: prompt.substring(0, 3500),
+        n: 1,
+        size: '1024x1024'
+      };
+      if (modelName.startsWith('dall-e')) {
+        payload.response_format = 'b64_json';
+        payload.quality = qualityPref || 'standard';
+      }
+
+      console.log(`[executeOpenAIImageGeneration] Attempting generation with model: ${modelName}...`);
+      const genRes = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (genRes.ok) {
+        const genData = await genRes.json();
+        if (genData?.data?.[0]?.b64_json) {
+          console.log(`[executeOpenAIImageGeneration] Successfully generated b64_json using model: ${modelName}`);
+          return genData.data[0].b64_json;
+        } else if (genData?.data?.[0]?.url) {
+          console.log(`[executeOpenAIImageGeneration] Successfully generated image URL using model: ${modelName}, fetching buffer...`);
+          const imgFetch = await fetch(genData.data[0].url);
+          const buf = await imgFetch.arrayBuffer();
+          return Buffer.from(buf).toString('base64');
+        }
+      } else {
+        const errTxt = await genRes.text();
+        console.warn(`[executeOpenAIImageGeneration] Model ${modelName} failed HTTP ${genRes.status}:`, errTxt);
+      }
+    } catch (e: any) {
+      console.warn(`[executeOpenAIImageGeneration] Model ${modelName} exception:`, e.message || e);
+    }
+  }
+  return null;
+}
+
 async function generateSingleCampaignImageBackend(
   item: any,
   logoUrl?: string
 ): Promise<string> {
   const openaiApiKey = process.env.OPENAI_API_KEY;
-  const openaiModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
-  const openaiQuality = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+  const rawModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+  const openaiModel = rawModel;
+  const rawQuality = process.env.OPENAI_IMAGE_QUALITY || 'standard';
+  const openaiQuality = rawQuality;
   const geminiApiKey = process.env.GEMINI_API_KEY;
 
   const promptText = typeof item === 'string' ? item : item?.prompt || `High quality editorial photographic visual`;
@@ -493,6 +589,7 @@ async function generateSingleCampaignImageBackend(
     try {
       const { colorDescriptor, typographyDescriptor } = translateBrandDNA(brandColors, fontStyle);
       let formattedPrompt = `1:1 ratio square editorial visual post.\n`;
+      if (promptText) formattedPrompt += `VISUAL SUBJECT & CONCEPT DESCRIPTION: ${promptText}\n`;
       if (headline) formattedPrompt += `HEADLINE TEXT TO DISPLAY: "${headline}"\n`;
       if (subtext) formattedPrompt += `SUBTEXT/BODY COPY: "${subtext}"\n`;
       formattedPrompt += `VIVID BRAND COLOR & LIGHTING HARMONY: ${colorDescriptor}\n`;
@@ -525,7 +622,7 @@ async function generateSingleCampaignImageBackend(
           formData.append('image', blob, 'source.png');
           formData.append('prompt', formattedPrompt);
           formData.append('model', openaiModel);
-          if (openaiModel.startsWith('gpt-image')) {
+          if (openaiModel === 'dall-e-3') {
             formData.append('quality', openaiQuality);
           } else {
             formData.append('response_format', 'b64_json');
@@ -560,34 +657,7 @@ async function generateSingleCampaignImageBackend(
       }
 
       if (!base64Data) {
-        const genRes = await fetch('https://api.openai.com/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openaiApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: openaiModel,
-            prompt: formattedPrompt,
-            n: 1,
-            size: '1024x1024',
-            ...(openaiModel.startsWith('gpt-image') ? { quality: openaiQuality } : { response_format: 'b64_json' })
-          })
-        });
-
-        if (genRes.ok) {
-          const genData = await genRes.json();
-          if (genData?.data?.[0]?.b64_json) {
-            base64Data = genData.data[0].b64_json;
-          } else if (genData?.data?.[0]?.url) {
-            const imgFetch = await fetch(genData.data[0].url);
-            const buf = await imgFetch.arrayBuffer();
-            base64Data = Buffer.from(buf).toString('base64');
-          }
-        } else {
-          const errTxt = await genRes.text();
-          console.error(`[generateSingleCampaignImageBackend] OpenAI Generations failed HTTP ${genRes.status}:`, errTxt);
-        }
+        base64Data = await executeOpenAIImageGeneration(openaiApiKey, formattedPrompt, openaiModel, openaiQuality);
       }
     } catch (oaiErr) {
       console.warn('[generateSingleCampaignImageBackend] OpenAI generation error:', oaiErr);
@@ -625,7 +695,13 @@ async function generateSingleCampaignImageBackend(
     return `/api/campaign/images/${imageId}.png`;
   }
 
-  return `https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80`;
+  return generateFallbackBrandedCanvas(
+    headline || promptText,
+    subtext || "",
+    brandColors?.[0] || "#7C3AED",
+    brandColors?.[1] || "#08080C",
+    logoUrl
+  );
 }
 
 const campaignSchema = {
@@ -1941,41 +2017,6 @@ async function executeAutoFounderPostGeneration(userId: string) {
   const postType = user.founderPostType || "general"; // 'general' | 'branded' | 'both'
   console.log(`[executeAutoFounderPostGeneration] Run for user ${userId}. Type: ${postType}, Style: ${attachmentStyle}...`);
 
-  // Helper to render rawHtml template into an SVG data URL for background automation
-  const renderHtmlToSvgDataUrl = (rawHtml: string, data: {
-    headline: string;
-    subtext: string;
-    imageUrl?: string | null;
-    logoUrl?: string | null;
-    primaryColor?: string;
-    secondaryColor?: string;
-    fontFamily?: string;
-  }): string => {
-    let html = rawHtml
-      .replace(/\{\{HEADLINE\}\}/g, data.headline || '')
-      .replace(/\{\{SUBTEXT\}\}/g, data.subtext || '')
-      .replace(/\{\{IMAGE_URL\}\}/g, data.imageUrl || '')
-      .replace(/\{\{PRIMARY_COLOR\}\}/g, data.primaryColor || '#7C3AED')
-      .replace(/\{\{SECONDARY_COLOR\}\}/g, data.secondaryColor || '#08080C')
-      .replace(/\{\{FONT_FAMILY\}\}/g, data.fontFamily || 'Inter');
-
-    if (data.logoUrl) {
-      html = html.replace(/\{\{LOGO_URL\}\}/g, `<img src="${data.logoUrl}" style="height:32px;object-fit:contain;" />`);
-    } else {
-      html = html.replace(/\{\{LOGO_URL\}\}/g, '');
-    }
-
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080">
-      <foreignObject width="1080" height="1080">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="width:1080px;height:1080px;">
-          ${html}
-        </div>
-      </foreignObject>
-    </svg>`;
-
-    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
-  };
-
   // 1. Generate topic to focus on today based on pillars and strategic context
   let selectedTopic = "entrepreneurship and personal lessons from building startups";
   let trendResearch = "";
@@ -2136,87 +2177,72 @@ Return a JSON object containing:
     if (!postData.postCopy) return;
 
     let imageUrl: string | null = null;
-    if (attachmentStyle !== "text-only" && postData.imagePrompt) {
-      try {
-        console.log(`[executeAutoFounderPostGeneration] Generating Imagen backdrop for: "${postData.imagePrompt}"...`);
-        const imgRes = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-image-preview',
-          contents: { parts: [{ text: postData.imagePrompt }] },
-          config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
-        });
-
-        await logBackendTokenUsage(userId, productData ? `auto_founder_branded_img_${productData.id}` : "auto_founder_general_img", "gemini-3.1-flash-image-preview", {
-          promptTokenCount: 0,
-          candidatesTokenCount: 0,
-          totalTokenCount: 1
-        });
-
-        if (imgRes?.candidates?.[0]?.content?.parts) {
-          for (const pt of imgRes.candidates[0].content.parts) {
-            if (pt.inlineData) {
-              const base64Data = pt.inlineData.data;
-              const mimeType = pt.inlineData.mimeType || 'image/png';
-              const imageId = 'img_founder_' + Math.random().toString(36).substring(2, 10);
-
-              await saveImageLocalAndDb(imageId, base64Data, mimeType, postData.imagePrompt);
-              imageUrl = `/api/whatsapp/images/${imageId}.png`;
-              break;
-            }
-          }
-        }
-      } catch (eImg) {
-        console.warn('[executeAutoFounderPostGeneration Image Gen Failed]', eImg);
-      }
-    }
-
-    // Fallback image if Imagen generation skipped or failed
-    if (attachmentStyle !== "text-only" && !imageUrl) {
-      imageUrl = "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1080&auto=format&fit=crop";
-    }
-
-    // Synthesize visual template composite SVG for automated post using live web research
     let approvedTemplateImage: string | null = null;
+
     if (attachmentStyle !== "text-only") {
+      // 1. Discover 1 Single Visual Aesthetic Trend ("like how they look") via Google Search grounding
+      let stylePrompt = "High-contrast B2B founder editorial visual with executive dark-mode lighting, minimal modern typography, and structured negative space.";
+      let activePrimary = productData?.visualData?.colors?.[0] || "#7C3AED";
+      let activeSecondary = productData?.visualData?.colors?.[1] || "#08080C";
+
       try {
-        let activeRawHtml = `<div style="width:1080px;height:1080px;position:relative;background:#08080c;overflow:hidden;font-family:{{FONT_FAMILY}},sans-serif;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:80px;"><img src="{{IMAGE_URL}}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.35;filter:brightness(0.5);z-index:1;" /><div style="position:relative;z-index:10;width:860px;background:#08080c;border:2px solid rgba(255,255,255,0.15);border-left:8px solid {{PRIMARY_COLOR}};border-radius:24px;padding:60px;box-sizing:border-box;"><div style="display:inline-block;background:{{PRIMARY_COLOR}}22;color:{{PRIMARY_COLOR}};font-size:14px;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;padding:6px 16px;border-radius:100px;margin-bottom:24px;border:1px solid {{PRIMARY_COLOR}}44;">FOUNDER INSIGHT</div><h2 style="color:#ffffff;font-weight:850;font-size:48px;line-height:1.2;margin:0 0 20px 0;word-break:break-word;">{{HEADLINE}}</h2><p style="color:#94a3b8;font-weight:500;font-size:22px;line-height:1.5;margin:0;">{{SUBTEXT}}</p><div style="margin-top:36px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.1);">{{LOGO_URL}}</div></div></div>`;
-        let activePrimary = productData?.visualData?.colors?.[0] || "#7C3AED";
-        let activeSecondary = productData?.visualData?.colors?.[1] || "#08080C";
-        let activeFont = "Inter";
-
-        // Execute live trend research for automated post visual structure
-        try {
-          const nicheLens = productData?.industry || founderAgent.targetIndustry || "AI agent tooling & B2B SaaS";
-          const resRes = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
-            contents: [{ text: `Synthesize a single 1080x1080 inline-styled HTML code for a discovered B2B founder visual trend in "${nicheLens}". Inside rawHtml use placeholders: {{HEADLINE}}, {{SUBTEXT}}, {{IMAGE_URL}}, {{LOGO_URL}}, {{PRIMARY_COLOR}}, {{SECONDARY_COLOR}}, {{FONT_FAMILY}}. Return JSON: {"rawHtml": "...", "primaryColor": "#...", "secondaryColor": "#...", "fontFamily": "Inter"}` }],
-            config: { tools: [{ googleSearch: {} }] }
-          });
-          let cleanRes = (resRes.text || "").trim();
-          if (cleanRes.startsWith('```')) {
-            cleanRes = cleanRes.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-          }
-          const parsedRes = JSON.parse(cleanRes);
-          if (parsedRes.rawHtml) {
-            activeRawHtml = parsedRes.rawHtml;
-            if (parsedRes.primaryColor) activePrimary = parsedRes.primaryColor;
-            if (parsedRes.secondaryColor) activeSecondary = parsedRes.secondaryColor;
-            if (parsedRes.fontFamily) activeFont = parsedRes.fontFamily;
-          }
-        } catch (errResHtml) {
-          console.warn("[executeAutoFounderPostGeneration] Live research fallback to default template:", errResHtml);
-        }
-
-        approvedTemplateImage = renderHtmlToSvgDataUrl(activeRawHtml, {
-          headline: postData.headline || selectedTopic,
-          subtext: postData.subtext || "",
-          imageUrl,
-          logoUrl: productData?.logoDarkUrl || productData?.logoUrl || null,
-          primaryColor: activePrimary,
-          secondaryColor: activeSecondary,
-          fontFamily: activeFont
+        const nicheLens = productData?.industry || founderAgent.targetIndustry || "AI agent tooling & B2B SaaS";
+        const trendRes = await ai.models.generateContent({
+          model: 'gemini-3.1-pro-preview',
+          contents: [{ text: `You are an elite B2B brand designer and visual researcher. Conduct Google Search grounding to discover 1 current, high-impact visual aesthetic trend for executive founder social media cards in "${nicheLens}".
+Return ONLY valid JSON matching this schema:
+{
+  "visualStylePrompt": "Detailed visual description of lighting, composition, negative space, and executive aesthetic",
+  "primaryColor": "#...",
+  "secondaryColor": "#..."
+}` }],
+          config: { tools: [{ googleSearch: {} }] }
         });
-      } catch (errSvg) {
-        console.warn("[executeAutoFounderPostGeneration] SVG composite synthesis failed:", errSvg);
+        let cleanRes = (trendRes.text || "").trim();
+        if (cleanRes.startsWith('```')) {
+          cleanRes = cleanRes.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+        }
+        const parsedRes = JSON.parse(cleanRes);
+        if (parsedRes.visualStylePrompt) stylePrompt = parsedRes.visualStylePrompt;
+        if (parsedRes.primaryColor) activePrimary = parsedRes.primaryColor;
+        if (parsedRes.secondaryColor) activeSecondary = parsedRes.secondaryColor;
+      } catch (trendErr) {
+        console.warn("[executeAutoFounderPostGeneration] 1-Style Grounding Research fallback:", trendErr);
+      }
+
+      // 2. Generate 1:1 Direct Image using our GPT-2 Image Medium (generateSingleCampaignImageBackend)
+      try {
+        const directPrompt = `B2B Founder Social Post Graphic about: ${selectedTopic}.
+Visual Concept & Subject: A modern editorial B2B graphic representing ${selectedTopic}. ${postData.imagePrompt || ''}
+Style & Aesthetic: ${stylePrompt}.
+Headline text to display: "${postData.headline || selectedTopic}".
+Subtext / secondary theme: "${postData.subtext || ''}".
+Brand Color Palette: Primary ${activePrimary}, Secondary ${activeSecondary}.
+Style: Professional 1:1 editorial graphic, zero stock photo slop, dark-mode executive aesthetic.`;
+
+        imageUrl = await generateSingleCampaignImageBackend({
+          prompt: directPrompt,
+          headline: postData.headline || selectedTopic,
+          subtext: postData.subtext || undefined,
+          brandColors: [activePrimary, activeSecondary]
+        }, productData?.logoDarkUrl || productData?.logoUrl);
+
+        approvedTemplateImage = imageUrl;
+        console.log(`[executeAutoFounderPostGeneration] Successfully generated GPT-2 image: ${imageUrl}`);
+      } catch (eImg) {
+        console.error('[executeAutoFounderPostGeneration] GPT-2 Image Generation failed:', eImg);
+      }
+
+      // Fallback branded graphic canvas if both OpenAI and Imagen failed (ZERO stock photo slop)
+      if (!imageUrl) {
+        imageUrl = generateFallbackBrandedCanvas(
+          postData.headline || selectedTopic,
+          postData.subtext || "",
+          activePrimary,
+          activeSecondary,
+          productData?.logoDarkUrl || productData?.logoUrl || undefined
+        );
+        approvedTemplateImage = imageUrl;
       }
     }
 
@@ -4220,6 +4246,15 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
   app.use(cookieParser());
 
+  // Static serving for campaign and personal branding generated images
+  app.use('/api/campaign/images', express.static(path.join(process.cwd(), 'public', 'campaign_images')));
+  app.use('/api/personal-branding/images', express.static(path.join(process.cwd(), 'public', 'campaign_images')));
+  app.use('/campaign_images', express.static(path.join(process.cwd(), 'public', 'campaign_images')));
+  app.use('/whatsapp_images', express.static(path.join(process.cwd(), 'public', 'whatsapp_images')));
+
+  // Personal Branding & Founder Post Generator API Routes
+  app.use('/api/personal-branding', personalBrandingRouter);
+
   // --- TEMPORARY DIAGNOSTIC ENDPOINT (remove after debugging) ---
   app.get('/api/debug/env', (req, res) => {
     const envPaths = [
@@ -4401,6 +4436,71 @@ async function startServer() {
       return res.status(500).json({ error: err.message || "Failed to lock all users" });
     }
   });
+
+  // --- Admin API: Delete User ---
+  app.post('/api/admin/users/delete', async (req, res) => {
+    try {
+      const { adminEmail, targetUserId } = req.body;
+
+      if (!targetUserId) {
+        return res.status(400).json({ error: "targetUserId is required" });
+      }
+
+      if (!db) {
+        return res.status(500).json({ error: "Database connection not active on server" });
+      }
+
+      // Delete from Firebase Auth
+      try {
+        await admin.auth().deleteUser(targetUserId);
+        console.log(`[Admin Delete] Deleted user ${targetUserId} from Firebase Auth.`);
+      } catch (authErr: any) {
+        console.warn(`[Admin Delete] Could not delete user from auth (might already be deleted): ${authErr.message}`);
+      }
+
+      // Delete from 'users' collection
+      await db.collection('users').doc(targetUserId).delete();
+
+      // Delete associated products
+      const productsSnap = await db.collection('products').where('userId', '==', targetUserId).get();
+      const productDeletes = productsSnap.docs.map(doc => doc.ref.delete());
+      await Promise.all(productDeletes);
+
+      // Delete associated campaigns
+      const campaignsSnap = await db.collection('campaigns').where('userId', '==', targetUserId).get();
+      const campaignDeletes = campaignsSnap.docs.map(doc => doc.ref.delete());
+      await Promise.all(campaignDeletes);
+
+      console.log(`[Admin Delete] User ${targetUserId} and associated data deleted by ${adminEmail || 'admin'}.`);
+      return res.json({ success: true, targetUserId });
+    } catch (err: any) {
+      console.error("[Admin Delete Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to delete user" });
+    }
+  });
+
+  // --- Admin API: Fetch User Generations ---
+  app.get('/api/admin/users/:userId/generations', async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      if (!db) {
+        return res.status(500).json({ error: "Database connection not active on server" });
+      }
+
+      const productsSnap = await db.collection('products').where('userId', '==', userId).get();
+      const products = productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      const campaignsSnap = await db.collection('campaigns').where('userId', '==', userId).orderBy('createdAt', 'desc').limit(20).get();
+      const campaigns = campaignsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      return res.json({ success: true, products, campaigns });
+    } catch (err: any) {
+      console.error("[Admin Generations Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to fetch user generations" });
+    }
+  });
+
   // --- Admin API: Fetch All Products / Brands ---
   app.get('/api/admin/products', async (req, res) => {
     try {
@@ -4831,8 +4931,10 @@ ${fallbackHtmlContent}
       }
 
       const openaiApiKey = process.env.OPENAI_API_KEY;
-      const openaiModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
-      const openaiQuality = process.env.OPENAI_IMAGE_QUALITY || 'medium';
+      const rawModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+      const openaiModel = rawModel;
+      const rawQuality = process.env.OPENAI_IMAGE_QUALITY || 'standard';
+      const openaiQuality = rawQuality;
       const geminiApiKey = process.env.GEMINI_API_KEY;
 
       const imageUrls: string[] = [];
@@ -4855,6 +4957,7 @@ ${fallbackHtmlContent}
           try {
             const { colorDescriptor, typographyDescriptor } = translateBrandDNA(brandColors, fontStyle);
             let formattedPrompt = `1:1 ratio square editorial visual post.\n`;
+            if (promptText) formattedPrompt += `VISUAL SUBJECT & CONCEPT DESCRIPTION: ${promptText}\n`;
             if (headline) formattedPrompt += `HEADLINE TEXT TO DISPLAY: "${headline}"\n`;
             if (subtext) formattedPrompt += `SUBTEXT/BODY COPY: "${subtext}"\n`;
             formattedPrompt += `VIVID BRAND COLOR & LIGHTING HARMONY: ${colorDescriptor}\n`;
@@ -4920,30 +5023,7 @@ ${fallbackHtmlContent}
 
             // Fallback to standard OpenAI Image Generation if edit wasn't used or failed
             if (!base64Data) {
-              const genRes = await fetch('https://api.openai.com/v1/images/generations', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${openaiApiKey}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  model: openaiModel,
-                  prompt: formattedPrompt,
-                  n: 1,
-                  size: '1024x1024',
-                  ...(openaiModel.startsWith('gpt-image') ? { quality: openaiQuality } : { response_format: 'b64_json' })
-                })
-              });
-
-              if (genRes.ok) {
-                const genData = await genRes.json();
-                if (genData?.data?.[0]?.b64_json) {
-                  base64Data = genData.data[0].b64_json;
-                }
-              } else {
-                const errTxt = await genRes.text();
-                console.error(`[generate-campaign-images] OpenAI Generations failed HTTP ${genRes.status}:`, errTxt);
-              }
+              base64Data = await executeOpenAIImageGeneration(openaiApiKey, formattedPrompt, openaiModel, openaiQuality);
             }
           } catch (oaiErr) {
             console.error('[generate-campaign-images] OpenAI generation error:', oaiErr);
@@ -4982,7 +5062,13 @@ ${fallbackHtmlContent}
           generatedUrl = `/api/whatsapp/images/${imageId}.png`;
         }
 
-        imageUrls.push(generatedUrl || `https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=80`);
+        imageUrls.push(generatedUrl || generateFallbackBrandedCanvas(
+          headline || promptText,
+          subtext || "",
+          brandColors?.[0] || "#7C3AED",
+          brandColors?.[1] || "#08080C",
+          logoUrl
+        ));
       }
 
       res.json({ success: true, imageUrls });
@@ -4994,9 +5080,9 @@ ${fallbackHtmlContent}
 
   // --- Real AI Trend Research Endpoint (Grounded Web Research Engine) ---
   app.post('/api/ai/research-trends', requireAuth, routeRateLimiter(15, 60 * 1000), async (req, res) => {
-    const { focusNiche } = req.body || {};
+    const { focusNiche, singleStyle } = req.body || {};
     console.log(`\n======================================================`);
-    console.log(`[STEP 1/6 SERVER] POST /api/ai/research-trends received.`);
+    console.log(`[STEP 1/6 SERVER] POST /api/ai/research-trends received (singleStyle: ${!!singleStyle}).`);
     console.log(`[STEP 1/6 SERVER] Focus Niche requested: "${focusNiche || '(Auto-random)'}" -> PASSED`);
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -5021,13 +5107,17 @@ ${fallbackHtmlContent}
       const currentDate = new Date().toISOString().split('T')[0];
 
       // --- PHASE 1: Live Grounded Web Research on LinkedIn & X Visual Trends ---
-      console.log(`[STEP 3/6 SERVER] Phase 1: Initiating Live Web Grounding for [${nicheLens}]...`);
+      console.log(`[STEP 3/6 SERVER] Phase 1: Initiating Live Web Grounding for [${nicheLens}] (singleStyle: ${!!singleStyle})...`);
       let groundingResearchText = "";
       try {
         const searchRes = await ai.models.generateContent({
           model: 'gemini-3.1-pro-preview',
           contents: [{
-            text: `Today's date is ${currentDate}. Perform live web searches on LinkedIn and X for recent viral B2B posts in: "${nicheLens}".
+            text: singleStyle
+              ? `Today's date is ${currentDate}. Perform a live web search on LinkedIn and X for recent viral B2B founder posts in: "${nicheLens}".
+Identify 1 SINGLE active, high-converting visual layout composition trend or visual aesthetic ("like how they look").
+Explain its lighting, contrast, typography hierarchy, and negative space composition.`
+              : `Today's date is ${currentDate}. Perform live web searches on LinkedIn and X for recent viral B2B posts in: "${nicheLens}".
 Identify 3 to 5 active, rising visual layout structures, graphic compositions, typography trends, and contrast patterns being used by top founders and accounts.
 Explain why each layout is converting.`
           }],
@@ -5039,13 +5129,27 @@ Explain why each layout is converting.`
         console.log(`[STEP 3/6 SERVER] Phase 1 Grounding Search -> PASSED (Received ${groundingResearchText.length} chars of trend findings)`);
       } catch (searchErr: any) {
         console.warn(`[STEP 3/6 SERVER] Phase 1 Grounding Search -> WARN (${searchErr.message}). Continuing with core synthesis...`);
-        groundingResearchText = `Focus on high-contrast B2B founder visual cards, split panels, dark-mode callout boxes, minimal typography, and metric billboards.`;
+        groundingResearchText = singleStyle
+          ? `High-contrast B2B founder editorial visual with executive dark-mode lighting, minimal modern typography, and structured negative space.`
+          : `Focus on high-contrast B2B founder visual cards, split panels, dark-mode callout boxes, minimal typography, and metric billboards.`;
       }
 
       // --- PHASE 2: Structured JSON Synthesis with Guaranteed Schema ---
       const timestamp = Date.now();
-      console.log(`[STEP 4/6 SERVER] Phase 2: Synthesizing Dynamic HTML/CSS Visual Templates with responseSchema...`);
-      const synthesisPrompt = `You are a world-class senior brand systems designer and B2B visual director.
+      console.log(`[STEP 4/6 SERVER] Phase 2: Synthesizing Dynamic Visual Templates with responseSchema...`);
+      const synthesisPrompt = singleStyle
+        ? `You are a world-class senior brand systems designer and B2B visual director.
+Today's date is ${currentDate}.
+
+Live Grounded Market Trend Research for "${nicheLens}":
+${groundingResearchText}
+
+Based on this grounded research, synthesize 1 SINGLE high-converting B2B founder visual trend aesthetic ("like how they look").
+Your output MUST contain an array "discoveredTemplates" with EXACTLY 1 object describing this single visual trend.
+The object MUST contain "visualStylePrompt" which provides detailed artistic, lighting, contrast, and layout composition instructions for generating a 1:1 editorial graphic via AI image models (e.g. GPT-2 Image / OpenAI / Imagen).
+Do NOT write HTML or CSS in visualStylePrompt. Focus on how the visual looks: composition, backdrop mood, executive aesthetic, lighting, and visual hierarchy.
+For "rawHtml", provide a simple minimal fallback string: "<div style='background:#08080C;color:#fff;padding:60px;'>AI Generated Visual</div>".`
+        : `You are a world-class senior brand systems designer and B2B visual director.
 Today's date is ${currentDate}.
 
 Live Grounded Market Trend Research for "${nicheLens}":
@@ -5085,6 +5189,7 @@ CRITICAL DESIGN RULES:
                 sourceTrend: { type: Type.STRING },
                 evidenceRef: { type: Type.STRING },
                 signatureDetail: { type: Type.STRING },
+                visualStylePrompt: { type: Type.STRING },
                 primaryColor: { type: Type.STRING },
                 secondaryColor: { type: Type.STRING },
                 fontFamily: { type: Type.STRING },
@@ -5131,7 +5236,7 @@ CRITICAL DESIGN RULES:
         // Last resort: find any array with items that look like templates
         if (!Array.isArray(parsedData.discoveredTemplates) || parsedData.discoveredTemplates.length === 0) {
           for (const key of Object.keys(parsedData)) {
-            if (Array.isArray(parsedData[key]) && parsedData[key].length > 0 && parsedData[key][0]?.rawHtml) {
+            if (Array.isArray(parsedData[key]) && parsedData[key].length > 0 && (parsedData[key][0]?.rawHtml || parsedData[key][0]?.visualStylePrompt)) {
               console.warn(`[STEP 6/6 SERVER] Key normalization (rawHtml scan): Remapping Gemini field "${key}" -> "discoveredTemplates"`);
               parsedData.discoveredTemplates = parsedData[key];
               delete parsedData[key];
@@ -5144,7 +5249,7 @@ CRITICAL DESIGN RULES:
       // --- rawHtml VALIDATION: Patch any templates that are missing rawHtml ---
       if (Array.isArray(parsedData.discoveredTemplates)) {
         parsedData.discoveredTemplates = parsedData.discoveredTemplates.map((t: any, idx: number) => {
-          if (!t.rawHtml || typeof t.rawHtml !== 'string' || t.rawHtml.trim().length < 50) {
+          if (!singleStyle && (!t.rawHtml || typeof t.rawHtml !== 'string' || t.rawHtml.trim().length < 50)) {
             console.warn(`[STEP 6/6 SERVER] Template "${t.id || idx}" missing valid rawHtml (got ${(t.rawHtml || '').length} chars). Injecting server-side fallback HTML.`);
             const pc = t.primaryColor || '#7C3AED';
             const sc = t.secondaryColor || '#08080C';
@@ -5163,6 +5268,8 @@ CRITICAL DESIGN RULES:
                 </div>
               </div>
             </div>`;
+          } else if (singleStyle && (!t.rawHtml || typeof t.rawHtml !== 'string' || t.rawHtml.trim().length < 10)) {
+            t.rawHtml = '<div style="background:#08080C;color:#fff;padding:60px;">AI Generated Visual</div>';
           }
           return t;
         });
@@ -5624,7 +5731,7 @@ Also search for their public LinkedIn profile avatar image URL if indexed.
 Output ONLY a valid JSON object with keys: "name", "headline", "avatarUrl". Do NOT wrap in markdown code blocks.`;
 
           const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-3.1-pro-preview",
             contents: [{ role: "user", parts: [{ text: searchPrompt }] }],
             config: {
               tools: [{ googleSearch: {} }]

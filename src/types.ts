@@ -261,6 +261,8 @@ export interface PersonalBrandItem {
   brandType: 'owned' | 'promotional';
   customPromotionalUrl?: string;
   researchedAt?: string;
+  logoUrl?: string;
+  brandColors?: string[];
 }
 
 export interface PersonalBrandingProfile {
@@ -270,6 +272,9 @@ export interface PersonalBrandingProfile {
   founderDescription: string;
   founderVoiceFileName?: string;
   founderVoiceFileData?: string;
+  tagline?: string;
+  avatarUrl?: string;
+  logoUrl?: string;
   voiceDna?: {
     personaName: string;
     behavioralTraits: string[];
@@ -292,5 +297,6 @@ export interface PersonalBrandingProfile {
     linkedinOrganizationId?: string;
     linkedinOrganizationName?: string;
   };
+  recentPosts?: any[];
   updatedAt?: string;
 }

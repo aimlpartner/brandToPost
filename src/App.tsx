@@ -24,6 +24,8 @@ import { WhatsAppLogin } from "./pages/WhatsAppLogin";
 import { WhatsAppDashboard } from "./pages/WhatsAppDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import { MasterFounder } from "./pages/MasterFounder";
+import { MasterFounderFeaturePage } from "./pages/MasterFounderFeaturePage";
+import { MasterAgencyFeaturePage } from "./pages/MasterAgencyFeaturePage";
 import { PersonalBrandingOnboarding } from "./pages/PersonalBrandingOnboarding";
 import { IndividualOverview } from "./pages/individual/IndividualOverview";
 import { IndividualCreator } from "./pages/individual/IndividualCreator";
@@ -56,6 +58,10 @@ export default function App() {
               <Route path="" element={<LandingPage />} />
               <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
+              <Route path="/founder" element={<MasterFounderFeaturePage />} />
+              <Route path="/master-founder-feature" element={<MasterFounderFeaturePage />} />
+              <Route path="/agency" element={<MasterAgencyFeaturePage />} />
+              <Route path="/master-agency-feature" element={<MasterAgencyFeaturePage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/research-blueprints" element={<GroundingResearchUtility />} />
               <Route path="/research-linkedin" element={<LinkedInTemplateCollector />} />
