@@ -125,6 +125,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
 
             const profileData = { ...data } as AuthProfile;
+            if (profileData.onboarded === undefined) {
+              profileData.onboarded = true;
+              updateDoc(userRef, { onboarded: true }).catch(() => {});
+            }
             const localAccountType = localStorage.getItem(`accountType_${currentUser.uid}`);
             if (!profileData.accountType && !profileData.purpose) {
               if (localAccountType === 'individual' || localAccountType === 'brand') {

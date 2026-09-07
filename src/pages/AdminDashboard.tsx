@@ -1005,8 +1005,8 @@ export default function AdminDashboard() {
               if (userStatusFilter === 'offline' && u.isOnline) return false;
 
               // Onboarding filter
-              if (userOnboardingFilter === 'onboarded' && !u.onboarded) return false;
-              if (userOnboardingFilter === 'pending' && u.onboarded) return false;
+              if (userOnboardingFilter === 'onboarded' && u.onboarded === false) return false;
+              if (userOnboardingFilter === 'pending' && u.onboarded !== false) return false;
 
               return true;
             });
@@ -1193,7 +1193,7 @@ export default function AdminDashboard() {
                                 </div>
                               </td>
                               <td className="py-3 px-2">
-                                {u.onboarded ? (
+                                {u.onboarded !== false ? (
                                   <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full text-[10px] font-semibold">
                                     <CheckCircle2 className="w-3.5 h-3.5" /> Complete
                                   </span>
