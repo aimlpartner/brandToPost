@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   MoreHorizontal, MessageCircle, Repeat2, Heart, Share2, Send, Bookmark,
   Fingerprint, Globe, PenTool, Palette, Layers, Video, Cpu, MessageSquare,
-  ChevronDown, X, CheckCircle2, ArrowRight
+  ChevronDown, X, CheckCircle2, ArrowRight, ArrowUpRight, ThumbsUp, Mic, Zap, Check
 } from 'lucide-react';
+import { AGENTS_LIST, renderAgentIcon } from '../data/agentsData';
+import { CloudShader } from '../components/ui/cloud-shader';
 
 export function NewLandingPage() {
   const navigate = useNavigate();
@@ -25,10 +27,44 @@ export function NewLandingPage() {
     return () => clearInterval(interval);
   }, [words.length]);
 
-  // Integrations Hamburger Dropdown State
+  // Agents & Integrations Hamburger Dropdowns State
+  const [agentsOpen, setAgentsOpen] = useState(false);
+  const agentsDropdownRef = useRef<HTMLDivElement>(null);
+  const agentsBtnRef = useRef<HTMLButtonElement>(null);
+  const agentsTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const integrationsDropdownRef = useRef<HTMLDivElement>(null);
   const integrationsBtnRef = useRef<HTMLButtonElement>(null);
+  const integrationsTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleAgentsMouseEnter = () => {
+    if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
+    setIntegrationsOpen(false);
+    setAgentsOpen(true);
+  };
+
+  const handleAgentsMouseLeave = () => {
+    if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    agentsTimerRef.current = setTimeout(() => {
+      setAgentsOpen(false);
+    }, 200);
+  };
+
+  const handleIntegrationsMouseEnter = () => {
+    if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
+    if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    setAgentsOpen(false);
+    setIntegrationsOpen(true);
+  };
+
+  const handleIntegrationsMouseLeave = () => {
+    if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
+    integrationsTimerRef.current = setTimeout(() => {
+      setIntegrationsOpen(false);
+    }, 200);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -40,21 +76,32 @@ export function NewLandingPage() {
       ) {
         setIntegrationsOpen(false);
       }
+      if (
+        agentsDropdownRef.current &&
+        !agentsDropdownRef.current.contains(event.target as Node) &&
+        agentsBtnRef.current &&
+        !agentsBtnRef.current.contains(event.target as Node)
+      ) {
+        setAgentsOpen(false);
+      }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIntegrationsOpen(false);
+        setAgentsOpen(false);
       }
     };
-    if (integrationsOpen) {
+    if (integrationsOpen || agentsOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
+      if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+      if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
     };
-  }, [integrationsOpen]);
+  }, [integrationsOpen, agentsOpen]);
 
   // 11 Core Integrations Directory
   const integrationsList = [
@@ -425,7 +472,7 @@ export function NewLandingPage() {
       authorName: "Marcus Vance",
       authorRole: "Managing Director • Apex Elevation",
       authorAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80",
-      timeAgo: "3h · 🌐",
+      timeAgo: "3h · Public",
       copy: "We stopped manual content distribution 6 months ago.\n\n1 voice note on WhatsApp now powers 11 feeds every week. Zero agency retainers. Here is the exact autonomous architecture:",
       image: "/campaign_images/post_content_framework.jpg",
       likesText: "You and 184 others",
@@ -447,7 +494,7 @@ export function NewLandingPage() {
       authorName: "Sarah Chen",
       authorRole: "Head of Growth • Kuro Studio",
       authorAvatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=160&q=80",
-      timeAgo: "5h · 🌐",
+      timeAgo: "5h · Public",
       copy: "Paid CAC is up 64% YoY across B2B SaaS.\n\nFounder-led organic authority is the only sustainable pipeline moat left. Look at the numbers:",
       image: "/campaign_images/post_cac_authority.jpg",
       likesText: "Elena Rostova and 342 others",
@@ -469,7 +516,7 @@ export function NewLandingPage() {
       authorName: "Elena Rostova",
       authorRole: "VP Engineering • StackLogic",
       authorAvatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
-      timeAgo: "1d · 🌐",
+      timeAgo: "1d · Public",
       copy: "Why your customer acquisition cost is bleeding while pipeline stalls. Breaking down the paid ad trap vs compound organic reach:",
       image: "/campaign_images/img_camp_gfutmcc8.png",
       likesText: "Julian Thorne and 219 others",
@@ -491,7 +538,7 @@ export function NewLandingPage() {
       authorName: "Devon Mitchell",
       authorRole: "Founder • HyperScale Media",
       authorAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80",
-      timeAgo: "2d · 🌐",
+      timeAgo: "2d · Public",
       copy: "We audited 28 B2B brands last week. Here are the 4 critical failure modes burning marketing bandwidth:",
       image: "/campaign_images/img_camp_3ze4z4jv.png",
       likesText: "Marcus Vance and 188 others",
@@ -650,20 +697,44 @@ export function NewLandingPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 relative">
           <div className="flex justify-between items-center">
             {/* Brand Logo */}
-            <Link className="flex items-center gap-3 group shrink-0" to="/">
-              <div className="w-7 h-7 bg-[#7C3AED] flex items-center justify-center text-white font-serif font-semibold text-base group-hover:bg-[#6D28D9] transition-colors">
-                B
-              </div>
+            <Link className="flex items-center gap-2.5 group shrink-0" to="/">
+              <img src="/B2PLOGO.png" alt="BrandToPost" className="w-8 h-8 object-contain" />
               <span className="text-base tracking-tight font-semibold">BrandToPost</span>
             </Link>
 
-            {/* Clean Text Links + Integrations Hamburger Trigger */}
-            <div className="flex items-center gap-4 sm:gap-6 lg:gap-8">
-              {/* Integrations Hamburger Dropdown Trigger */}
+            {/* Clean Text Links + Agents & Integrations Hamburger Triggers */}
+            <div className="flex items-center gap-3 sm:gap-5 lg:gap-6">
+              {/* Agents Dropdown Trigger */}
+              <button
+                ref={agentsBtnRef}
+                onMouseEnter={handleAgentsMouseEnter}
+                onMouseLeave={handleAgentsMouseLeave}
+                onClick={() => {
+                  setAgentsOpen(!agentsOpen);
+                  setIntegrationsOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
+                  agentsOpen 
+                    ? 'bg-white/10 border-white/30 text-white shadow-[0_0_15px_rgba(124,58,237,0.25)]' 
+                    : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/20'
+                }`}
+                aria-expanded={agentsOpen}
+                aria-label="Toggle agents dropdown"
+              >
+                <span className="tracking-tight font-medium">Agents</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 text-white/60 ${agentsOpen ? 'rotate-180 text-white' : ''}`} />
+              </button>
+
+              {/* Integrations Dropdown Trigger */}
               <button
                 ref={integrationsBtnRef}
-                onClick={() => setIntegrationsOpen(!integrationsOpen)}
-                className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
+                onMouseEnter={handleIntegrationsMouseEnter}
+                onMouseLeave={handleIntegrationsMouseLeave}
+                onClick={() => {
+                  setIntegrationsOpen(!integrationsOpen);
+                  setAgentsOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
                   integrationsOpen 
                     ? 'bg-white/10 border-white/30 text-white shadow-[0_0_15px_rgba(124,58,237,0.25)]' 
                     : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/20'
@@ -671,18 +742,10 @@ export function NewLandingPage() {
                 aria-expanded={integrationsOpen}
                 aria-label="Toggle integrations dropdown"
               >
-                {/* Hamburger 3-line animated icon */}
-                <div className="w-4 h-3 flex flex-col justify-between items-center relative">
-                  <span className={`block h-[1.5px] w-full bg-current transition-transform duration-300 ${integrationsOpen ? 'rotate-45 translate-y-[5.25px]' : ''}`} />
-                  <span className={`block h-[1.5px] w-full bg-current transition-opacity duration-200 ${integrationsOpen ? 'opacity-0' : 'opacity-100'}`} />
-                  <span className={`block h-[1.5px] w-full bg-current transition-transform duration-300 ${integrationsOpen ? '-rotate-45 -translate-y-[5.25px]' : ''}`} />
-                </div>
                 <span className="tracking-tight font-medium">Integrations</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 text-white/60 ${integrationsOpen ? 'rotate-180 text-white' : ''}`} />
               </button>
 
-              <Link className="hidden sm:inline-block text-xs font-medium opacity-70 hover:opacity-100 transition-opacity" to="/agency">Agency OS</Link>
-              <Link className="hidden sm:inline-block text-xs font-medium opacity-70 hover:opacity-100 transition-opacity" to="/founder">Founder Studio</Link>
               <Link className="text-xs font-medium opacity-70 hover:opacity-100 transition-opacity" to="/blog">Blog</Link>
               <Link className="text-xs font-medium opacity-70 hover:opacity-100 transition-opacity hidden md:block" to="/login">Sign In</Link>
               <Link className="px-4 py-2 text-xs font-medium tracking-wide transition-all bg-[#7C3AED] hover:bg-[#6D28D9] text-white whitespace-nowrap" to="/login?mode=signup">
@@ -691,12 +754,100 @@ export function NewLandingPage() {
             </div>
           </div>
 
-          {/* Hamburger Integrations Mega Dropdown Panel */}
+          {/* Agents Mega Dropdown Panel */}
+          {agentsOpen && (
+            <div
+              ref={agentsDropdownRef}
+              onMouseEnter={handleAgentsMouseEnter}
+              onMouseLeave={handleAgentsMouseLeave}
+              className="absolute top-full left-4 right-4 sm:left-auto sm:right-6 lg:right-10 mt-2 sm:w-[680px] md:w-[780px] lg:w-[860px] max-h-[82vh] overflow-y-auto bg-[#0A0A0F]/95 border border-white/15 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_0_50px_rgba(124,58,237,0.15)] backdrop-blur-2xl rounded-2xl p-6 sm:p-7 z-50 text-left animate-in fade-in zoom-in-95 duration-200"
+            >
+              <div className="absolute -top-3 left-0 right-0 h-3" />
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2 h-2 rounded-full bg-[#7C3AED] animate-pulse"></span>
+                    <h3 className="text-sm font-semibold text-white tracking-tight">Autonomous Platform Agents</h3>
+                    <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">
+                      8 Dedicated Engines
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/50">
+                    Each agent specializes in platform-native algorithms, formatting, and high-retention storytelling.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAgentsOpen(false)}
+                  className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Close agents menu"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Agents Grid (Clean Logos, Zero Boxes) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 py-5">
+                {AGENTS_LIST.map((agent) => (
+                  <Link
+                    key={agent.slug}
+                    to={`/agents/${agent.slug}`}
+                    onClick={() => setAgentsOpen(false)}
+                    className="group/agent p-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/20 transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Clean Logo: No box container */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                          {renderAgentIcon(agent, "w-5 h-5")}
+                        </div>
+                        <ArrowUpRight className="w-3.5 h-3.5 text-white/30 group-hover/agent:text-white transition-colors" />
+                      </div>
+                      <h4 className="text-xs font-semibold text-white group-hover/agent:text-[#C084FC] transition-colors mb-1">
+                        {agent.name}
+                      </h4>
+                      <p className="text-[10px] font-mono text-[#A78BFA] mb-2">
+                        {agent.role}
+                      </p>
+                      <p className="text-[11px] text-white/50 line-clamp-2 leading-relaxed">
+                        {agent.tagline}
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2.5 border-t border-white/[0.06] flex items-center justify-between text-[10px] text-white/40 group-hover/agent:text-white/80 transition-colors">
+                      <span>Explore Agent</span>
+                      <span className="text-[#C084FC]">→</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Dropdown Footer CTA */}
+              <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-white/60">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
+                  <span>All 8 agents synchronize with your central Brand DNA automatically</span>
+                </div>
+                <Link
+                  to="/login?mode=signup"
+                  onClick={() => setAgentsOpen(false)}
+                  className="inline-flex items-center gap-1.5 font-medium text-[#A78BFA] hover:text-white transition-colors group/cta"
+                >
+                  <span>Deploy all agents free</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover/cta:translate-x-0.5 transition-transform" />
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Integrations Mega Dropdown Panel */}
           {integrationsOpen && (
             <div
               ref={integrationsDropdownRef}
-              className="absolute top-full left-4 right-4 sm:left-auto sm:right-6 lg:right-10 mt-3 sm:w-[720px] md:w-[840px] lg:w-[940px] max-h-[82vh] overflow-y-auto bg-[#0A0A0F]/95 border border-white/15 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_0_50px_rgba(124,58,237,0.15)] backdrop-blur-2xl rounded-2xl p-6 sm:p-7 z-50 animate-in fade-in zoom-in-95 duration-200 text-left"
+              onMouseEnter={handleIntegrationsMouseEnter}
+              onMouseLeave={handleIntegrationsMouseLeave}
+              className="absolute top-full left-4 right-4 sm:left-auto sm:right-6 lg:right-10 mt-2 sm:w-[720px] md:w-[840px] lg:w-[940px] max-h-[82vh] overflow-y-auto bg-[#0A0A0F]/95 border border-white/15 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_0_50px_rgba(124,58,237,0.15)] backdrop-blur-2xl rounded-2xl p-6 sm:p-7 z-50 animate-in fade-in zoom-in-95 duration-200 text-left"
             >
+              <div className="absolute -top-3 left-0 right-0 h-3" />
               {/* Dropdown Header */}
               <div className="flex items-center justify-between pb-5 border-b border-white/10">
                 <div className="space-y-1">
@@ -781,27 +932,39 @@ export function NewLandingPage() {
            ========================================== */}
       <section data-nav-theme="dark" className="relative w-full min-h-screen bg-[#08080C] text-white pt-32 pb-14 px-6 sm:px-10 lg:px-16 flex flex-col justify-between border-b border-white/10 overflow-hidden">
         
-        {/* Special Ambient Architectural Halo Surrounding the Center Stage */}
+        {/* Aceternity UI Cloud Shader Procedural Background */}
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-          <div className="hero-halo-pulse absolute top-[46%] left-1/2 w-[540px] h-[540px] sm:w-[760px] sm:h-[760px] rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.16)_0%,rgba(192,132,252,0.04)_45%,transparent_70%)] blur-2xl"></div>
-          
-          <div className="hero-orbit-cw absolute top-[46%] left-1/2 w-[660px] h-[660px] sm:w-[920px] sm:h-[920px] lg:w-[1120px] lg:h-[1120px] rounded-full border border-white/[0.06]">
+          <CloudShader
+            className="w-full h-full"
+            speed={0.8}
+            count={6}
+            cloudColor="#fbf8f2"
+            skyTopColor="#3876ba"
+            skyBottomColor="#8cbfe8"
+          />
+          {/* Subtle gradient vignette to preserve contrast and seamlessly blend with dark navbar and client logo strip */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#08080C]/75 via-[#08080C]/25 to-[#08080C]/90 pointer-events-none" />
+
+          {/* Ambient architectural halo pulse */}
+          <div className="hero-halo-pulse absolute top-[46%] left-1/2 w-[540px] h-[540px] sm:w-[760px] sm:h-[760px] rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.18)_0%,rgba(192,132,252,0.04)_45%,transparent_70%)] blur-2xl"></div>
+
+          <div className="hero-orbit-cw absolute top-[46%] left-1/2 w-[660px] h-[660px] sm:w-[920px] sm:h-[920px] lg:w-[1120px] lg:h-[1120px] rounded-full border border-white/[0.08]">
             <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#7C3AED] shadow-[0_0_14px_#7C3AED]"></div>
             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[#C084FC]/60"></div>
             <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-1.5 h-1.5 bg-white/30"></div>
             <div className="absolute top-1/2 -right-1 -translate-y-1/2 w-1.5 h-1.5 bg-white/30"></div>
           </div>
 
-          <div className="hero-orbit-ccw absolute top-[46%] left-1/2 w-[480px] h-[480px] sm:w-[680px] sm:h-[680px] lg:w-[820px] lg:h-[820px] rounded-full border border-dashed border-[#C084FC]/[0.12]">
+          <div className="hero-orbit-ccw absolute top-[46%] left-1/2 w-[480px] h-[480px] sm:w-[680px] sm:h-[680px] lg:w-[820px] lg:h-[820px] rounded-full border border-dashed border-[#C084FC]/[0.15]">
             <div className="absolute top-[14%] right-[14%] w-1.5 h-1.5 bg-[#C084FC] shadow-[0_0_10px_#C084FC]"></div>
             <div className="absolute bottom-[14%] left-[14%] w-1.5 h-1.5 bg-[#7C3AED]"></div>
           </div>
 
-          <div className="absolute top-[46%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92%] max-w-5xl h-[540px] border border-white/[0.03] hidden lg:block">
-            <div className="absolute -top-px -left-px w-5 h-5 border-t border-l border-[#7C3AED]/50"></div>
-            <div className="absolute -top-px -right-px w-5 h-5 border-t border-r border-[#7C3AED]/50"></div>
-            <div className="absolute -bottom-px -left-px w-5 h-5 border-b border-l border-[#7C3AED]/50"></div>
-            <div className="absolute -bottom-px -right-px w-5 h-5 border-b border-r border-[#7C3AED]/50"></div>
+          <div className="absolute top-[46%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92%] max-w-5xl h-[540px] border border-white/[0.04] hidden lg:block">
+            <div className="absolute -top-px -left-px w-5 h-5 border-t border-l border-[#7C3AED]/60"></div>
+            <div className="absolute -top-px -right-px w-5 h-5 border-t border-r border-[#7C3AED]/60"></div>
+            <div className="absolute -bottom-px -left-px w-5 h-5 border-b border-l border-[#7C3AED]/60"></div>
+            <div className="absolute -bottom-px -right-px w-5 h-5 border-b border-r border-[#7C3AED]/60"></div>
           </div>
 
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:4.5rem_4.5rem] [mask-image:radial-gradient(ellipse_at_center,black_25%,transparent_72%)]"></div>
@@ -817,14 +980,14 @@ export function NewLandingPage() {
               <span className="w-1.5 h-1.5 bg-[#7C3AED] inline-block"></span>
             </div>
 
-            <h1 className="text-5xl sm:text-7xl lg:text-[86px] font-serif font-normal tracking-tight text-white leading-[1.01]">
+            <h1 className="text-5xl sm:text-7xl lg:text-[86px] font-serif font-normal tracking-tight text-white leading-[1.01] drop-shadow-[0_4px_28px_rgba(0,0,0,0.7)]">
               Marketing for <br className="hidden sm:block" />
               <span className={`inline-block transition-all duration-300 text-[#C084FC] italic font-normal ${isWordIn ? 'opacity-100 translate-y-0 filter-none' : 'opacity-0 translate-y-3 blur-xs'}`}>
                 {words[wordIdx]}
               </span>
             </h1>
 
-            <p className="text-base sm:text-xl text-slate-300 font-light max-w-xl mx-auto leading-relaxed">
+            <p className="text-base sm:text-xl text-white/90 font-light max-w-xl mx-auto leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
               Drop your URL. Get 30 posts in your exact voice, published to 11 channels automatically.
             </p>
 
@@ -871,26 +1034,31 @@ export function NewLandingPage() {
           </div>
           
           <div className="relative [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
-            <div className="animate-marquee flex items-center gap-16 sm:gap-24 py-1">
+            <div className="animate-marquee flex items-center gap-12 sm:gap-16 lg:gap-20 py-2">
               {[
-                { name: "MINIM", font: "font-serif tracking-[0.25em]", svg: <path d="M12 2L2 19h20L12 2zm0 4.5l6.5 11h-13L12 6.5z"/> },
-                { name: "AIMLPARTNER", font: "font-sans font-semibold tracking-[0.2em]", svg: <g><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><circle cx="17" cy="17" r="4"/></g> },
-                { name: "SUPERHERO GYM", font: "font-mono tracking-[0.2em]", svg: <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/> },
-                { name: "WEAREKNWN", font: "font-serif italic tracking-[0.18em]", svg: <g><circle cx="12" cy="12" r="9" stroke="white" strokeWidth="2" fill="none"/><circle cx="12" cy="12" r="3"/></g> },
-                { name: "AVENOIR", font: "font-sans font-light tracking-[0.28em]", svg: <path d="M12 2L2 7l10 5 10-5-10-5zm0 7.5l-10-5v10l10 5 10-5v-10l-10 5z"/> },
-                { name: "GVRG INDUSTRIES", font: "font-mono tracking-[0.18em]", svg: <path d="M4 4h16v4H4V4zm0 6h10v4H4v-4zm0 6h16v4H4v-4z"/> },
-                { name: "EQUESTRIAN", font: "font-serif tracking-[0.22em]", svg: <polygon points="12 2 19 21 12 17 5 21 12 2"/> },
-                { name: "MINIM", font: "font-serif tracking-[0.25em]", svg: <path d="M12 2L2 19h20L12 2zm0 4.5l6.5 11h-13L12 6.5z"/> },
-                { name: "AIMLPARTNER", font: "font-sans font-semibold tracking-[0.2em]", svg: <g><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><circle cx="17" cy="17" r="4"/></g> },
-                { name: "SUPERHERO GYM", font: "font-mono tracking-[0.2em]", svg: <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/> },
-                { name: "WEAREKNWN", font: "font-serif italic tracking-[0.18em]", svg: <g><circle cx="12" cy="12" r="9" stroke="white" strokeWidth="2" fill="none"/><circle cx="12" cy="12" r="3"/></g> },
-                { name: "AVENOIR", font: "font-sans font-light tracking-[0.28em]", svg: <path d="M12 2L2 7l10 5 10-5-10-5zm0 7.5l-10-5v10l10 5 10-5v-10l-10 5z"/> }
+                { name: "MINIM", src: "/MINIM-logo-primary.png", className: "h-4 sm:h-5" },
+                { name: "AIMLPARTNER", src: "/aimlpartner_logo.png", className: "h-6 sm:h-7" },
+                { name: "SUPERHERO GYM", src: "/superherogym_logo.png", className: "h-5 sm:h-6" },
+                { name: "WEAREKNWN", src: "/weareknwn_logo.png", className: "h-4 sm:h-5" },
+                { name: "AVENOIR", src: "/avenoirlogo.png", className: "h-5 sm:h-6" },
+                { name: "GVRG INDUSTRIES", src: "/gvrgindustrieslogo.png", className: "h-4 sm:h-5" },
+                { name: "EQUESTRIAN", src: "/equestrianlogo.png", className: "h-5 sm:h-6" },
+                { name: "LOHIA TRADERS", src: "/lohiatraderslogo.png", className: "h-6 sm:h-7" },
+                { name: "MINIM", src: "/MINIM-logo-primary.png", className: "h-4 sm:h-5" },
+                { name: "AIMLPARTNER", src: "/aimlpartner_logo.png", className: "h-6 sm:h-7" },
+                { name: "SUPERHERO GYM", src: "/superherogym_logo.png", className: "h-5 sm:h-6" },
+                { name: "WEAREKNWN", src: "/weareknwn_logo.png", className: "h-4 sm:h-5" },
+                { name: "AVENOIR", src: "/avenoirlogo.png", className: "h-5 sm:h-6" },
+                { name: "GVRG INDUSTRIES", src: "/gvrgindustrieslogo.png", className: "h-4 sm:h-5" },
+                { name: "EQUESTRIAN", src: "/equestrianlogo.png", className: "h-5 sm:h-6" },
+                { name: "LOHIA TRADERS", src: "/lohiatraderslogo.png", className: "h-6 sm:h-7" },
               ].map((brand, idx) => (
-                <div key={idx} className="flex items-center gap-2.5 opacity-45 hover:opacity-100 transition-opacity">
-                  <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
-                    {brand.svg}
-                  </svg>
-                  <span className={`text-xs ${brand.font} uppercase`}>{brand.name}</span>
+                <div key={idx} className="flex items-center justify-center shrink-0 opacity-60 hover:opacity-100 transition-opacity">
+                  <img
+                    src={brand.src}
+                    alt={brand.name}
+                    className={`${brand.className} w-auto object-contain brightness-0 invert`}
+                  />
                 </div>
               ))}
             </div>
@@ -898,92 +1066,7 @@ export function NewLandingPage() {
         </div>
       </section>
 
-      {/* ==========================================
-           1. FOUNDER AGENT: Ultra-Minimalist, Dark (#08080C), Zero Boxes
-           ========================================== */}
-      <section data-nav-theme="dark" className="w-full bg-[#08080C] text-white py-16 sm:py-24 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
-        {/* Subtle Ambient Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[260px] bg-[#7C3AED]/10 rounded-full blur-[140px] pointer-events-none"></div>
 
-        <div className="max-w-5xl mx-auto relative z-10">
-          
-          {/* Header: Straight to the point */}
-          <div className="mb-12">
-            <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
-              FOUNDER AGENT
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
-              What it does for you. <em className="italic text-[#C084FC]">Zero hours writing.</em>
-            </h2>
-          </div>
-
-          {/* 3 Plain Minimal Columns (No Boxes, No Cards, Thin Hairline Dividers) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 sm:gap-12 pt-2">
-            
-            {/* Step 01 */}
-            <div className="border-b md:border-b-0 md:border-r border-white/10 pb-6 md:pb-0 md:pr-8">
-              <span className="text-2xl sm:text-4xl font-serif text-white/30 font-light block mb-2 select-none">
-                01
-              </span>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
-                What you give us
-              </h3>
-              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
-                A 20-second voice note on WhatsApp while walking. Nothing else.
-              </p>
-              <div className="text-xs font-mono text-emerald-400 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>🎙️ 20s WhatsApp voice note</span>
-              </div>
-            </div>
-
-            {/* Step 02 */}
-            <div className="border-b md:border-b-0 md:border-r border-white/10 pb-6 md:pb-0 md:pr-8">
-              <span className="text-2xl sm:text-4xl font-serif text-[#C084FC]/60 font-light block mb-2 select-none">
-                02
-              </span>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
-                What the agent does
-              </h3>
-              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
-                Clones your exact voice and crafts ready-to-publish posts for LinkedIn &amp; X.
-              </p>
-              <div className="text-xs font-mono text-[#C084FC] flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]"></span>
-                <span>⚡ In your voice · Zero AI slop</span>
-              </div>
-            </div>
-
-            {/* Step 03 */}
-            <div>
-              <span className="text-2xl sm:text-4xl font-serif text-emerald-400/60 font-light block mb-2 select-none">
-                03
-              </span>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
-                How it goes live
-              </h3>
-              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
-                Draft arrives in WhatsApp. Reply "1" or tap approve. Goes live instantly.
-              </p>
-              <div className="text-xs font-mono text-emerald-400 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>✓ 10-second approval ── Done</span>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Quick Flow Line */}
-          <div className="mt-12 pt-6 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-400">
-            <span className="text-slate-200">Send 20s voice memo</span>
-            <span className="text-white/20">──►</span>
-            <span className="text-slate-200">Agent crafts post in your voice</span>
-            <span className="text-white/20">──►</span>
-            <span className="text-emerald-400 font-medium">Approve on WhatsApp in 10s ── Boom, live</span>
-          </div>
-
-        </div>
-      </section>
 
       {/* ==========================================
            2. HOW IT WORKS (Minimal Text, Zero Boxes, Ultra-Straightforward Vertical)
@@ -1641,7 +1724,7 @@ export function NewLandingPage() {
                     <div className="px-3.5 py-2 border-b border-white/10 flex items-center justify-between text-[11px] font-mono text-slate-400">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <div className="w-4 h-4 rounded-full bg-[#0A66C2] flex items-center justify-center shrink-0">
-                          <svg className="w-2.5 h-2.5 fill-white" viewBox="0 0 24 24"><path d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017a2 2 0 01-2-2V10a2 2 0 012-2h1.5l1.637-4.912A1.5 1.5 0 0113.82 2h.36a1.5 1.5 0 011.5 1.5V10z" /></svg>
+                          <ThumbsUp className="w-2.5 h-2.5 text-white fill-white" />
                         </div>
                         <span className="truncate">{post.likesText}</span>
                       </div>
@@ -1650,20 +1733,20 @@ export function NewLandingPage() {
 
                     {/* Action buttons */}
                     <div className="px-1 py-1.5 flex items-center justify-between text-slate-300">
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex-1 justify-center">
-                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017a2 2 0 01-2-2V10a2 2 0 012-2h1.5l1.637-4.912A1.5 1.5 0 0113.82 2h.36a1.5 1.5 0 011.5 1.5V10z" /></svg>
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex-1 justify-center cursor-pointer group/btn">
+                        <ThumbsUp className="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-[#0A66C2] transition-colors" />
                         <span>Like</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex-1 justify-center">
-                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex-1 justify-center cursor-pointer group/btn">
+                        <MessageSquare className="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-[#0A66C2] transition-colors" />
                         <span>Comment</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex-1 justify-center">
-                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex-1 justify-center cursor-pointer group/btn">
+                        <Repeat2 className="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-[#0A66C2] transition-colors" />
                         <span>Repost</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex-1 justify-center">
-                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex-1 justify-center cursor-pointer group/btn">
+                        <Send className="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-[#0A66C2] transition-colors" />
                         <span>Send</span>
                       </div>
                     </div>
@@ -1687,7 +1770,7 @@ export function NewLandingPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 fill-[#E1306C]" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-                        <svg className="w-4 h-4 text-slate-400 fill-current" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                        <MoreHorizontal className="w-4 h-4 text-slate-400" />
                       </div>
                     </div>
 
@@ -1700,11 +1783,11 @@ export function NewLandingPage() {
                     <div className="p-3 pb-2">
                       <div className="flex items-center justify-between text-slate-200 mb-2">
                         <div className="flex items-center gap-3.5">
-                          <svg className="w-5 h-5 fill-none stroke-current hover:text-red-500 transition-colors cursor-pointer" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                          <svg className="w-5 h-5 fill-none stroke-current hover:text-slate-400 transition-colors cursor-pointer" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                          <svg className="w-5 h-5 fill-none stroke-current hover:text-slate-400 transition-colors cursor-pointer" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                          <Heart className="w-5 h-5 text-slate-200 hover:text-[#E1306C] hover:fill-[#E1306C] transition-colors cursor-pointer" />
+                          <MessageCircle className="w-5 h-5 text-slate-200 hover:text-white transition-colors cursor-pointer" />
+                          <Send className="w-5 h-5 text-slate-200 hover:text-white transition-colors cursor-pointer" />
                         </div>
-                        <svg className="w-5 h-5 fill-none stroke-current hover:text-slate-400 transition-colors cursor-pointer" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+                        <Bookmark className="w-5 h-5 text-slate-200 hover:text-white transition-colors cursor-pointer" />
                       </div>
 
                       <div className="text-[12px] font-semibold text-white mb-1">{post.likesCount}</div>
@@ -1734,6 +1817,102 @@ export function NewLandingPage() {
       </section>
 
 
+
+      {/* ==========================================
+           FOUNDER AGENT: What it does for you (Clean Icons, Zero Emojis)
+           ========================================== */}
+      <section data-nav-theme="dark" className="w-full bg-[#08080C] text-white py-16 sm:py-24 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
+        {/* Subtle Ambient Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[260px] bg-[#7C3AED]/10 rounded-full blur-[140px] pointer-events-none"></div>
+
+        <div className="max-w-5xl mx-auto relative z-10">
+          
+          {/* Header */}
+          <div className="mb-12">
+            <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
+              FOUNDER AGENT
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
+              What it does for you. <em className="italic text-[#C084FC]">Zero hours writing.</em>
+            </h2>
+          </div>
+
+          {/* 3 Plain Minimal Columns (Clean SVG Icons, Zero Emojis) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 sm:gap-12 pt-2">
+            
+            {/* Step 01 */}
+            <div className="border-b md:border-b-0 md:border-r border-white/10 pb-6 md:pb-0 md:pr-8">
+              <span className="text-2xl sm:text-4xl font-serif text-white/30 font-light block mb-2 select-none">
+                01
+              </span>
+              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
+                What you give us
+              </h3>
+              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
+                A 20-second voice note on WhatsApp while walking. Nothing else.
+              </p>
+              <div className="text-xs font-mono text-emerald-400 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>20s WhatsApp voice note</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Step 02 */}
+            <div className="border-b md:border-b-0 md:border-r border-white/10 pb-6 md:pb-0 md:pr-8">
+              <span className="text-2xl sm:text-4xl font-serif text-[#C084FC]/60 font-light block mb-2 select-none">
+                02
+              </span>
+              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
+                What the agent does
+              </h3>
+              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
+                Clones your exact voice and crafts ready-to-publish posts for LinkedIn &amp; X.
+              </p>
+              <div className="text-xs font-mono text-[#C084FC] flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]"></span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-[#C084FC] shrink-0" />
+                  <span>In your voice · Zero AI slop</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Step 03 */}
+            <div>
+              <span className="text-2xl sm:text-4xl font-serif text-emerald-400/60 font-light block mb-2 select-none">
+                03
+              </span>
+              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
+                How it goes live
+              </h3>
+              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
+                Draft arrives in WhatsApp. Reply "1" or tap approve. Goes live instantly.
+              </p>
+              <div className="text-xs font-mono text-emerald-400 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>10-second approval ── Done</span>
+                </span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Quick Flow Line */}
+          <div className="mt-12 pt-6 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-400">
+            <span className="text-slate-200">Send 20s voice memo</span>
+            <ArrowRight className="w-3.5 h-3.5 text-white/30 hidden sm:inline" />
+            <span className="text-slate-200">Agent crafts post in your voice</span>
+            <ArrowRight className="w-3.5 h-3.5 text-white/30 hidden sm:inline" />
+            <span className="text-emerald-400 font-medium">Approve on WhatsApp in 10s ── Boom, live</span>
+          </div>
+
+        </div>
+      </section>
 
       {/* ==========================================
            4. AUDITED PERFORMANCE (Sliding 2-Row Deck of Cards · Dark Theme)
@@ -2559,8 +2738,8 @@ export function NewLandingPage() {
            ========================================== */}
       <footer className="w-full bg-[#FAF9F6] py-16 px-6 sm:px-10 lg:px-16 border-t border-slate-900/10 text-slate-600 text-xs font-mono">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-[#7C3AED] flex items-center justify-center text-white font-serif font-semibold text-sm">B</div>
+          <div className="flex items-center gap-2.5">
+            <img src="/B2PLOGO.png" alt="BrandToPost" className="w-6 h-6 object-contain" />
             <span className="font-semibold text-slate-900 font-sans text-sm">BrandToPost</span>
             <span className="text-slate-400">© 2026. All rights reserved.</span>
           </div>

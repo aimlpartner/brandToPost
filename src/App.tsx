@@ -49,6 +49,7 @@ import { InstagramTemplateCollector } from "./pages/InstagramTemplateCollector";
 import { XTemplateCollector } from "./pages/XTemplateCollector";
 import { CampaignTemplateTest } from "./pages/CampaignTemplateTest";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { AgentDetailPage } from "./pages/AgentDetailPage";
 
 export default function App() {
   return (
@@ -57,11 +58,15 @@ export default function App() {
         <AuthProvider>
           <BrowserRouter>
             <Routes>
-              <Route path="" element={<LandingPage />} />
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/landing" element={<LandingPage />} />
+              <Route path="" element={<NewLandingPage />} />
+              <Route path="/" element={<NewLandingPage />} />
+              <Route path="/landing" element={<NewLandingPage />} />
               <Route path="/new-landing" element={<NewLandingPage />} />
               <Route path="/new" element={<NewLandingPage />} />
+              <Route path="/classic-landing" element={<LandingPage />} />
+              <Route path="/agents" element={<AgentDetailPage />} />
+              <Route path="/agents/:agentSlug" element={<AgentDetailPage />} />
+              <Route path="/agent/:agentSlug" element={<AgentDetailPage />} />
               <Route path="/founder" element={<MasterFounderFeaturePage />} />
               <Route path="/master-founder-feature" element={<MasterFounderFeaturePage />} />
               <Route path="/agency" element={<MasterAgencyFeaturePage />} />
