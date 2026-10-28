@@ -8,10 +8,7 @@ import {
 import { AGENTS_LIST, renderAgentIcon } from '../data/agentsData';
 import { CloudShader } from '../components/ui/cloud-shader';
 
-export function NewLandingPage() {
-  const navigate = useNavigate();
-
-  // 1. Rotating Word in Hero
+const HeroRotatingWord = React.memo(() => {
   const words = ["consultancies.", "agencies.", "founders.", "advisors.", "studios."];
   const [wordIdx, setWordIdx] = useState(0);
   const [isWordIn, setIsWordIn] = useState(true);
@@ -25,7 +22,17 @@ export function NewLandingPage() {
       }, 350);
     }, 2800);
     return () => clearInterval(interval);
-  }, [words.length]);
+  }, []);
+
+  return (
+    <span className={`inline-block transition-all duration-300 text-[#C084FC] italic font-normal ${isWordIn ? 'opacity-100 translate-y-0 filter-none' : 'opacity-0 translate-y-3 blur-xs'}`}>
+      {words[wordIdx]}
+    </span>
+  );
+});
+
+export function NewLandingPage() {
+  const navigate = useNavigate();
 
   // Agents & Integrations Hamburger Dropdowns State
   const [agentsOpen, setAgentsOpen] = useState(false);
@@ -675,12 +682,18 @@ export function NewLandingPage() {
         }
         .hero-orbit-cw {
           animation: orbit-slow 90s linear infinite;
+          will-change: transform;
+          backface-visibility: hidden;
         }
         .hero-orbit-ccw {
           animation: orbit-reverse 120s linear infinite;
+          will-change: transform;
+          backface-visibility: hidden;
         }
         .hero-halo-pulse {
           animation: breathe-glow 8s ease-in-out infinite;
+          will-change: transform, opacity;
+          backface-visibility: hidden;
         }
         .editorial-card {
           transition: transform 0.45s var(--ease-out-expo), border-color 0.35s ease;
@@ -937,10 +950,12 @@ export function NewLandingPage() {
           <CloudShader
             className="w-full h-full"
             speed={0.8}
-            count={6}
+            count={4}
             cloudColor="#fbf8f2"
             skyTopColor="#3876ba"
             skyBottomColor="#8cbfe8"
+            resolutionScale={0.55}
+            maxFps={36}
           />
           {/* Subtle gradient vignette to preserve contrast and seamlessly blend with dark navbar and client logo strip */}
           <div className="absolute inset-0 bg-gradient-to-b from-[#08080C]/75 via-[#08080C]/25 to-[#08080C]/90 pointer-events-none" />
@@ -982,9 +997,7 @@ export function NewLandingPage() {
 
             <h1 className="text-5xl sm:text-7xl lg:text-[86px] font-serif font-normal tracking-tight text-white leading-[1.01] drop-shadow-[0_4px_28px_rgba(0,0,0,0.7)]">
               Marketing for <br className="hidden sm:block" />
-              <span className={`inline-block transition-all duration-300 text-[#C084FC] italic font-normal ${isWordIn ? 'opacity-100 translate-y-0 filter-none' : 'opacity-0 translate-y-3 blur-xs'}`}>
-                {words[wordIdx]}
-              </span>
+              <HeroRotatingWord />
             </h1>
 
             <p className="text-base sm:text-xl text-white/90 font-light max-w-xl mx-auto leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">

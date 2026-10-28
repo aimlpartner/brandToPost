@@ -66,6 +66,9 @@
   display: flex;
   width: max-content;
   animation: marquee 28s linear infinite;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 .animate-marquee:hover {
   animation-play-state: paused;
@@ -80,6 +83,9 @@
   display: flex;
   width: max-content;
   animation: marquee-reverse 28s linear infinite;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 .animate-marquee-reverse:hover {
   animation-play-state: paused;
