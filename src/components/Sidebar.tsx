@@ -4,16 +4,24 @@ import { cn } from "../lib/utils";
 import { useProducts } from "../contexts/ProductContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useState, useRef, useEffect } from "react";
-import { ThemeToggle } from "./ThemeToggle";
 
-const navigation = [
- { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
- { name: "Brand Position", href: "/dashboard/dna", icon: FileText },
- { name: "Brand Assets", href: "/dashboard/creatives", icon: ImageIcon },
- { name: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },
- { name: "Script Studio", href: "/dashboard/scripts", icon: Clapperboard, isLocked: true },
- { name: "Schedule", href: "/dashboard/schedule", icon: CalendarClock, isLocked: true },
- { name: "Settings", href: "/dashboard/settings", icon: Settings },
+interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  badge?: string;
+  isLocked?: boolean;
+}
+
+const navigation: NavItem[] = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Brand Position", href: "/dashboard/dna", icon: FileText },
+  { name: "Brand Assets", href: "/dashboard/creatives", icon: ImageIcon },
+  { name: "Post Creation", href: "/dashboard/post-creation", icon: Sparkles },
+  { name: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },
+  { name: "Script Studio", href: "/dashboard/scripts", icon: Clapperboard },
+  { name: "Schedule", href: "/dashboard/schedule", icon: CalendarClock, isLocked: true },
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -136,7 +144,15 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       )}
       strokeWidth={1.8}
       />
-       <span className="flex-1 text-left">{item.name}</span>
+       <span className="flex-1 text-left truncate">{item.name}</span>
+       {item.badge && (
+         <span className={cn(
+           "text-[9px] px-1.5 py-0.5 rounded font-sans font-semibold border flex items-center gap-0.5 ml-auto shrink-0",
+           isActive ? "bg-white/20 text-white border-white/30" : "bg-slate-100 text-slate-500 border-slate-200"
+         )}>
+           {item.badge}
+         </span>
+       )}
        {item.isLocked && (
          <span className={cn(
            "text-[9px] px-1.5 py-0.5 rounded font-sans font-semibold border flex items-center gap-0.5 ml-auto shrink-0",
@@ -189,12 +205,11 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
    </nav>
 
-   {/* Bottom: User Profile + Theme + Logout */}
+   {/* Bottom: User Profile + Logout */}
    <div className="mt-auto border-t border-slate-100 px-3 py-4 space-y-1.5">
-    <ThemeToggle variant="sidebar" />
     <NavLink
-     to="/dashboard/profile"
-     onClick={onClose}
+      to="/dashboard/settings"
+      onClick={onClose}
      className={({ isActive }) =>
       cn(
        "flex items-center gap-2.5 px-2 py-2 rounded-lg transition-all duration-150 mb-1 tour-nav-profile",

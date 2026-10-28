@@ -21,6 +21,7 @@ export async function handleProxyImage(req: Request, res: Response) {
     const buffer = Buffer.from(arrayBuffer);
 
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.send(buffer);

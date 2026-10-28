@@ -1,5 +1,7 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
+import { ai, Type, MODELS } from '../config/gemini';
 import { PersonalBrandItem } from '../../types';
+import { executeGoogleImageGeneration } from './aiService';
 import fsSync from 'fs';
 import path from 'path';
 import admin from 'firebase-admin';
@@ -105,11 +107,7 @@ export function getOpenAiApiKey(): string | undefined {
 }
 
 function getAiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY environment variable is not set.');
-  }
-  return new GoogleGenAI({ apiKey });
+  return ai;
 }
 
 export interface VoiceSynthesisResult {
@@ -159,7 +157,7 @@ Synthesize the profile into a JSON object with:
 - contentPillars: Array of 3-5 content topics they should post about on LinkedIn`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
+    model: MODELS.PRIMARY,
     contents: prompt,
     config: {
       responseMimeType: 'application/json',
@@ -228,7 +226,7 @@ Return a JSON object with:
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
+        model: MODELS.PRIMARY,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -382,7 +380,7 @@ CRITICAL INSTRUCTIONS FOR OUTPUT:
    - featuredUrl: The URL included in the post (or empty string if personal post)`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
+    model: MODELS.PRIMARY,
     contents: prompt,
     config: {
       responseMimeType: 'application/json',
@@ -615,8 +613,22 @@ Visual Direction: High-contrast luxury editorial photography and visual metaphor
 
   console.log(`[generatePersonalBrandImageService] Prompt for model: "${formattedPrompt.substring(0, 200)}..."`);
 
-  // 1. Prioritize gpt-image-2 (OpenAI Image Model)
-  if (openaiApiKey) {
+  // 1. Prioritize Google Nano Banana Image Model (gemini-3.1-flash-image-preview)
+  if (geminiApiKey) {
+    try {
+      console.log(`[generatePersonalBrandImageService] Calling Google Nano Banana Image API (gemini-3.1-flash-image-preview)...`);
+      base64Data = await executeGoogleImageGeneration(formattedPrompt, { aspectRatio: '1:1' });
+      if (base64Data) {
+        modelUsed = 'gemini-3.1-flash-image-preview';
+        console.log(`[generatePersonalBrandImageService] ✔ Google Nano Banana successfully generated image plate!`);
+      }
+    } catch (gErr) {
+      console.warn('[generatePersonalBrandImageService] Google Nano Banana exception:', gErr);
+    }
+  }
+
+  // 2. Secondary Fallback to OpenAI Image Model (gpt-image-2 / dall-e-3)
+  if (!base64Data && openaiApiKey) {
     const configuredModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
     const modelsToTry = [configuredModel, 'gpt-image-2', 'dall-e-3'];
     const uniqueModels = Array.from(new Set(modelsToTry));
@@ -632,8 +644,9 @@ Visual Direction: High-contrast luxury editorial photography and visual metaphor
           size: '1024x1024',
         };
         if (m.startsWith('dall-e')) {
-          payload.response_format = 'b64_json';
           payload.quality = 'standard';
+        } else if (m.includes('gpt-image')) {
+          payload.quality = process.env.OPENAI_IMAGE_QUALITY || 'medium';
         }
         const genRes = await fetch('https://api.openai.com/v1/images/generations', {
           method: 'POST',
@@ -672,29 +685,6 @@ Visual Direction: High-contrast luxury editorial photography and visual metaphor
     }
   }
 
-  // 2. Try Gemini Imagen fallback if OpenAI failed or not present
-  if (!base64Data && geminiApiKey) {
-    try {
-      console.log(`[generatePersonalBrandImageService] Attempting Gemini Imagen fallback...`);
-      const ai = getAiClient();
-      const imgRes = await ai.models.generateImages({
-        model: 'imagen-3.0-generate-001',
-        prompt: formattedPrompt,
-        config: {
-          numberOfImages: 1,
-          aspectRatio: '1:1',
-          outputMimeType: 'image/png',
-        },
-      });
-      if (imgRes?.generatedImages?.[0]?.image?.imageBytes) {
-        base64Data = imgRes.generatedImages[0].image.imageBytes;
-        modelUsed = 'imagen-3.0';
-        console.log(`[generatePersonalBrandImageService] Successfully generated with Gemini Imagen`);
-      }
-    } catch (gErr) {
-      console.error('[generatePersonalBrandImageService] Gemini Imagen fallback error:', gErr);
-    }
-  }
 
   // 3. Save generated image to local disk & upload to Firebase Storage Bucket
   if (base64Data) {
@@ -758,7 +748,7 @@ Return a JSON object with:
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
+      model: MODELS.PRIMARY,
       contents: prompt,
       config: {
         responseMimeType: 'application/json',

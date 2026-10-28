@@ -45,9 +45,11 @@ interface ErrorLog {
 
 const COLORS = ['#7C3AED', '#2583EB', '#10B981', '#FF7778', '#C084FC'];
 
-// Estimated costs per 1M tokens (as of typical Gemini pricing, adjust as needed)
+// Estimated costs per 1M tokens (adjust as needed)
 const PRICING = {
+  'gpt-5.6-sol': { prompt: 2.50, candidate: 15.00 },
   'gemini-3.1-pro-preview': { prompt: 2.00, candidate: 12.00 },
+  'gemini-4-argon': { prompt: 2.00, candidate: 10.00 },
   'gemini-2.5-flash': { prompt: 0.30, candidate: 2.50 },
   'gemini-2.5-flash-preview': { prompt: 0.30, candidate: 2.50 },
   'gemini-3.1-flash-preview': { prompt: 0.30, candidate: 2.50 },

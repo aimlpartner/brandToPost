@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs/promises';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
+import { ai, Type } from '../config/gemini';
 import { db } from '../config/firebase';
 
 const PLATFORMS = ["linkedin", "x", "instagram", "reddit"] as const;
@@ -8,7 +9,7 @@ export type ResearchPlatform = (typeof PLATFORMS)[number];
 
 const ITEMS_PER_PLATFORM = 25; // 4 x 25 = 100
 const PRIMARY_MODEL = "gemini-3.1-pro-preview";
-const FALLBACK_MODEL = "gemini-2.5-pro";
+const FALLBACK_MODEL = "gemini-3.5-flash";
 
 const PLATFORM_RESEARCH_FOCUS: Record<ResearchPlatform, string> = {
   linkedin:
@@ -243,19 +244,14 @@ export async function getSavedChannelTemplates(channel: string = 'linkedin') {
 export async function researchChannelTemplates(channel: string = 'linkedin', count: number = 8, niche: string = 'B2B SaaS & Tech Leadership') {
   console.log(`[Channel Research] Initiating live template discovery for channel "${channel.toUpperCase()}" (${count} templates)...`);
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is not configured.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  // ai provided via shared high-reasoning proxy from ../config/gemini
   const currentDate = new Date().toISOString().split('T')[0];
 
   // Phase 1: Live Grounded Search on Channel Trends
   let groundingNotes = "";
   try {
     const searchRes = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
+      model: PRIMARY_MODEL,
       contents: [{
         text: `Today's date is ${currentDate}. Perform live web searches for top-performing corporate B2B and SMB post visual layouts on ${channel.toUpperCase()} in the niche: "${niche}".
 Focus areas for ${channel.toUpperCase()}:
@@ -329,7 +325,7 @@ CRITICAL DESIGN & CODE REQUIREMENTS:
   };
 
   const synthRes = await ai.models.generateContent({
-    model: 'gemini-3.1-pro-preview',
+    model: PRIMARY_MODEL,
     contents: [{ text: synthesisPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -450,12 +446,7 @@ export async function saveBlueprints(blueprintsToSave: any[]) {
 }
 
 export async function researchPlatformBatch(platform: ResearchPlatform, usedDescriptors: string[] = []) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is not configured.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  // ai provided via shared high-reasoning proxy from ../config/gemini
   const startIndexMap: Record<ResearchPlatform, number> = {
     linkedin: 1,
     x: 26,
@@ -478,12 +469,7 @@ export async function researchPlatformBatch(platform: ResearchPlatform, usedDesc
 }
 
 export async function researchAllBlueprints() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is not configured.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  // ai provided via shared high-reasoning proxy from ../config/gemini
   console.log("[Grounding Research] Starting full multi-channel blueprint research operation...");
   const researchNotesByPlatform = await Promise.all(
     PLATFORMS.map((p) => researchPlatform(ai, p))

@@ -920,8 +920,8 @@ function getPlatformLogo(platform: string, className = "h-4 w-4") {
         const directPrompt = `B2B Founder Social Post Graphic about: ${postTopic}.
 Visual Concept & Subject: A modern editorial B2B graphic representing ${postTopic}.
 Style & Aesthetic: ${stylePrompt}.
-Headline text to display: "${result.headline || 'Key Founder Insight'}".
-Subtext / secondary theme: "${result.subtext || 'Value-driven lesson'}".
+Strictly NO text, NO words, NO letters, NO numbers, NO logo.
+
 Brand Color Palette: Primary ${topTrend.primaryColor || '#7C3AED'}, Secondary ${topTrend.secondaryColor || '#08080C'}.
 Style: Professional 1:1 editorial graphic, zero stock photo slop, dark-mode executive aesthetic.`;
 
@@ -933,11 +933,11 @@ Style: Professional 1:1 editorial graphic, zero stock photo slop, dark-mode exec
             subtext: result.subtext || undefined
           }, user?.uid, targetProduct?.id, targetProduct?.logoUrl);
         } catch (imgErr) {
-          console.warn("[STUDIO AUTO STEP 3/4] Direct GPT-2 image generation fallback:", imgErr);
+          console.warn("[STUDIO AUTO STEP 3/4] Direct Google Nano Banana image generation fallback:", imgErr);
         }
 
         const finalImageUrl = directImageUrl || result.imageUrl || STOCK_IMAGES[0].url;
-        console.log(`[STUDIO AUTO STEP 3/4] Direct GPT-2 Image -> PASSED (${directImageUrl ? 'Direct GPT-2' : 'Fallback Image'})`);
+        console.log(`[STUDIO AUTO STEP 3/4] Direct Google Nano Banana Image -> PASSED (${directImageUrl ? 'Google Nano Banana' : 'Fallback Image'})`);
         setGeneratorLogs(p => [...p, "✓ Directly generated AI visual graphic successfully!"]);
 
         let finalCopy = result.postCopy || "";

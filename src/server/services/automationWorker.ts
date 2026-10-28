@@ -23,6 +23,7 @@ export function startAutomationWorker(): void {
   console.log('[Automation Worker] Starting background scheduled posting and automation workers...');
 // --- Cron Job for Scheduled Posting ---
   scheduledPostingTimer = setInterval(async () => {
+    try {
   const now = new Date();
   const hours = now.getUTCHours().toString().padStart(2, '0');
   const minutes = now.getUTCMinutes().toString().padStart(2, '0');
@@ -202,9 +203,12 @@ export function startAutomationWorker(): void {
         postQueue.unshift(post);
         lastPostedDates[productId] = "";
       }
-    }
+        }
   }
-}, 30000);
+    } catch (cronErr) {
+      console.error("[Automation Worker] Scheduled posting check error:", cronErr);
+    }
+  }, 30000);
 
 // --- Automation Agent Background Check ---
   const processingProductIds = new Set<string>();

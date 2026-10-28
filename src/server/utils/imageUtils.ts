@@ -229,32 +229,175 @@ export function generateFallbackBrandedCanvas(
   secondaryColor: string,
   logoUrl?: string
 ): string {
-  const cleanHeadline = (headline || 'EXECUTIVE FOUNDER INSIGHT').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const cleanSubtext = (subtext || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const primary = primaryColor || '#7C3AED';
 
-  const logoSvg = logoUrl
-    ? `<img src="${logoUrl}" style="height:42px;object-fit:contain;" />`
-    : `<div style="color:${primary};font-weight:900;font-size:20px;letter-spacing:0.15em;">BRAND TOPIC</div>`;
-
-  const rawHtml = `<div xmlns="http://www.w3.org/1999/xhtml" style="width:1080px;height:1080px;background:#08080c;display:flex;flex-direction:column;justify-content:space-between;padding:90px;box-sizing:border-box;font-family:'Inter',sans-serif;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
-    <div style="position:absolute;top:-150px;right:-150px;width:600px;height:600px;background:${primary};opacity:0.12;filter:blur(110px);border-radius:50%;"></div>
-    <div style="position:relative;z-index:10;display:flex;flex-direction:column;gap:36px;">
-      <div style="display:inline-block;background:${primary}22;color:${primary};font-size:14px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;padding:8px 20px;border-radius:100px;border:1px solid ${primary}44;width:fit-content;">FOUNDER PERSPECTIVE</div>
-      <h2 style="color:#ffffff;font-weight:850;font-size:52px;line-height:1.22;margin:0;letter-spacing:-0.02em;">${cleanHeadline}</h2>
-      ${cleanSubtext ? `<p style="color:#94a3b8;font-weight:500;font-size:24px;line-height:1.5;margin:0;">${cleanSubtext}</p>` : ''}
-    </div>
-    <div style="position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding-top:44px;border-top:1px solid rgba(255,255,255,0.12);">
-      ${logoSvg}
-      <div style="width:48px;height:4px;background:${primary};border-radius:2px;"></div>
-    </div>
-  </div>`;
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080">
-    <foreignObject width="1080" height="1080">
-      ${rawHtml}
-    </foreignObject>
+  // Return a clean, sleek dark aesthetic background plate without baked-in typography
+  // so the client-side Native dynamic layout engine can cleanly place typography dynamically.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#08080c" />
+        <stop offset="50%" stop-color="#0e0e17" />
+        <stop offset="100%" stop-color="#181829" />
+      </linearGradient>
+      <radialGradient id="glowGrad" cx="80%" cy="20%" r="60%">
+        <stop offset="0%" stop-color="${primary}" stop-opacity="0.3" />
+        <stop offset="100%" stop-color="#08080c" stop-opacity="0" />
+      </radialGradient>
+      <radialGradient id="glowGrad2" cx="20%" cy="80%" r="50%">
+        <stop offset="0%" stop-color="${primary}" stop-opacity="0.12" />
+        <stop offset="100%" stop-color="#08080c" stop-opacity="0" />
+      </radialGradient>
+    </defs>
+    <rect width="1080" height="1080" fill="url(#bgGrad)" />
+    <circle cx="850" cy="200" r="450" fill="url(#glowGrad)" />
+    <circle cx="200" cy="850" r="350" fill="url(#glowGrad2)" />
+    <line x1="90" y1="960" x2="990" y2="960" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
   </svg>`;
 
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+}
+
+export interface ResolvedImageBuffer {
+  buffer: Buffer;
+  mimeType: string;
+}
+
+export async function resolveImageBuffer(
+  imageUrl?: string | null,
+  appHost?: string
+): Promise<ResolvedImageBuffer | null> {
+  if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.trim()) {
+    return null;
+  }
+
+  const cleanUrl = imageUrl.trim();
+
+  // 1. Data URL
+  if (cleanUrl.startsWith('data:')) {
+    const matches = cleanUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (matches && matches.length === 3) {
+      let mimeType = matches[1];
+      let buffer = Buffer.from(matches[2], 'base64');
+      if (mimeType.includes('svg')) {
+        try {
+          const { Canvas, loadImage } = await import('skia-canvas');
+          const img = await loadImage(buffer);
+          const canvas = new Canvas(img.width || 1080, img.height || 1080);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const rasterBuf = await canvas.toBuffer('png');
+          buffer = Buffer.from(rasterBuf as any);
+          mimeType = 'image/png';
+        } catch (_) {
+          // Fallback to original SVG buffer if rasterization fails
+        }
+      }
+      return { buffer, mimeType };
+    }
+    return null;
+  }
+
+  // 2. Extract potential image ID
+  let imageId: string | null = null;
+  const idMatch = cleanUrl.match(/(?:campaign|whatsapp)_images\/([^/.]+)/) ||
+                  cleanUrl.match(/\/api\/(?:campaign|whatsapp)\/images\/([^/.]+)/) ||
+                  cleanUrl.match(/\b(img_[a-zA-Z0-9_-]+)\b/);
+  if (idMatch) {
+    imageId = idMatch[1].replace(/\.png$/i, '');
+  }
+
+  // Check local filesystem first
+  if (imageId) {
+    const candidatePaths = [
+      path.join(process.cwd(), 'public', 'campaign_images', `${imageId}.png`),
+      path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`),
+      path.join(process.cwd(), 'public', cleanUrl.replace(/^\//, ''))
+    ];
+    for (const candPath of candidatePaths) {
+      try {
+        const buf = await fs.readFile(candPath);
+        if (buf && buf.length > 0) {
+          return { buffer: buf, mimeType: 'image/png' };
+        }
+      } catch (_) {}
+    }
+
+    // Check Firestore metadata / Cloud Storage
+    if (db) {
+      try {
+        let docSnap = await db.collection('campaign_images').doc(imageId).get();
+        if (!docSnap.exists) {
+          docSnap = await db.collection('whatsapp_images').doc(imageId).get();
+        }
+        if (docSnap.exists) {
+          const data = docSnap.data();
+          if (data?.base64Data) {
+            return {
+              buffer: Buffer.from(data.base64Data, 'base64'),
+              mimeType: data.mimeType || 'image/png'
+            };
+          }
+          if (data?.storageUrl) {
+            try {
+              const sRes = await fetch(data.storageUrl);
+              if (sRes.ok) {
+                const arr = await sRes.arrayBuffer();
+                return {
+                  buffer: Buffer.from(arr),
+                  mimeType: sRes.headers.get('content-type') || data.mimeType || 'image/png'
+                };
+              }
+            } catch (_) {}
+          }
+          if (data?.storagePath) {
+            const bucketNames = ['map-api-459818.firebasestorage.app', 'map-api-459818.appspot.com'];
+            for (const bName of bucketNames) {
+              try {
+                const bucket = admin.storage().bucket(bName);
+                const file = bucket.file(data.storagePath);
+                const [downBuf] = await file.download();
+                if (downBuf && downBuf.length > 0) {
+                  return { buffer: downBuf, mimeType: data.mimeType || 'image/png' };
+                }
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[resolveImageBuffer] Firestore lookup note:', dbErr);
+      }
+    }
+  }
+
+  // 3. Absolute HTTP/HTTPS URL
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    try {
+      const resp = await fetch(cleanUrl);
+      if (resp.ok) {
+        const arrayBuf = await resp.arrayBuffer();
+        const mimeType = resp.headers.get('content-type') || 'image/jpeg';
+        return { buffer: Buffer.from(arrayBuf), mimeType };
+      }
+    } catch (httpErr) {
+      console.warn(`[resolveImageBuffer] Failed to fetch image over HTTP (${cleanUrl}):`, httpErr);
+    }
+  }
+
+  // 4. Relative URL path (e.g., /api/campaign/images/...)
+  if (cleanUrl.startsWith('/')) {
+    const host = (appHost || process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+    try {
+      const resp = await fetch(`${host}${cleanUrl}`);
+      if (resp.ok) {
+        const arrayBuf = await resp.arrayBuffer();
+        const mimeType = resp.headers.get('content-type') || 'image/png';
+        return { buffer: Buffer.from(arrayBuf), mimeType };
+      }
+    } catch (relErr) {
+      console.warn(`[resolveImageBuffer] Failed to fetch relative image via host (${host}${cleanUrl}):`, relErr);
+    }
+  }
+
+  return null;
 }

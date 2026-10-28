@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
+import { ai, Type, MODELS } from '../config/gemini';
 import { admin, db } from '../config/firebase';
 import { getMonday, formatDate } from '../utils/dateUtils';
 import { saveImageLocalAndDb, generateFallbackBrandedCanvas } from '../utils/imageUtils';
@@ -53,7 +54,8 @@ const campaignSchema = {
             type: Type.OBJECT,
             properties: {
               headline: { type: Type.STRING, description: "Short, punchy primary text" },
-              cinematicPrompt: { type: Type.STRING, description: "Image prompt for the background image. Should include artistic directions like off-center, negative space, lighting, mood. Do NOT include text instructions." },
+              cinematicPrompt: { type: Type.STRING, description: "Photorealistic editorial scene description grounding the post hook in real physical objects or environments. Naturally frame the shot with generous open negative space (e.g. empty table surface, clean wall, open sky, shallow depth of field bokeh) where text can breathe organically. Strictly NO text, NO words." },
+              visualStrategy: { type: Type.STRING, description: "Visual tier: 'synthetic_photography' (editorial AI photography with planned negative space) or 'brand_gradient' (minimalist CSS mesh gradient for text-heavy or quote cards).", enum: ["synthetic_photography", "brand_gradient"] },
               customHtml: { type: Type.STRING, description: "A highly creative, BESPOKE HTML layout using INLINE STYLES. The canvas is 1080x1080px. CRITICAL: To prevent text overlap, you MUST use Flexbox (display: flex; flex-direction: column; gap: 20px) for layout instead of absolute positioning individual text nodes. NEVER overlap text. Use safe line-heights (1.2+). ALWAYS ensure text is readable. Examples: <div style=\"position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 60px; background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: white;\"><h1 style=\"font-size: 80px; font-weight: 900; line-height: 1.2; margin: 0;\">Title</h1><p style=\"font-size: 32px; margin: 20px 0 0 0;\">Subtitle</p></div>." }
             },
             required: ["cinematicPrompt", "customHtml"]
@@ -105,7 +107,8 @@ const dailyPostCampaignSchema = {
             type: Type.OBJECT,
             properties: {
               headline: { type: Type.STRING, description: "Short, punchy primary text" },
-              cinematicPrompt: { type: Type.STRING, description: "Artistic image prompt for the background image" },
+              cinematicPrompt: { type: Type.STRING, description: "Photorealistic editorial scene description grounding the post hook in real physical objects or environments. Naturally frame the shot with generous open negative space (e.g. empty table surface, clean wall, open sky, shallow depth of field bokeh) where text can breathe organically. Strictly NO text, NO words." },
+              visualStrategy: { type: Type.STRING, description: "Visual tier: 'synthetic_photography' or 'brand_gradient'.", enum: ["synthetic_photography", "brand_gradient"] },
               customHtml: { type: Type.STRING, description: "HTML layout using inline styles (1080x1080px canvas) with flexbox." }
             },
             required: ["cinematicPrompt", "customHtml"]
@@ -149,11 +152,7 @@ export async function executeAutoCampaignGeneration(productId: string) {
   if (!founderAgent) {
     throw new Error("Founder Agent doppelganger has not been synthesized globally yet.");
   }
-  let apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY environment variable.");
-  }
-  const ai = new GoogleGenAI({ apiKey });
+  // ai provided via shared high-reasoning proxy from ../config/gemini
 
   // 1. Get campaign inputs from Founder Agent
   console.log(`[executeAutoCampaignGeneration] Querying Founder Agent Doppelganger "${founderAgent.personaName}" for campaign direction...`);
@@ -178,7 +177,7 @@ Return the result in a JSON object with the following fields:
 `;
 
   const founderResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: founderPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -194,7 +193,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_founder_focus", "gemini-3.1-pro-preview", founderResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_founder_focus", MODELS.PRIMARY, founderResponse.usageMetadata);
 
   const founderInputs = JSON.parse(founderResponse.text || "{}");
   if (!founderInputs.focusInput) throw new Error("Founder Agent failed to generate campaign focus.");
@@ -217,7 +216,7 @@ Return the result in a JSON object with the following fields:
   `;
 
   const researchResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: researchPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -228,7 +227,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_research", "gemini-3.1-pro-preview", researchResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_research", MODELS.PRIMARY, researchResponse.usageMetadata);
 
   const insights = JSON.parse(researchResponse.text || "[]");
 
@@ -288,10 +287,23 @@ Return the result in a JSON object with the following fields:
     - A confidence score (0-100) based on relevance.
     - The primary content pillar used.
     - A research summary (1-2 paragraphs summarizing what you found about the company and audience trends).
+
+    EDITORIAL ART DIRECTOR (CHLOE) PROTOCOL — IMAGE GENERATION PLANNING:
+    For every daily post, you MUST act as an Editorial Art Director planning the background visual scene (cinematicPrompt) to guarantee perfect negative space for typography overlay.
+
+    The 5 Art Director Planning Parameters (MUST BE SYNTHESIZED INTO EACH cinematicPrompt):
+    1. The Concrete Subject: What physical object, environment, or human interaction grounds this specific post hook?
+       - TANGIBLE REALITY: Ground in real physical objects (e.g. ceramic mug on raw oak desk, founder at studio drafting table, anodized aluminum hardware on textured slate, espresso extraction, architectural concrete staircase, craftsman hands working with materials).
+       - FORBIDDEN ABSTRACT SLOP: Absolutely NEVER generate abstract metaphors (no glowing digital gears, no floating holographic graphs, no generic silhouettes shaking hands, no matrix code rain, no cartoon graphics).
+    2. The Lighting & Mood: Derived from the brand's aesthetic (e.g. warm 45-degree directional morning window light, high-contrast moody amber rim glow, soft overcast scandinavian daylight).
+    3. The Camera Setup: Photorealistic optical cues (e.g. 35mm prime lens, f/1.8 shallow depth of field, creamy background bokeh, subtle organic film grain).
+    4. Natural Negative Space (Anti-Template): Intentionally frame the photograph with generous, uncrowded negative space (e.g. empty wooden table, clean concrete wall, textured stone surface, soft out-of-focus background, vast open floor or horizon) so our Computer Vision engine can detect the open zone and float typography into it.
+       - VARY COMPOSITION FREELY: Rotate camera perspectives and spatial balance dynamically across the 7 days (e.g. high-angle flat-lay, off-center subject with wide open side, macro close-up, dramatic low-angle, atmospheric horizon). NEVER repeat the same framing or subject position across consecutive days!
+    5. Strict Negative Prompt: Always terminate cinematicPrompt with: "clean editorial composition, strictly no text, no letters, no words, no logos".
   `;
 
   const campaignResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: campaignPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -299,7 +311,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_draft", "gemini-3.1-pro-preview", campaignResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "weekly_campaign_draft", MODELS.PRIMARY, campaignResponse.usageMetadata);
 
   const campaignData = JSON.parse(campaignResponse.text || "{}");
 
@@ -364,7 +376,8 @@ Return the result in a JSON object with the following fields:
         brandColors,
         fontStyle,
         brandAssetUrl: chosenAsset,
-        logoPosition: dp.visualData?.logoPosition || 'top-left'
+        logoPosition: dp.visualData?.logoPosition || 'top-left',
+        visualStrategy: dp.visualData?.visualStrategy || dp.visualStrategy || 'synthetic_photography'
       }, brandLogoUrl);
 
       dp.imageUrl = generatedImageUrl;
@@ -492,11 +505,7 @@ export async function executeAutoDailyPostGeneration(productId: string) {
   if (!founderAgent) {
     throw new Error("Founder Agent doppelganger has not been synthesized globally yet.");
   }
-  let apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY environment variable.");
-  }
-  const ai = new GoogleGenAI({ apiKey });
+  // ai provided via shared high-reasoning proxy from ../config/gemini
 
   // 1. Get campaign inputs from Founder Agent
   console.log(`[executeAutoDailyPostGeneration] Querying Founder Agent Doppelganger "${founderAgent.personaName}" for daily post direction...`);
@@ -521,7 +530,7 @@ Return the result in a JSON object with the following fields:
 `;
 
   const founderResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: founderPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -537,7 +546,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_founder_focus", "gemini-3.1-pro-preview", founderResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_founder_focus", MODELS.PRIMARY, founderResponse.usageMetadata);
 
   const founderInputs = JSON.parse(founderResponse.text || "{}");
   if (!founderInputs.focusInput) throw new Error("Founder Agent failed to generate daily post focus.");
@@ -559,7 +568,7 @@ Return the result in a JSON object with the following fields:
   `;
 
   const researchResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: researchPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -570,7 +579,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_research", "gemini-3.1-pro-preview", researchResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_research", MODELS.PRIMARY, researchResponse.usageMetadata);
 
   const insights = JSON.parse(researchResponse.text || "[]");
 
@@ -635,10 +644,22 @@ Return the result in a JSON object with the following fields:
     - A confidence score (0-100) based on relevance.
     - The primary content pillar used.
     - A research summary (1-2 paragraphs summarizing audience trends).
+
+    EDITORIAL ART DIRECTOR (CHLOE) PROTOCOL — IMAGE GENERATION PLANNING:
+    You MUST act as an Editorial Art Director planning the background visual scene (cinematicPrompt) for this post to guarantee perfect negative space for typography overlay.
+
+    The 5 Art Director Planning Parameters (MUST BE SYNTHESIZED INTO cinematicPrompt):
+    1. The Concrete Subject: What physical object, environment, or human interaction grounds this specific post hook?
+       - TANGIBLE REALITY: Ground in real physical objects (e.g. ceramic mug on raw oak desk, founder at studio drafting table, anodized aluminum hardware on textured slate, espresso extraction, architectural concrete staircase, craftsman hands working with materials).
+       - FORBIDDEN ABSTRACT SLOP: Absolutely NEVER generate abstract metaphors (no glowing digital gears, no floating holographic graphs, no generic silhouettes shaking hands, no matrix code rain, no cartoon graphics).
+    2. The Lighting & Mood: Derived from the brand's aesthetic (e.g. warm 45-degree directional morning window light, high-contrast moody amber rim glow, soft overcast scandinavian daylight).
+    3. The Camera Setup: Photorealistic optical cues (e.g. 35mm prime lens, f/1.8 shallow depth of field, creamy background bokeh, subtle organic film grain).
+    4. Natural Negative Space (Anti-Template): Intentionally frame the photograph with generous, uncrowded negative space (e.g. empty wooden table, clean concrete wall, textured stone surface, soft out-of-focus background, vast open floor or horizon) so our Computer Vision engine can detect the open zone and float typography into it.
+    5. Strict Negative Prompt: Always terminate cinematicPrompt with: "clean editorial composition, strictly no text, no letters, no words, no logos".
   `;
 
   const campaignResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: campaignPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -646,7 +667,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_draft", "gemini-3.1-pro-preview", campaignResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_post_draft", MODELS.PRIMARY, campaignResponse.usageMetadata);
 
   const campaignData = JSON.parse(campaignResponse.text || "{}");
 
@@ -700,7 +721,8 @@ Return the result in a JSON object with the following fields:
         brandColors,
         fontStyle,
         brandAssetUrl: chosenAsset,
-        logoPosition: dp.visualData?.logoPosition || 'top-left'
+        logoPosition: dp.visualData?.logoPosition || 'top-left',
+        visualStrategy: dp.visualData?.visualStrategy || dp.visualStrategy || 'synthetic_photography'
       }, brandLogoUrl);
 
       filteredVersions = filteredVersions.map((pv: any) => ({
@@ -857,7 +879,7 @@ Return ONLY a JSON object with a single field:
 
   try {
     const res = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: MODELS.IMAGE_PROMPT,
       contents: [{ text: systemPrompt }],
       config: {
         responseMimeType: "application/json",
@@ -872,7 +894,7 @@ Return ONLY a JSON object with a single field:
     });
 
     if (res.usageMetadata) {
-      await logBackendTokenUsage(userId, "blog_image_prompt_gen", "gemini-3.1-pro-preview", res.usageMetadata);
+      await logBackendTokenUsage(userId, "blog_image_prompt_gen", MODELS.IMAGE_PROMPT, res.usageMetadata);
     }
 
     const data = JSON.parse(res.text || "{}");
@@ -917,11 +939,7 @@ export async function executeAutoDailyBlogGeneration(productId: string) {
   if (!founderAgent) {
     throw new Error("Founder Agent doppelganger has not been synthesized globally yet.");
   }
-  let apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY environment variable.");
-  }
-  const ai = new GoogleGenAI({ apiKey });
+  // ai provided via shared high-reasoning proxy from ../config/gemini
 
   // 1. Get campaign inputs / blog topic from Founder Agent
   console.log(`[executeAutoDailyBlogGeneration] Querying Founder Agent Doppelganger "${founderAgent.personaName}" for blog direction...`);
@@ -946,7 +964,7 @@ Return the result in a JSON object with the following fields:
 `;
 
   const founderResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: founderPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -962,7 +980,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_founder_focus", "gemini-3.1-pro-preview", founderResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_founder_focus", MODELS.PRIMARY, founderResponse.usageMetadata);
 
   const founderInputs = JSON.parse(founderResponse.text || "{}");
   if (!founderInputs.focusInput || !founderInputs.blogTitle) throw new Error("Founder Agent failed to generate daily blog focus.");
@@ -984,7 +1002,7 @@ Return the result in a JSON object with the following fields:
   `;
 
   const researchResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: researchPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -995,7 +1013,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_research", "gemini-3.1-pro-preview", researchResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_research", MODELS.PRIMARY, researchResponse.usageMetadata);
 
   const insights = JSON.parse(researchResponse.text || "[]");
 
@@ -1050,7 +1068,7 @@ Return the result in a JSON object with the following fields:
   `;
 
   const blogResponse = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: MODELS.PRIMARY,
     contents: [{ text: blogPrompt }],
     config: {
       responseMimeType: "application/json",
@@ -1068,7 +1086,7 @@ Return the result in a JSON object with the following fields:
     }
   });
 
-  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_draft", "gemini-3.1-pro-preview", blogResponse.usageMetadata);
+  await logBackendTokenUsage(product.userId || "anonymous", "daily_blog_draft", MODELS.PRIMARY, blogResponse.usageMetadata);
 
   const blogData = JSON.parse(blogResponse.text || "{}");
   if (!blogData.blogContent) throw new Error("Failed to generate blog content.");
@@ -1294,14 +1312,14 @@ export async function performBackendSocialTrendResearch(ai: any, topic: string, 
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: MODELS.PRIMARY,
       contents: [{ text: prompt }],
       config: {
         tools: [{ googleSearch: {} }]
       }
     });
 
-    await logBackendTokenUsage(userId, "founder_post_research", "gemini-3.1-pro-preview", response.usageMetadata);
+    await logBackendTokenUsage(userId, "founder_post_research", MODELS.PRIMARY, response.usageMetadata);
     return response.text || "";
   } catch (err) {
     console.warn("[performBackendSocialTrendResearch] Failed:", err);
@@ -1321,11 +1339,7 @@ export async function executeAutoFounderPostGeneration(userId: string) {
   }
 
   // Load API Key
-  let apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY environment variable for user founder post automation.");
-  }
-  const ai = new GoogleGenAI({ apiKey });
+  // ai provided via shared high-reasoning proxy from ../config/gemini
 
   const attachmentStyle = user.founderPostAttachmentStyle || "image-overlay";
   const postType = user.founderPostType || "general"; // 'general' | 'branded' | 'both'
@@ -1468,7 +1482,7 @@ Return a JSON object containing:
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: MODELS.PRIMARY,
       contents: [{ text: prompt }],
       config: {
         responseMimeType: "application/json",
@@ -1485,7 +1499,7 @@ Return a JSON object containing:
       }
     });
 
-    await logBackendTokenUsage(userId, productData ? `auto_founder_branded_${productData.id}` : "auto_founder_general", "gemini-3.1-pro-preview", response.usageMetadata);
+    await logBackendTokenUsage(userId, productData ? `auto_founder_branded_${productData.id}` : "auto_founder_general", MODELS.PRIMARY, response.usageMetadata);
 
     const postData = JSON.parse(response.text || "{}");
     if (!postData.postCopy) return;
@@ -1502,7 +1516,7 @@ Return a JSON object containing:
       try {
         const nicheLens = productData?.industry || founderAgent.targetIndustry || "AI agent tooling & B2B SaaS";
         const trendRes = await ai.models.generateContent({
-          model: 'gemini-3.1-pro-preview',
+          model: MODELS.IMAGE_PROMPT,
           contents: [{ text: `You are an elite B2B brand designer and visual researcher. Conduct Google Search grounding to discover 1 current, high-impact visual aesthetic trend for executive founder social media cards in "${nicheLens}".
 Return ONLY valid JSON matching this schema:
 {
@@ -1524,13 +1538,13 @@ Return ONLY valid JSON matching this schema:
         console.warn("[executeAutoFounderPostGeneration] 1-Style Grounding Research fallback:", trendErr);
       }
 
-      // 2. Generate 1:1 Direct Image using our GPT-2 Image Medium (generateSingleCampaignImageBackend)
+      // 2. Generate 1:1 Direct Image using Google Nano Banana (generateSingleCampaignImageBackend)
       try {
         const directPrompt = `B2B Founder Social Post Graphic about: ${selectedTopic}.
 Visual Concept & Subject: A modern editorial B2B graphic representing ${selectedTopic}. ${postData.imagePrompt || ''}
 Style & Aesthetic: ${stylePrompt}.
-Headline text to display: "${postData.headline || selectedTopic}".
-Subtext / secondary theme: "${postData.subtext || ''}".
+Strictly NO text, NO words, NO letters, NO numbers, NO logo.
+
 Brand Color Palette: Primary ${activePrimary}, Secondary ${activeSecondary}.
 Style: Professional 1:1 editorial graphic, zero stock photo slop, dark-mode executive aesthetic.`;
 
@@ -1542,12 +1556,12 @@ Style: Professional 1:1 editorial graphic, zero stock photo slop, dark-mode exec
         }, productData?.logoDarkUrl || productData?.logoUrl);
 
         approvedTemplateImage = imageUrl;
-        console.log(`[executeAutoFounderPostGeneration] Successfully generated GPT-2 image: ${imageUrl}`);
+        console.log(`[executeAutoFounderPostGeneration] Successfully generated Google Nano Banana image: ${imageUrl}`);
       } catch (eImg) {
         console.error('[executeAutoFounderPostGeneration] GPT-2 Image Generation failed:', eImg);
       }
 
-      // Fallback branded graphic canvas if both OpenAI and Imagen failed (ZERO stock photo slop)
+      // Fallback branded graphic canvas if gpt-image-2 failed (ZERO stock photo slop)
       if (!imageUrl) {
         imageUrl = generateFallbackBrandedCanvas(
           postData.headline || selectedTopic,

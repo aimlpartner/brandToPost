@@ -2,6 +2,7 @@ import express from 'express';
 import {
   handleGenerateAiContent,
   handleGenerateCampaignImages,
+  handleMergeProductImages,
   handleResearchTrends,
   handleGetTemplatesLibrary,
   handleGetResearchChannelTemplates,
@@ -16,6 +17,7 @@ export const aiRouter = express.Router();
 
 aiRouter.post('/api/ai/generate', requireAuth, routeRateLimiter(15, 60 * 1000), handleGenerateAiContent);
 aiRouter.post('/api/ai/generate-campaign-images', requireAuth, routeRateLimiter(10, 60 * 1000), handleGenerateCampaignImages);
+aiRouter.post('/api/ai/merge-product-images', requireAuth, routeRateLimiter(10, 60 * 1000), handleMergeProductImages);
 aiRouter.post('/api/ai/research-trends', requireAuth, routeRateLimiter(15, 60 * 1000), handleResearchTrends);
 aiRouter.get('/api/templates/library', requireAuth, handleGetTemplatesLibrary);
 

@@ -4,10 +4,14 @@ import useImage from "use-image";
 import { Download, Loader2, Image as ImageIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 import { ProductDNA } from "../types";
+import { computeTypographicScale } from "../lib/dynamicLayoutResolver";
 
 export interface VisualData {
+  eyebrow?: string;
   headline?: string;
   subtext?: string;
+  highlightWords?: string[];
+  layoutAnchor?: string;
   stats?: Array<{ label: string; value: string }>;
   cinematicPrompt?: string;
   customHtml?: string;
@@ -217,6 +221,7 @@ export function VisualEngine({
     );
   }
 
+  const eyebrowText = visualData?.eyebrow || "";
   const headlineText = visualData?.headline || fallbackText || "Your disruptive quote goes here.";
   const subtextText = visualData?.subtext || "";
 
@@ -509,24 +514,44 @@ export function VisualEngine({
                   fillLinearGradientColorStops={[0, "rgba(0,0,0,0)", 1, "rgba(0,0,0,0.85)"]}
                 />
 
-                {/* Headline */}
-                <Text
-                  x={80}
-                  y={700}
-                  width={920}
-                  text={headlineText}
-                  fontFamily={fontFamily}
-                  fontSize={headlineText.length > 150 ? 38 : headlineText.length > 80 ? 48 : 60}
-                  fill="#FFFFFF"
-                  fontStyle="bold"
-                  lineHeight={1.2}
-                />
+                {/* Level 1: Category Tag / Eyebrow */}
+                {eyebrowText && (
+                  <Text
+                    x={80}
+                    y={660}
+                    width={920}
+                    text={eyebrowText.toUpperCase()}
+                    fontFamily="'Inter Tight', sans-serif"
+                    fontSize={22}
+                    fill={primaryColor || "#E9B638"}
+                    fontStyle="bold"
+                    letterSpacing={4}
+                  />
+                )}
 
-                {/* Subtext */}
+                {/* Level 2: Headline with Native Typographic Scale */}
+                {(() => {
+                  const { fontSize, lineHeight } = computeTypographicScale(headlineText, 1080);
+                  return (
+                    <Text
+                      x={80}
+                      y={eyebrowText ? 705 : 680}
+                      width={920}
+                      text={headlineText}
+                      fontFamily={fontFamily}
+                      fontSize={fontSize}
+                      fill="#FFFFFF"
+                      fontStyle="bold"
+                      lineHeight={lineHeight}
+                    />
+                  );
+                })()}
+
+                {/* Level 3: Subtext */}
                 {subtextText && (
                   <Text
                     x={80}
-                    y={880}
+                    y={eyebrowText ? 895 : 880}
                     width={920}
                     text={subtextText}
                     fontFamily={fontFamily}

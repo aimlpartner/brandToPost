@@ -1,3 +1,6 @@
+import type { TypographicIntent, CompositionMode } from '../lib/dynamicLayoutResolver';
+import type { ArgonSceneGraph } from '../types';
+
 const Type = {
   STRING: "STRING",
   NUMBER: "NUMBER",
@@ -107,9 +110,9 @@ Give 3 distinct, compelling, and creative weekly campaign themes (e.g. "The Anti
     return [];
   }
 }
-import { ProductDNA, WeeklyCampaign, Creative } from "../types";
+import { ProductDNA, WeeklyCampaign, Creative, PlatformPost, DailyPost } from "../types";
 import { db, auth } from "../firebase";
-import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, doc, setDoc } from "firebase/firestore";
 import { loggerService } from "./loggerService";
 import { logSilentError } from "../lib/firestore-error";
 import { getCookie } from "../lib/cookies";
@@ -247,9 +250,697 @@ export async function generateImageViaProxy(prompt: string | any, userId?: strin
   
   const data = await response.json();
   if (data.success && data.imageUrls && data.imageUrls.length > 0) {
+    if (data.visualAnalyses && data.visualAnalyses[0]) {
+      try {
+        const { cacheServerVisionAnalysis } = await import('../lib/dynamicLayoutResolver');
+        cacheServerVisionAnalysis(data.imageUrls[0], data.visualAnalyses[0]);
+      } catch (_) {}
+    }
     return data.imageUrls[0];
   }
   return null;
+}
+
+export async function mergeProductImagesViaProxy(
+  params: {
+    asset1Url: string;
+    asset2Url: string;
+    prompt?: string;
+    headline?: string;
+    subtext?: string;
+    brandColors?: string[];
+    logoUrl?: string;
+  },
+  userId?: string,
+  productId?: string
+): Promise<string> {
+  const token = await auth.currentUser?.getIdToken();
+  const activeProductId = productId || (userId ? (getCookie(`activeProductId_${userId}`) || localStorage.getItem(`activeProductId_${userId}`)) : null);
+
+  const response = await fetchWithRetry('/api/ai/merge-product-images', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(activeProductId ? { 'X-Product-Id': activeProductId } : {})
+    },
+    body: JSON.stringify(params)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to merge product images: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  if (data.success && data.imageUrl) {
+    return data.imageUrl;
+  }
+  throw new Error(data.error || 'Failed to merge product images');
+}
+
+export async function generatePostCreationSuggestions(
+  dna: any | null,
+  field: "topic" | "purpose" | "occasion",
+  currentData: { topic?: string; purpose?: string; occasion?: string; channel?: string },
+  userId?: string
+): Promise<string[]> {
+  try {
+    let prompt = `You are Tror, Chief AI Growth Strategist. Suggest 3 high-impact ideas for a 1-day social post generation form field.
+Return ONLY a JSON array of 3 strings. Example: ["Idea 1", "Idea 2", "Idea 3"]\n`;
+
+    if (dna) {
+      prompt += `Brand Name: ${dna.name || 'Our Brand'}
+${dna.description ? `Core Description: ${dna.description}` : ''}
+Positioning: ${dna.positioning || "Not specified"}
+Audience: ${dna.audience || "Not specified"}
+${dna.tone ? `Tone of Voice: ${dna.tone}` : ''}
+${dna.enemy ? `The Enemy / Problem We Fight: ${dna.enemy}` : ''}
+${dna.earnedSecret ? `Our Earned Secret: ${dna.earnedSecret}` : ''}
+${dna.uniqueMechanism ? `Unique Mechanism: ${dna.uniqueMechanism}` : ''}
+${dna.contentPillars && dna.contentPillars.length > 0 ? `Content Pillars: ${dna.contentPillars.join(", ")}` : ""}
+${dna.targetIcps && dna.targetIcps.length > 0 ? `Target ICPs: ${dna.targetIcps.map((icp: any) => `${icp.name} (Pains: ${(icp.painPoints || []).join(', ')})`).join("; ")}` : ""}
+`;
+    }
+
+    if (field === "topic") {
+      prompt += `Give 3 compelling, viral, or authoritative post topic ideas tailored to this brand's audience and content pillars. Make each punchy, specific, and discussion-provoking. Avoid generic clichés.`;
+    } else if (field === "purpose") {
+      prompt += `Current Topic: ${currentData.topic || "Brand growth"}
+Give 3 distinct strategic objectives/purposes for this post (e.g., "Establish thought leadership & challenge industry dogma", "Demonstrate product ROI with tangible metrics", "Spark community debate on common failure points").`;
+    } else if (field === "occasion") {
+      prompt += `Current Topic: ${currentData.topic || "Product update"}
+Give 3 timely, seasonal, or milestone-based angles (e.g., "Q3 Industry Reset", "New Product Feature Milestone", "Founder Reflection & Behind-The-Scenes", "Customer Milestone Celebration").`;
+    }
+
+    const response = await generateContentProxy("gemini-2.5-flash", prompt, {
+      temperature: 0.7,
+      responseMimeType: "application/json"
+    });
+
+    if (response.usageMetadata && userId) {
+      logTokenUsage(userId, "generatePostCreationSuggestions", "gemini-2.5-flash", response.usageMetadata).catch(console.error);
+    }
+
+    const text = response.text || "";
+    try {
+      const parsed = parseLLMJSON(text);
+      if (Array.isArray(parsed)) return parsed.slice(0, 3).map(String);
+    } catch {
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) {
+        try {
+          const parsed = JSON.parse(match[0]);
+          if (Array.isArray(parsed)) return parsed.slice(0, 3).map(String);
+        } catch (_) {}
+      }
+    }
+    return [];
+  } catch (err) {
+    console.error("generatePostCreationSuggestions error:", err);
+    return [];
+  }
+}
+export async function generatePostCreationContent(params: {
+  dna: any | null;
+  topic?: string;
+  purpose?: string;
+  specialOccasion?: string;
+  prompt?: string;
+  channel: string;
+  isProductImageCreator?: boolean;
+  userId?: string;
+}): Promise<{
+  copy: string;
+  headline: string;
+  subtext: string;
+  imagePrompt: string;
+  layoutAnchor?: string;
+  visualStrategy?: string;
+  highlightWords?: string[];
+  eyebrow?: string;
+  typographicIntent?: TypographicIntent;
+  primaryText?: string;
+  secondaryText?: string;
+  kickerText?: string;
+}> {
+  const { dna, topic, purpose, specialOccasion, prompt: userPrompt, channel, isProductImageCreator, userId } = params;
+
+  let brandDnaContext = '';
+  if (dna) {
+    brandDnaContext = `
+==================== FULL BRAND DNA & STRATEGIC PROFILE ====================
+- Brand / Product Name: ${dna.name || 'Our Company'}
+${dna.website ? `- Website: ${dna.website}` : ''}
+${dna.description ? `- What We Do / Core Description: ${dna.description}` : ''}
+${dna.positioning ? `- Market Positioning Statement: ${dna.positioning}` : ''}
+${dna.audience ? `- Primary Target Audience: ${dna.audience}` : ''}
+${dna.tone ? `- Calibrated Brand Tone of Voice: ${dna.tone}` : ''}
+${dna.stage ? `- Company Stage: ${dna.stage}` : ''}
+
+STRATEGIC PSYCHOGRAPHICS & NARRATIVE:
+${dna.enemy ? `- The Enemy / Status Quo We Fight: ${dna.enemy}` : ''}
+${dna.earnedSecret ? `- Our Earned Secret (Non-obvious Industry Truth): ${dna.earnedSecret}` : ''}
+${dna.originStory ? `- Company Origin Story: ${dna.originStory}` : ''}
+${dna.hellState ? `- Customer 'Hell' State (Pain points & frustration before us): ${dna.hellState}` : ''}
+${dna.heavenState ? `- Customer 'Heaven' State (Dream transformation & relief after us): ${dna.heavenState}` : ''}
+${dna.uniqueMechanism ? `- Unique Mechanism (Our secret sauce / proprietary approach): ${dna.uniqueMechanism}` : ''}
+${dna.proofPoints ? `- Proof Points, Metrics & Credibility: ${dna.proofPoints}` : ''}
+${dna.vocabularyAlways ? `- Vocabulary to ALWAYS Use: ${dna.vocabularyAlways}` : ''}
+${dna.vocabularyNever ? `- Vocabulary to STRICTLY AVOID: ${dna.vocabularyNever}` : ''}
+${dna.contentPillars && dna.contentPillars.length > 0 ? `- Content Pillars: ${dna.contentPillars.join(' | ')}` : ''}
+${dna.targetIcps && dna.targetIcps.length > 0 ? `- Target ICPs & Pain Points:\n${dna.targetIcps.map((icp: any) => `  * ${icp.name}: ${(icp.painPoints || []).join(', ')}`).join('\n')}` : ''}
+=============================================================================
+`;
+  }
+
+  const systemInstructions = `You are Alex (Multi-Channel Copywriter), the specialist creative agent crafting high-converting, platform-native social copy.
+Your mission is to craft a compelling, channel-native post for the brand: ${dna?.name ? `"${dna.name}"` : 'the company'} on channel: ${channel.toUpperCase()}.
+
+${brandDnaContext}
+
+PLATFORM STYLE GUIDELINES:
+- LinkedIn: High impact opening hook (first 2 lines must stop the scroll), clean line spacing, short scannable paragraphs (1-2 sentences), authoritative and candid tone, ending with a thought-provoking question and 3-5 relevant hashtags.
+- X (Twitter): Punchy, tight, magnetic hook. Fast pacing. 240-280 chars max or short thread opener. Zero fluff. 1-2 focused hashtags.
+- Instagram: Engaging conversational tone, visually evocative narrative, clear line breaks, strong call to action to link-in-bio or comment, 5-8 targeted hashtags.
+- Facebook: Community-focused, relatable storytelling, natural tone, clear question or link to check out.
+- Reddit: Authentic, no corporate marketing jargon, self-aware, value-first, transparent discussion starter or helpful breakdown.
+
+ANTI-SLOP & BRAND FIDELITY RULES:
+- NO generic AI openings like "In today's fast-paced digital world", "Unlock your potential", "Are you tired of...", or "Let's dive in".
+- NO robotic corporate buzzwords. Write with crisp, compelling brand authority that speaks directly to industry peers and clients.
+- PURE BRAND PERSPECTIVE: Write from the official brand / company voice of ${dna?.name || 'the brand'} (e.g. "At ${dna?.name || 'our company'}...", "Our team...", or thought leadership addressing the industry). Do NOT write as a personal founder diary or personal founder persona.
+- Naturally weave in our unique mechanism, contrast against the enemy/status quo, and speak directly to our audience's pain points.
+${dna?.vocabularyAlways ? `- MANDATORY VOCABULARY: Naturally integrate vocabulary/phrases from: "${dna.vocabularyAlways}".` : ''}
+${dna?.vocabularyNever ? `- FORBIDDEN VOCABULARY: Absolutely NEVER use words from: "${dna.vocabularyNever}".` : ''}
+`;
+
+  let inputContext = '';
+  if (userPrompt && userPrompt.trim()) {
+    inputContext = `DIRECT USER PROMPT:
+${userPrompt}
+`;
+  } else {
+    inputContext = `FORM INPUTS:
+- Post Topic: ${topic || 'Industry insights'}
+- Post Purpose / Objective: ${purpose || 'Thought leadership and audience engagement'}
+- Special Occasion / Event / Context: ${specialOccasion || 'Standard timely post'}
+`;
+  }
+
+  if (isProductImageCreator) {
+    inputContext += `\nNOTE: This post accompanies a commercial Product Image featuring our product alongside a person, model, or complementary item. Emphasize tangible product benefits, utility, and desirability in the copy.\n`;
+  }
+  const fullPrompt = `${systemInstructions}
+${inputContext}
+
+EDITORIAL ART DIRECTOR (CHLOE) PROTOCOL — IMAGE GENERATION PLANNING:
+You are also acting as Chloe (Creative Director). Plan the "imagePrompt" as a single, cohesive, photorealistic scene description synthesizing the Art Director Planning Guidelines:
+1. The Concrete Subject: A tangible physical object, environment, or human interaction grounding this specific post hook. NEVER generate abstract metaphors (absolutely NO glowing digital gears, NO floating holographic graphs, NO generic silhouettes, NO matrix code). Ground in physical reality (e.g. craftsman hands working with materials, espresso on raw walnut desk, founder at studio drafting table, architectural stone staircase).
+2. The Lighting & Mood: Derived from brand identity (e.g. warm directional morning window light, moody high-contrast amber rim glow, soft overcast scandinavian daylight).
+3. The Camera Setup: Photorealistic optical cues (e.g. 35mm prime lens, f/1.8 shallow depth of field, creamy background bokeh, subtle organic film grain).
+4. Spatial Composition & Negative Space: Compose the scene with organic breathing room (e.g. off-center subject, wide textured tabletop, expansive architectural floor, clean negative wall space) leaving 40-50% clean uncluttered space for typography overlay. Do NOT follow rigid quadrant templates; describe a genuine, bespoke photographic scene.
+5. Strict Negative Prompt: Always terminate the prompt with: "clean editorial composition, strictly no text, no letters, no words, no watermark".
+
+EDITORIAL TYPOGRAPHIC INTENT RULES:
+Do NOT blindly generate an "eyebrow, headline, subtext" template for every post.
+Analyze the brand, tone, and visual, then autonomously select the most impactful "typographic_intent":
+
+1. "attribution_badge": Use for team member, founder, or product spotlights.
+   Output: "primary_text" (Person's name or product name), "secondary_text" (Role or category, e.g. "Team Member"). NO eyebrow, NO subtext.
+2. "taxonomy_strip": Use for creative work, film stills, or portfolio galleries.
+   Output: "primary_text" (Creative concept title), "secondary_text" (Semicolon tags: "Motion; Lifestyle; Product"), "kicker_text" (Punchy 6-word thought).
+3. "manifesto_body": Use for deep industry philosophy, earned secrets, or strong opinions.
+   Output: "primary_text" (Unapologetic 3-5 word hook), "secondary_text" (3-4 poetic, rhythmic lines explaining the philosophy). NO photo will be used.
+4. "hero_headline_only": Use when the photo is stunning and needs breathing room.
+   Output: "primary_text" (Massive 2-4 word statement, e.g. "Stop Cold Calling."). Zero secondary clutter.
+5. "metric_callout": Use for data, audits, or proof points.
+   Output: "eyebrow" (Uppercase metric tag), "primary_text" (e.g. "80% of landing pages leak revenue"), "kicker_text" (Brief insight).
+
+CRITICAL JSON FORMATTING REQUIREMENT:
+The response MUST be strictly valid JSON. Inside the "copy" string and other fields, NEVER use unescaped double quotes ("). Either escape them with backslashes (\\") or use single quotes (') or typographic quotes (“ ”).
+
+Respond strictly in JSON matching this schema:
+{
+  "copy": "Full platform-native post copy ready to publish",
+  "typographic_intent": "attribution_badge | taxonomy_strip | manifesto_body | hero_headline_only | metric_callout",
+  "primary_text": "Main title / Name / Hook",
+  "secondary_text": "Role / Semicolon taxonomy / Manifesto body / optional",
+  "kicker_text": "Micro-kicker punchline / optional",
+  "eyebrow": "Only if metric_callout / optional",
+  "headline": "Alias of primary_text for compatibility",
+  "subtext": "Alias of secondary_text for compatibility",
+  "highlight_words": ["Words to italicize or highlight in accent color"],
+  "visual_strategy": "synthetic_photography | library_asset | brutalist_text_only",
+  "layout_intent": "bottom_left_editorial | negative_space_right | top_left_banner | bottom_full_cinematic | centered_minimal",
+  "imagePrompt": "Single-sentence editorial scene prompt: [Subject positioned on ...], [brand lighting], [wide clean empty surface with generous negative space on ...], editorial 35mm photography, f/1.8 shallow depth of field, clean editorial background plate, strictly no text, no words."
+}`;
+
+  let responseText = "";
+  try {
+    const response = await generateContentProxy("gemini-3.5-flash", fullPrompt, {
+      temperature: 0.7,
+      responseMimeType: "application/json"
+    });
+    responseText = (response.text || "").trim();
+    if (response.usageMetadata && userId) {
+      logTokenUsage(userId, "generatePostCreationContent", "gemini-3.5-flash", response.usageMetadata).catch(console.error);
+    }
+  } catch (err) {
+    console.warn('[generatePostCreationContent] gemini-3.5-flash call note, trying fallback:', err);
+    const fallbackRes = await generateContentProxy("gemini-3.1-pro-preview", fullPrompt, {
+      temperature: 0.7,
+      responseMimeType: "application/json"
+    });
+    responseText = (fallbackRes.text || "").trim();
+  }
+
+  // Resilient JSON & Field Extraction
+  let parsed: any = null;
+  try {
+    parsed = parseLLMJSON(responseText);
+  } catch (_) {
+    // Lenient regex-based extraction if unescaped quotes broke standard JSON.parse
+    parsed = {};
+    const copyMatch = responseText.match(/"copy"\s*:\s*"([\s\S]*?)"\s*,\s*"(?:typographic_intent|typographicIntent|primary_text|primaryText|headline|imagePrompt|visual_strategy|visualStrategy|layout_intent|layoutAnchor|highlight_words|highlightWords)"/i)
+      || responseText.match(/"copy"\s*:\s*"([\s\S]*?)"\s*\}\s*$/i);
+    if (copyMatch && copyMatch[1]) {
+      parsed.copy = copyMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    }
+
+    const primaryMatch = responseText.match(/"(?:primary_text|headline)"\s*:\s*"([^"\n]+)"/i);
+    if (primaryMatch && primaryMatch[1]) {
+      parsed.primary_text = primaryMatch[1];
+      parsed.headline = primaryMatch[1];
+    }
+
+    const secondaryMatch = responseText.match(/"(?:secondary_text|subtext)"\s*:\s*"([^"\n]+)"/i);
+    if (secondaryMatch && secondaryMatch[1] && secondaryMatch[1] !== 'null') {
+      parsed.secondary_text = secondaryMatch[1];
+      parsed.subtext = secondaryMatch[1];
+    }
+
+    const imgMatch = responseText.match(/"imagePrompt"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"|\}\s*$)/i);
+    if (imgMatch && imgMatch[1]) {
+      parsed.imagePrompt = imgMatch[1].replace(/\\"/g, '"');
+    }
+
+    const intentMatch = responseText.match(/"(?:typographic_intent|typographicIntent)"\s*:\s*"([^"\n]+)"/i);
+    if (intentMatch && intentMatch[1]) {
+      parsed.typographic_intent = intentMatch[1];
+    }
+
+    const layoutMatch = responseText.match(/"(?:layout_intent|layoutAnchor)"\s*:\s*"([^"\n]+)"/i);
+    if (layoutMatch && layoutMatch[1]) {
+      parsed.layout_intent = layoutMatch[1];
+    }
+
+    const visualMatch = responseText.match(/"(?:visual_strategy|visualStrategy)"\s*:\s*"([^"\n]+)"/i);
+    if (visualMatch && visualMatch[1]) {
+      parsed.visual_strategy = visualMatch[1];
+    }
+
+    const wordsMatch = responseText.match(/"(?:highlight_words|highlightWords)"\s*:\s*\[([\s\S]*?)\]/i);
+    if (wordsMatch && wordsMatch[1]) {
+      const items = wordsMatch[1].match(/"([^"]+)"/g);
+      if (items) {
+        parsed.highlight_words = items.map(w => w.replace(/^"|"$/g, ''));
+      }
+    }
+  }
+
+  // Guarantee clean copy — never leak raw JSON into user state
+  let cleanCopy = (parsed?.copy || responseText).trim();
+  if (cleanCopy.startsWith('{') && cleanCopy.includes('"copy"')) {
+    const innerCopy = cleanCopy.match(/"copy"\s*:\s*"([\s\S]*?)"(?:\s*,\s*"|\s*\}\s*$)/);
+    if (innerCopy && innerCopy[1]) {
+      cleanCopy = innerCopy[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    } else {
+      // Strip json wrappers
+      cleanCopy = cleanCopy.replace(/^[{\s\S]*?"copy"\s*:\s*"/, '').replace(/"[\s\S]*$/, '').replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    }
+  }
+  // Ultimate safeguard: if still raw JSON
+  if (cleanCopy.startsWith('{') && cleanCopy.endsWith('}')) {
+    cleanCopy = `${topic || dna?.name || 'Momentum'} — Strategic Growth Insight\n\n${purpose || dna?.positioning || 'Building un-copyable brand authority.'}`;
+  }
+
+  const intent = (parsed?.typographic_intent || parsed?.typographicIntent) as TypographicIntent | undefined;
+  const primaryText = (parsed?.primary_text || parsed?.headline || topic || "Modern Growth").replace(/["{}]/g, '').trim();
+  const secondaryText = (parsed?.secondary_text || parsed?.subtext || (intent === 'hero_headline_only' ? '' : (purpose || ""))).replace(/["{}]/g, '').trim();
+  const kickerText = parsed?.kicker_text || parsed?.kickerText || undefined;
+  const eyebrow = parsed?.eyebrow || (intent === 'metric_callout' || intent === 'taxonomy_strip' ? (topic ? topic.toUpperCase().substring(0, 18) : undefined) : undefined);
+  const imagePrompt = parsed?.imagePrompt || `Editorial photographic scene representing ${dna?.name || 'the brand'}: focused founder working in modern architectural studio, warm directional window light, generous negative space, strictly no text, no letters, no words, no watermark`;
+
+  return {
+    copy: cleanCopy,
+    headline: primaryText,
+    subtext: secondaryText || '',
+    eyebrow: eyebrow,
+    typographicIntent: intent || 'hero_headline_only',
+    primaryText,
+    secondaryText,
+    kickerText,
+    imagePrompt,
+    visualStrategy: parsed?.visual_strategy || parsed?.visualStrategy || (intent === 'manifesto_body' ? 'brutalist_text_only' : 'synthetic_photography'),
+    layoutAnchor: parsed?.layout_intent || parsed?.layoutAnchor || "negative_space_right",
+    highlightWords: parsed?.highlight_words || parsed?.highlightWords || []
+  };
+}
+
+/**
+ * Section 6 & 7: Gemini 4 Argon Generative Scene Graph Art Direction
+ * Eliminates all pre-coded templates and rigid enums.
+ * Synthesizes dynamic typography, arbitrary panels, palette roles, and semantic word highlights.
+ */
+export async function planAutonomousArtDirection(params: {
+  brandDna: any;
+  postCopy: string;
+  headline?: string;
+  subtext?: string;
+  availableImageUrls: string[];
+  isGraphicOnly?: boolean;
+}): Promise<ArgonSceneGraph> {
+  const { brandDna, postCopy, headline: explicitHeadline, subtext: explicitSubtext, availableImageUrls, isGraphicOnly = false } = params;
+
+  let headline = (explicitHeadline || '').replace(/["{}]/g, '').trim();
+  if (!headline || headline.includes('"copy"')) {
+    headline = postCopy.split('\n')[0].replace(/^["'{]+|["'}:]+$/g, '').trim().substring(0, 48) || 'Un-copyable Growth';
+  }
+
+  const prompt = `You are Gemini 4 Argon, the frontier reasoning AI serving as Executive Creative Director and Visual Art Director.
+You do NOT select from pre-made templates. You synthesize a custom Declarative Scene Graph from scratch.
+
+BRAND DNA:
+- Name: "${brandDna?.name || brandDna?.brandName || 'Our Brand'}"
+- Tone / Soul: "${brandDna?.tone || 'Modern, Premium'}"
+- Scraped Palette: ${JSON.stringify(brandDna?.visualData?.colors || brandDna?.brandColors || [brandDna?.primaryColor || '#0C111D', brandDna?.secondaryColor || '#E9B638'])}
+- Target Audience: "${brandDna?.audience || brandDna?.targetAudience || 'General'}"
+
+POST HEADLINE & COPY:
+Headline: "${headline}"
+${explicitSubtext ? `Subtext: "${explicitSubtext}"` : ''}
+Full Copy:
+"${postCopy.substring(0, 800)}"
+
+AVAILABLE ASSETS:
+- Count: ${availableImageUrls.length}
+- Image URLs: ${JSON.stringify(availableImageUrls)}
+- Graphic Only Mode: ${isGraphicOnly}
+
+CREATIVE DIRECTIVES:
+1. Typography: Choose ANY Google Font that reflects this exact brand's essence (e.g. brutalist sans, athletic condensed, literary serif, neo-grotesque, or technical mono). Specify exact weights, optical tracking, line-height, and casing.
+2. Layout & Panels:
+   - If 0 images or Graphic Only: Design a pure graphical composition (e.g. brutalist concrete poster with bleeding black accents, data proof card, or ambient CSS mesh gradient).
+   - If 1 image: Analyze visual focus. On photographic editorial scenes, position text in the lower-third negative space (rect: { bottom: '56px', left: '48px', right: '48px' }) with subtle dark scrim so text NEVER overlaps the subject's face or body.
+   - If 3-4 images or multi-step content: Arrange a multi-panel layout (e.g. 58/42 hero-to-steps collage or horizontal cinematic slices).
+3. Semantic Emphasis: Identify the emotional punchline word(s) in the headline and mark them with isAccent: true (or italicized).
+4. Return strictly valid JSON adhering to the ArgonSceneGraph schema. No markdown wrappers, no conversational text.`;
+
+  const rawColor = brandDna?.visualData?.colors?.[0] || brandDna?.primaryColor || '#0C111D';
+  const accent = rawColor !== '#7C3AED' ? rawColor : '#E9B638';
+
+  let parsed: any = null;
+  try {
+    const response = await generateContentProxy("gemini-4-argon", prompt, {
+      responseMimeType: "application/json"
+    });
+    const text = response.text.trim();
+    parsed = parseLLMJSON(text);
+  } catch (llmErr) {
+    console.warn('[planAutonomousArtDirection] LLM request fallback:', llmErr);
+  }
+
+  if (parsed && typeof parsed === 'object') {
+    const normalized: ArgonSceneGraph = {
+      rationale: parsed.rationale || "Generative scene graph by Gemini 4 Argon",
+      canvas: {
+        width: parsed.canvas?.width || 1080,
+        height: parsed.canvas?.height || 1350,
+        backgroundColor: parsed.canvas?.backgroundColor || (parsed.palette?.isDarkMode ? '#0C111D' : '#FAF7F2'),
+        backgroundImage: parsed.canvas?.backgroundImage
+      },
+      typography: {
+        headlineFont: (parsed.typography?.headlineFont || brandDna?.fontFamily || 'Inter Tight').replace(/['"]/g, ''),
+        bodyFont: (parsed.typography?.bodyFont || 'Inter').replace(/['"]/g, ''),
+        headlineWeight: parsed.typography?.headlineWeight || 700,
+        textTransform: parsed.typography?.textTransform || 'none',
+        letterSpacing: parsed.typography?.letterSpacing || '-0.02em',
+        lineHeight: parsed.typography?.lineHeight || 1.15
+      },
+      palette: {
+        textPrimary: parsed.palette?.textPrimary || '#FAF7F2',
+        textSecondary: parsed.palette?.textSecondary || '#94A3B8',
+        accent: parsed.palette?.accent || accent,
+        surface: parsed.palette?.surface || '#141419',
+        border: parsed.palette?.border || 'rgba(255,255,255,0.1)',
+        isDarkMode: parsed.palette?.isDarkMode ?? true
+      },
+      panels: (() => {
+        let panels = Array.isArray(parsed.panels) ? [...parsed.panels] : [];
+        if (availableImageUrls && availableImageUrls.length > 0 && !isGraphicOnly) {
+          if (panels.length === 0) {
+            panels = [
+              {
+                id: 'hero',
+                rect: { x: 0, y: 0, width: 100, height: 100 },
+                imageUrl: availableImageUrls[0],
+                overlayGradient: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)'
+              }
+            ];
+          } else {
+            let imgIdx = 0;
+            panels = panels.map((p) => {
+              const hasValidUrl = p.imageUrl && (p.imageUrl.startsWith('http') || p.imageUrl.startsWith('/') || p.imageUrl.startsWith('data:'));
+              if (!hasValidUrl && imgIdx < availableImageUrls.length) {
+                const url = availableImageUrls[imgIdx++];
+                return {
+                  ...p,
+                  imageUrl: url,
+                  overlayGradient: p.overlayGradient || 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)'
+                };
+              }
+              return p;
+            });
+            const anyHasImage = panels.some(p => p.imageUrl && (p.imageUrl.startsWith('http') || p.imageUrl.startsWith('/') || p.imageUrl.startsWith('data:')));
+            if (!anyHasImage && availableImageUrls[0]) {
+              panels[0] = {
+                ...panels[0],
+                imageUrl: availableImageUrls[0],
+                overlayGradient: panels[0].overlayGradient || 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)'
+              };
+            }
+          }
+        }
+        return panels;
+      })(),
+      textBlocks: Array.isArray(parsed.textBlocks) && parsed.textBlocks.length > 0 ? parsed.textBlocks : [
+        {
+          id: 'headline',
+          rect: { bottom: '56px', left: '48px', right: '48px' },
+          align: 'left',
+          spans: [{ text: headline, isAccent: false }]
+        }
+      ],
+      graphicAccents: Array.isArray(parsed.graphicAccents) ? parsed.graphicAccents : undefined,
+      logo: (brandDna?.logoDarkUrl || brandDna?.logoUrl) ? {
+        url: brandDna.logoDarkUrl || brandDna.logoUrl,
+        rect: { top: '48px', right: '48px' },
+        height: '32px'
+      } : undefined
+    };
+    return normalized;
+  }
+
+    if (isGraphicOnly || availableImageUrls.length === 0) {
+      return {
+        rationale: "Zero-diffusion ambient mesh gradient artboard",
+        canvas: {
+          width: 1080,
+          height: 1350,
+          backgroundColor: '#0C111D',
+          backgroundImage: `radial-gradient(at 15% 20%, ${accent}28 0px, transparent 55%), radial-gradient(at 85% 80%, #1E304F70 0px, transparent 65%), radial-gradient(at 50% 50%, #0C111DFA 0px, transparent 100%)`
+        },
+        typography: {
+          headlineFont: (brandDna?.fontFamily || 'Inter Tight').replace(/['"]/g, ''),
+          bodyFont: 'Inter',
+          headlineWeight: 700,
+          textTransform: 'none',
+          letterSpacing: '-0.02em',
+          lineHeight: 1.15
+        },
+        palette: {
+          textPrimary: '#FAF7F2',
+          textSecondary: '#94A3B8',
+          accent: accent,
+          surface: '#141419',
+          border: 'rgba(255,255,255,0.1)',
+          isDarkMode: true
+        },
+        panels: [],
+        textBlocks: [
+          {
+            id: 'hook',
+            rect: { top: '38%', left: '48px', right: '48px' },
+            align: 'left',
+            spans: [{ text: headline, isAccent: false }]
+          }
+        ],
+        logo: (brandDna?.logoDarkUrl || brandDna?.logoUrl) ? {
+          url: brandDna.logoDarkUrl || brandDna.logoUrl,
+          rect: { top: '48px', left: '48px' },
+          height: '32px'
+        } : undefined
+      };
+    }
+
+    return {
+      rationale: "Single image negative space editorial composition",
+      canvas: {
+        width: 1080,
+        height: 1350,
+        backgroundColor: '#000000'
+      },
+      typography: {
+        headlineFont: (brandDna?.fontFamily || 'Montserrat').replace(/['"]/g, ''),
+        bodyFont: 'Inter',
+        headlineWeight: 800,
+        textTransform: 'uppercase',
+        letterSpacing: '-0.02em',
+        lineHeight: 1.05
+      },
+      palette: {
+        textPrimary: '#FFFFFF',
+        textSecondary: '#E2E8F0',
+        accent: accent,
+        surface: 'rgba(0,0,0,0.4)',
+        border: 'rgba(255,255,255,0.15)',
+        isDarkMode: true
+      },
+      panels: [
+        {
+          id: 'hero',
+          rect: { x: 0, y: 0, width: 100, height: 100 },
+          imageUrl: availableImageUrls[0],
+          overlayGradient: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)'
+        }
+      ],
+      textBlocks: [
+        {
+          id: 'headline',
+          rect: { bottom: '56px', left: '48px', right: '48px' },
+          align: 'left',
+          spans: [{ text: headline, isAccent: false }]
+        }
+      ],
+      logo: (brandDna?.logoDarkUrl || brandDna?.logoUrl) ? {
+        url: brandDna.logoDarkUrl || brandDna.logoUrl,
+        rect: { top: '48px', right: '48px' },
+        height: '32px'
+      } : undefined
+    };
+}
+
+export async function saveOneDayPostToCampaigns(
+  postData: {
+    productId: string;
+    userId: string;
+    productName?: string;
+    productLogoUrl?: string;
+    channel: string;
+    copy: string;
+    imageUrl?: string;
+    headline?: string;
+    subtext?: string;
+    eyebrow?: string;
+    topic: string;
+    purpose?: string;
+    layoutAnchor?: string;
+    highlightWords?: string[];
+    brandColors?: string[];
+    fontFamily?: string;
+    typographicIntent?: string;
+    primaryText?: string;
+    secondaryText?: string;
+    kickerText?: string;
+    compositionMode?: string;
+    scene?: ArgonSceneGraph;
+  }
+): Promise<string> {
+  const campaignId = 'camp_oneday_' + Math.random().toString(36).substring(2, 11);
+  const nowIso = new Date().toISOString();
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+  const todayDay = dayNames[new Date().getDay()];
+
+  const visualDataPayload = {
+    headline: postData.headline || postData.primaryText || postData.topic || '',
+    subtext: postData.subtext || postData.secondaryText || '',
+    eyebrow: postData.eyebrow,
+    highlightWords: postData.highlightWords || [],
+    colors: postData.brandColors || [],
+    fontFamily: postData.fontFamily,
+    typographicIntent: postData.typographicIntent,
+    primaryText: postData.primaryText || postData.headline,
+    secondaryText: postData.secondaryText || postData.subtext,
+    kickerText: postData.kickerText,
+    compositionMode: postData.compositionMode,
+    ...(postData.scene ? { scene: postData.scene } : {}),
+    ...(postData.imageUrl ? { baseImage: postData.imageUrl } : {}),
+    ...(postData.layoutAnchor ? { layoutAnchor: postData.layoutAnchor } : {})
+  };
+
+  const platformPost: PlatformPost = {
+    platform: (postData.channel as any) || 'LinkedIn',
+    copy: postData.copy || '',
+    format: postData.channel || 'Post',
+    ...(postData.imageUrl ? { imageUrl: postData.imageUrl } : {}),
+    visualData: { ...visualDataPayload }
+  };
+
+  const dailyPost: DailyPost = {
+    day: todayDay,
+    date: nowIso.split('T')[0],
+    contentType: postData.purpose || '1-Day Outreach',
+    platformVersions: [platformPost],
+    ...(postData.imageUrl ? { imageUrl: postData.imageUrl } : {}),
+    overlayText: postData.headline || postData.topic || '',
+    visualData: { ...visualDataPayload }
+  };
+
+  const campaignDoc: WeeklyCampaign = {
+    id: campaignId,
+    productId: postData.productId || 'default',
+    userId: postData.userId || 'guest',
+    productName: postData.productName || 'Product',
+    productLogoUrl: postData.productLogoUrl || '',
+    theme: postData.headline || postData.topic || 'Single Post',
+    targetAudience: 'Target Customers',
+    coreMessage: (postData.copy || '').substring(0, 150),
+    hook: postData.headline || postData.topic || 'Post Hook',
+    cta: 'Learn more',
+    contentFormat: postData.channel || 'Post',
+    platformVersions: [platformPost],
+    dailyPosts: [dailyPost],
+    repurposingNotes: `Crafted for ${postData.channel} via Post Creation Studio`,
+    confidenceScore: 95,
+    pillar: postData.purpose || 'Post Creation',
+    createdAt: nowIso,
+    focus: postData.topic || 'Post',
+    subCategory: postData.purpose || 'General',
+    tags: ['1-Day Post', postData.channel],
+    isOneDay: true,
+    ...(postData.headline ? { headline: postData.headline } : {}),
+    ...(postData.subtext ? { subtext: postData.subtext } : {}),
+    ...(postData.imageUrl ? { imageUrl: postData.imageUrl } : {}),
+    ...(postData.layoutAnchor ? { layoutAnchor: postData.layoutAnchor } : {})
+  } as any;
+
+  // Firestore setDoc throws an error if any field in the object is undefined.
+  // JSON serialization strips all keys with undefined values automatically.
+  const sanitizedDoc = JSON.parse(JSON.stringify(campaignDoc));
+
+  await setDoc(doc(db, 'campaigns', campaignId), sanitizedDoc);
+  return campaignId;
 }
 
 async function logTokenUsage(userId: string | undefined, operationType: string, model: string, usageMetadata: any) {
@@ -704,11 +1395,16 @@ const campaignSchema = {
           visualData: {
             type: Type.OBJECT,
             properties: {
-              headline: { type: Type.STRING, description: "Short, punchy primary text" },
-              cinematicPrompt: { type: Type.STRING, description: "Image prompt for the background image. Should include artistic directions like off-center, negative space, lighting, mood. Do NOT include text instructions." },
-              customHtml: { type: Type.STRING, description: "A highly creative, BESPOKE HTML layout using INLINE STYLES. The canvas is 1080x1080px. CRITICAL: To prevent text overlap, you MUST use Flexbox (display: flex; flex-direction: column; gap: 20px) for layout instead of absolute positioning individual text nodes. NEVER overlap text. Use safe line-heights (1.2+). ALWAYS ensure text is readable. Examples: <div style=\"position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 60px; background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: white;\"><h1 style=\"font-size: 80px; font-weight: 900; line-height: 1.2; margin: 0;\">Title</h1><p style=\"font-size: 32px; margin: 20px 0 0 0;\">Subtitle</p></div>." }
+              eyebrow: { type: Type.STRING, description: "2-3 word uppercase letter-spaced category tag (e.g. PERSPECTIVE, CASE STUDY, STRATEGY, MISTAKE 01, LESSON, FRAMEWORK, BREAKTHROUGH)" },
+              headline: { type: Type.STRING, description: "Punchy 3-7 word editorial headline for graphic overlay" },
+              subtext: { type: Type.STRING, description: "Concise 6-12 word secondary subtext for graphic overlay" },
+              highlightWords: { type: Type.ARRAY, items: { type: Type.STRING }, description: "1-3 key words or phrase in headline to italicize and highlight with brand accent color" },
+              layoutAnchor: { type: Type.STRING, description: "Continuous layout intent: bottom_left_editorial | negative_space_right | top_left_banner | bottom_full_cinematic | centered_minimal", enum: ["bottom_left_editorial", "negative_space_right", "top_left_banner", "bottom_full_cinematic", "centered_minimal"] },
+              cinematicPrompt: { type: Type.STRING, description: "Editorial Art Director background prompt formulated using the Art Director Planning Guidelines: (1) Concrete physical Subject, (2) Brand Lighting & Mood, (3) Camera Setup (35mm lens, f/1.8 shallow depth of field), (4) Spatial Composition with organic 40-50% clean negative space, (5) Strict negative prompt: 'clean editorial composition, strictly no text, no letters, no words'." },
+              visualStrategy: { type: Type.STRING, description: "Visual tier: 'synthetic_photography' or 'brand_gradient'.", enum: ["synthetic_photography", "brand_gradient"] },
+              customHtml: { type: Type.STRING, description: "A creative fallback HTML layout using INLINE STYLES." }
             },
-            required: ["cinematicPrompt", "customHtml"]
+            required: ["headline", "subtext", "eyebrow", "cinematicPrompt", "customHtml"]
           },
           platformVersions: {
             type: Type.ARRAY,
@@ -795,18 +1491,54 @@ export async function generateCampaign(
 
 Generate a comprehensive 7-DAY MULTI-CHANNEL SOCIAL CAMPAIGN for this brand:
 Brand Name: "${dna.name}"
+Website: "${dna.website || ''}"
 Value Proposition: "${(dna as any).tagline || dna.positioning || dna.description}"
 Target Audience: "${dna.audience}"
+Tone of Voice: "${dna.tone || 'Authoritative, authentic'}"
 Industry: "${(dna as any).industry || dna.positioning}"
 Campaign Focus/Theme: "${focus || campaignTheme || 'B2B Growth & Automation'}"
 Selected Channels: ${activeChannels.join(', ')}
 
+STRATEGIC BRAND DNA & PSYCHOGRAPHICS:
+${dna.enemy ? `- The Enemy / Status Quo: ${dna.enemy}` : ''}
+${dna.earnedSecret ? `- Our Earned Secret: ${dna.earnedSecret}` : ''}
+${dna.originStory ? `- Founder Origin Story: ${dna.originStory}` : ''}
+${dna.hellState ? `- Customer 'Hell' State (Pain points before): ${dna.hellState}` : ''}
+${dna.heavenState ? `- Customer 'Heaven' State (Desired outcome after): ${dna.heavenState}` : ''}
+${dna.uniqueMechanism ? `- Unique Mechanism: ${dna.uniqueMechanism}` : ''}
+${dna.proofPoints ? `- Proof Points & Credibility: ${dna.proofPoints}` : ''}
+${dna.vocabularyAlways ? `- Vocabulary to ALWAYS Use: ${dna.vocabularyAlways}` : ''}
+${dna.vocabularyNever ? `- Vocabulary to NEVER Use: ${dna.vocabularyNever}` : ''}
+${dna.contentPillars && dna.contentPillars.length > 0 ? `- Content Pillars: ${dna.contentPillars.join(' | ')}` : ''}
+${dna.targetIcps && dna.targetIcps.length > 0 ? `- Target ICPs & Pain Points:\n${dna.targetIcps.map((icp: any) => `  * ${icp.name}: ${(icp.painPoints || []).join(', ')}`).join('\n')}` : ''}
+${dna.founderAgentSynthesized ? `
+ARTHUR (FOUNDER VOICE CLONE):
+- Persona Name: ${dna.founderAgentSynthesized.personaName || 'Founder'}
+${dna.founderAgentSynthesized.communicationStyle?.length ? `- Style: ${dna.founderAgentSynthesized.communicationStyle.join(', ')}` : ''}
+${dna.founderAgentSynthesized.decisionHeuristics?.length ? `- Decision Heuristics: ${dna.founderAgentSynthesized.decisionHeuristics.join('; ')}` : ''}
+` : ''}
+
 REQUIREMENTS:
 1. Generate dailyPosts for all 7 days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
 2. For each day, create platformVersions tailored ONLY for these Selected Channels: ${activeChannels.join(', ')}. Do NOT generate posts or platformVersions for any platform not explicitly included in Selected Channels.
-3. For each day, provide a punchy "headline" (10-15 words max) and "subtext" (15-25 words max) inside "visualData" that captures the day's key value hook.
-4. Provide a descriptive, cinematic "cinematicPrompt" inside visualData for generating a background photo.
-`;
+3. Incorporate the brand's unique mechanism, customer pain points, and vocabulary into the copy so it reads with deep brand alignment and founder authenticity.
+4. For each day, provide the 3-level editorial typographic hierarchy inside "visualData":
+   - "eyebrow": 2-3 word uppercase category tag (e.g. PERSPECTIVE, CASE STUDY, STRATEGY, MISTAKE 01, LESSON, FRAMEWORK, BREAKTHROUGH)
+   - "headline": Punchy 3-7 word editorial headline (written in editorial magazine tone)
+   - "subtext": Concise 6-12 word secondary subtext that clarifies the hook
+   - "highlightWords": 1-3 key words or phrase in headline to italicize with brand accent color
+   - "layoutAnchor": "bottom_left_editorial" | "negative_space_right" | "top_left_banner" | "bottom_full_cinematic" | "centered_minimal" explicitly harmonized with the negative space in the cinematicPrompt
+5. EDITORIAL ART DIRECTOR (CHLOE) PROTOCOL — IMAGE GENERATION PLANNING:
+   For every daily post, you MUST act as an Editorial Art Director planning the background visual scene (cinematicPrompt) to guarantee perfect negative space for typography overlay.
+
+   The 5 Art Director Planning Parameters (MUST BE SYNTHESIZED INTO EACH cinematicPrompt):
+   1. The Concrete Subject: A tangible physical object, environment, or human interaction grounding this specific post hook. NEVER generate abstract metaphors (absolutely NO glowing digital gears, NO floating holographic graphs, NO generic silhouettes, NO matrix code). Ground in physical reality (e.g. craftsman hands working with materials, espresso on raw walnut desk, founder at studio drafting table, architectural stone staircase).
+   2. The Lighting & Mood: Derived from brand identity (e.g. warm directional morning window light, moody high-contrast amber rim glow, soft overcast scandinavian daylight).
+   3. The Camera Setup: Photorealistic optical cues (e.g. 35mm prime lens, f/1.8 shallow depth of field, creamy background bokeh, subtle organic film grain).
+   4. Spatial Composition & Negative Space: Describe the scene with expansive, organic negative space (e.g. off-center subject, wide raw tabletop, architectural horizon, or soft ambient breathing room leaving 40-50% clean area) so that overlay typography sits naturally over negative space. Vary the visual scene across the 7 days (e.g. macro close-ups with blurred backgrounds, wide environmental flat-lays, high-angle desk shots, horizon landscapes). Do NOT use rigid templates.
+   5. Strict Negative Prompt: Always terminate cinematicPrompt with: "clean editorial composition, strictly no text, no letters, no words, no watermark".
+
+   Each cinematicPrompt must be a cohesive, single-sentence editorial scene description synthesizing all 5 parameters.`;
 
   try {
     const res = await generateContentProxy('gemini-3.1-pro-preview', prompt, {
@@ -834,23 +1566,35 @@ REQUIREMENTS:
     const structuredPrompts = (campaignData.dailyPosts || []).map((dp: any, idx: number) => {
       const headline = dp.visualData?.headline || dp.contentType || `${dna.name} — ${days[idx]}`;
       const subtext = dp.visualData?.subtext || (dna as any).tagline || dna.description || 'Automated B2B Growth Engine';
-      const promptText = dp.visualData?.cinematicPrompt || dp.imagePrompt || `High-end executive photographic visual for ${dna.name}, topic: ${headline}, 1:1 ratio, clean aesthetic`;
+      const eyebrow = dp.visualData?.eyebrow || (dp.contentType ? dp.contentType.toUpperCase().substring(0, 18) : 'PERSPECTIVE');
+      const highlightWords = dp.visualData?.highlightWords || [];
+      const promptText = dp.visualData?.cinematicPrompt || dp.imagePrompt || `High-end executive photographic visual plate for ${dna.name}, topic: ${headline}, 1:1 square ratio, clean aesthetic, strictly no text`;
       const brandAssetUrl = (!generateImages && brandAssets.length > 0)
         ? (typeof brandAssets[idx % brandAssets.length] === 'string' ? brandAssets[idx % brandAssets.length] : brandAssets[idx % brandAssets.length]?.url)
         : undefined;
 
       const logoPosition = weeklyLogoPositions[idx % weeklyLogoPositions.length];
+      const layoutAnchor = dp.visualData?.layoutAnchor || 'bottom_left_editorial';
       if (!dp.visualData) dp.visualData = {};
       dp.visualData.logoPosition = logoPosition;
+      dp.visualData.layoutAnchor = layoutAnchor;
+      dp.visualData.eyebrow = eyebrow;
+      dp.visualData.headline = headline;
+      dp.visualData.subtext = subtext;
+      dp.visualData.highlightWords = highlightWords;
 
       return {
         prompt: promptText,
         headline,
         subtext,
+        eyebrow,
+        highlightWords,
         brandColors,
         fontStyle,
         brandAssetUrl,
-        logoPosition
+        logoPosition,
+        layoutAnchor,
+        visualStrategy: dp.visualData?.visualStrategy || dp.visualStrategy || 'synthetic_photography'
       };
     });
 
@@ -869,6 +1613,16 @@ REQUIREMENTS:
       const iData = await imgRes.json();
       if (iData.success && Array.isArray(iData.imageUrls)) {
         generatedAiImages = iData.imageUrls;
+        if (Array.isArray(iData.visualAnalyses)) {
+          try {
+            const { cacheServerVisionAnalysis } = await import('../lib/dynamicLayoutResolver');
+            iData.imageUrls.forEach((url: string, idx: number) => {
+              if (iData.visualAnalyses[idx]) {
+                cacheServerVisionAnalysis(url, iData.visualAnalyses[idx]);
+              }
+            });
+          } catch (_) {}
+        }
       }
     } catch (e) {
       console.warn("Failed to generate AI campaign images via backend proxy", e);
@@ -886,6 +1640,16 @@ REQUIREMENTS:
       'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&auto=format&fit=crop&q=80'
     ];
 
+    const defaultAnchors = [
+      'bottom_left_editorial',
+      'negative_space_right',
+      'top_left_banner',
+      'bottom_full_cinematic',
+      'centered_minimal',
+      'editorial_split',
+      'bottom_left_editorial'
+    ];
+
     const dailyPosts = (campaignData.dailyPosts || []).map((dp: any, idx: number) => {
       const headline = dp.visualData?.headline || dp.contentType || `${dna.name} — ${days[idx]}`;
       const subtext = dp.visualData?.subtext || (dna as any).tagline || dna.description || 'Automated B2B Growth Engine';
@@ -893,13 +1657,30 @@ REQUIREMENTS:
         ? generatedAiImages[idx]
         : defaultImages[idx % defaultImages.length];
 
+      const assignedAnchor = dp.visualData?.layoutAnchor || defaultAnchors[idx % defaultAnchors.length];
       const visualDataObj = {
         ...(dp.visualData || {}),
         headline,
         subtext,
+        layoutAnchor: assignedAnchor,
+        baseImage: finalImageUrl,
+        bgImageUrl: finalImageUrl,
+        brandLogoUrl: logoUrl,
         colors: brandColors,
         fontStyle,
-        isFlattened: true
+        isFlattened: false,
+        editorState: {
+          baseBg: finalImageUrl,
+          title: headline,
+          subtitle: subtext,
+          layoutAnchor: assignedAnchor,
+          brandName: dna.name,
+          brandColor: brandColors[0] || '#E9B638',
+          logoUrl: logoUrl,
+          showLogo: true,
+          activeSticker: true,
+          badgeText: dp.contentType || 'Featured Insight'
+        }
       };
 
       const updatedPlatformVersions = (dp.platformVersions || []).map((pv: any) => ({
@@ -972,7 +1753,7 @@ export async function generateOneDayStoryImage(params: {
     let editorStateResult: any = null;
 
     if (!baseImageBase64) {
-      loggerService.addLog("image", "info", `Step 1: Planning backdrop scenery theme via Gemini Flash Creative Director...`);
+      loggerService.addLog("image", "info", `Step 1: Planning backdrop scenery theme via Gemini 4 Argon Creative Director...`);
       // 1. Generate an optimized visual prompt using a high-fidelity prompt planner (gemini-2.5-flash)
       const promptPlanner = `You are an elite creative director. Create a highly professional, detailed, and atmospheric descriptive photography prompt for an AI image generator.
 The business name is: "${params.businessName}"
@@ -984,7 +1765,7 @@ CRITICAL Rules:
 - Ensure the scene is modern, premium, and evocative.
 Return ONLY the description prompt text, with no wrappers, no conversational text, and no markdown. Just the direct prompt.`;
 
-      const promptResponse = await generateContentProxy("gemini-2.5-flash", promptPlanner);
+      const promptResponse = await generateContentProxy("gemini-4-argon", promptPlanner);
       const imagePrompt = promptResponse.text?.trim() || `Cinematic editorial photography representing ${params.businessName}, high quality, vast negative space for text overlay`;
       loggerService.addLog("image", "info", `Step 1 complete: Backdrop prompt planned beautifully:`, imagePrompt);
 

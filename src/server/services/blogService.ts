@@ -1,8 +1,7 @@
-import path from 'path';
-import fs from 'fs/promises';
 import express from 'express';
 import { db } from '../config/firebase';
 import { getBlogSettings } from '../utils/firestoreStorage';
+import { resolveImageBuffer } from '../utils/imageUtils';
 
 export async function publishBlogToWordPress(
   settings: any,
@@ -10,50 +9,30 @@ export async function publishBlogToWordPress(
   content: string,
   imageUrl: string | null
 ): Promise<{ success: boolean; url: string; postId: any }> {
-  let cleanUrl = settings.wordpress.url.trim().replace(/\/$/, '');
+  let cleanUrl = (settings?.wordpress?.url || '').trim().replace(/\/$/, '');
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
     cleanUrl = 'https://' + cleanUrl;
   }
 
-  const authHeader = `Basic ${Buffer.from(`${settings.wordpress.username.trim()}:${settings.wordpress.appPassword.trim()}`).toString('base64')}`;
+  const username = (settings?.wordpress?.username || '').trim();
+  const password = (settings?.wordpress?.appPassword || '').trim();
+  const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
   let featuredMediaId: number | null = null;
 
   if (imageUrl) {
     try {
-      let imageBuffer: Buffer | null = null;
-      let mimeType = 'image/png';
-
-      if (imageUrl.startsWith('/api/whatsapp/images/')) {
-        const imageId = imageUrl.split('/').pop()?.replace('.png', '');
-        if (imageId) {
-          const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
-          try {
-            imageBuffer = await fs.readFile(localPath);
-          } catch (e) {
-            console.warn(`[WordPress Publish] Local file read failed: ${localPath}. Trying DB...`, e);
-          }
-
-          if (!imageBuffer && db) {
-            const imgDoc = await db.collection('whatsapp_images').doc(imageId).get();
-            if (imgDoc.exists) {
-              const data = imgDoc.data()!;
-              imageBuffer = Buffer.from(data.base64Data, 'base64');
-              mimeType = data.mimeType || 'image/png';
-            }
-          }
-        }
-      }
-
-      if (imageBuffer) {
+      const resolved = await resolveImageBuffer(imageUrl);
+      if (resolved && resolved.buffer && resolved.buffer.length > 0) {
         const mediaUrl = `${cleanUrl}/wp-json/wp/v2/media`;
+        const ext = resolved.mimeType.includes('jpeg') || resolved.mimeType.includes('jpg') ? 'jpg' : 'png';
         const uploadRes = await fetch(mediaUrl, {
           method: 'POST',
           headers: {
             Authorization: authHeader,
-            'Content-Type': mimeType,
-            'Content-Disposition': 'attachment; filename="blog_image.png"'
+            'Content-Type': resolved.mimeType || 'image/png',
+            'Content-Disposition': `attachment; filename="blog_image.${ext}"`
           },
-          body: imageBuffer
+          body: new Uint8Array(resolved.buffer)
         });
 
         if (uploadRes.ok) {
@@ -62,11 +41,11 @@ export async function publishBlogToWordPress(
           console.log(`[WordPress Publish] Image uploaded successfully. WP Media ID: ${featuredMediaId}`);
         } else {
           const errText = await uploadRes.text();
-          console.warn(`[WordPress Publish] Image upload failed: ${uploadRes.status} - ${errText}`);
+          console.warn(`[WordPress Publish] Image upload failed (${uploadRes.status}): ${errText}`);
         }
       }
     } catch (imgErr) {
-      console.error('[WordPress Publish] Exception uploading image:', imgErr);
+      console.warn('[WordPress Publish] Exception uploading image:', imgErr);
     }
   }
 
@@ -104,8 +83,11 @@ export async function publishBlogToWordPress(
 }
 
 export async function publishBlogToWebhook(settings: any, payload: any): Promise<{ success: boolean; message: string }> {
-  const targetUrl = settings.webhook.url.trim();
-  const secret = settings.webhook?.secret?.trim();
+  let targetUrl = (settings?.webhook?.url || '').trim();
+  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    targetUrl = 'https://' + targetUrl;
+  }
+  const secret = settings?.webhook?.secret?.trim();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -123,7 +105,7 @@ export async function publishBlogToWebhook(settings: any, payload: any): Promise
   }
 
   console.log('[Blog Webhook Debug] Target URL:', targetUrl);
-  console.log('[Blog Webhook Debug] Secret Exact Value:', JSON.stringify(secret), '| Length:', secret?.length || 0);
+  console.log('[Blog Webhook Debug] Secret Configured:', !!secret);
 
   let response;
   try {
@@ -141,7 +123,7 @@ export async function publishBlogToWebhook(settings: any, payload: any): Promise
         body: JSON.stringify(payload)
       });
     } catch (retryErr: any) {
-      console.error('[Blog Webhook Error] Network connection reset by remote host:', retryErr);
+      console.error('[Blog Webhook Error] Network connection error:', retryErr);
       throw new Error(`Failed to connect to ${targetUrl}: ${retryErr.message} (Check target server status or SSL certificate)`);
     }
   }
@@ -185,7 +167,7 @@ export async function publishBlogToExternalSite(
     if (!settings.wordpress || !settings.wordpress.url || !settings.wordpress.username || !settings.wordpress.appPassword) {
       throw new Error('WordPress integration is incomplete. Check settings.');
     }
-    return await publishBlogToWordPress(settings, title, content, blogImageUrl);
+    return await publishBlogToWordPress(settings, title, content, absoluteImageUrl || blogImageUrl);
   } else if (settings.type === 'webhook') {
     if (!settings.webhook || !settings.webhook.url) {
       throw new Error('Webhook integration URL is missing. Check settings.');
@@ -215,39 +197,49 @@ export async function publishBlogToExternalSite(
       throw new Error('Database connection is not available.');
     }
 
-    let slug = title
+    let slug = (title || 'post')
       .toLowerCase()
       .trim()
       .replace(/[^\w\s-]/g, '')
       .replace(/[\s_-]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
+    if (!slug) {
+      slug = `post-${Math.random().toString(36).substring(2, 8)}`;
+    }
+
     const slugQuery = await db.collection('blogs').where('slug', '==', slug).get();
     if (!slugQuery.empty) {
       slug = `${slug}-${Math.random().toString(36).substring(2, 6)}`;
     }
 
+    const blogId = 'blog_' + Math.random().toString(36).substring(2, 9);
+    const nowIso = new Date().toISOString();
+
     const blogDoc = {
+      id: blogId,
       title,
       slug,
       content,
       imageUrl: absoluteImageUrl || blogImageUrl || '',
+      coverImage: absoluteImageUrl || blogImageUrl || '',
       summary: extraData.coreMessage || '',
       targetAudience: extraData.targetAudience || '',
       cta: extraData.cta || '',
       productId,
       campaignId: extraData.campaignId || null,
-      createdAt: new Date().toISOString(),
-      publishedAt: new Date().toISOString(),
-      status: 'published'
+      createdAt: nowIso,
+      publishedAt: nowIso,
+      status: 'published',
+      published: true
     };
 
-    const docRef = await db.collection('blogs').add(blogDoc);
+    await db.collection('blogs').doc(blogId).set(blogDoc, { merge: true });
 
     return {
       success: true,
       url: `/blog/${slug}`,
-      id: docRef.id,
+      id: blogId,
       message: 'Published successfully to BrandToPost website'
     };
   } else {
@@ -256,20 +248,21 @@ export async function publishBlogToExternalSite(
 }
 
 export async function isValidBlogApiKey(req: express.Request): Promise<boolean> {
-  const rawAuth = (req.headers.authorization || '').trim();
+  const rawAuth = (req.headers?.authorization || '').trim();
   const bearerKey = rawAuth.toLowerCase().startsWith('bearer ') ? rawAuth.substring(7).trim() : rawAuth;
 
   const providedKey =
-    (req.headers['x-blog-api-key'] as string) ||
-    (req.headers['x-api-key'] as string) ||
+    (req.headers?.['x-blog-api-key'] as string) ||
+    (req.headers?.['x-api-key'] as string) ||
     bearerKey ||
-    (req.query.apiKey as string) ||
-    (req.query.api_key as string) ||
-    (req.query.key as string) ||
-    (req.body && (req.body.apiKey || req.body.api_key || req.body.key));
+    (req.query?.apiKey as string) ||
+    (req.query?.api_key as string) ||
+    (req.query?.key as string) ||
+    (req.body && typeof req.body === 'object' && (req.body.apiKey || req.body.api_key || req.body.key));
 
   if (!providedKey) return false;
   const cleanKey = String(providedKey).trim();
+  if (!cleanKey) return false;
 
   if (db) {
     try {

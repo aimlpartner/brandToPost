@@ -47,6 +47,8 @@ export interface ProductDNA {
   stage: string;
   visualStyle?: string;
   visualData?: VisualData;
+  primaryColor?: string;
+  secondaryColor?: string;
   logoUrl?: string; // Kept for backwards compatibility
   logoDarkUrl?: string; // Used on light backgrounds
   logoLightUrl?: string; // Used on dark backgrounds
@@ -300,3 +302,137 @@ export interface PersonalBrandingProfile {
   recentPosts?: any[];
   updatedAt?: string;
 }
+
+export type SocialMediaPlatform = 'LinkedIn' | 'X' | 'Instagram' | 'Facebook' | 'Reddit';
+
+export interface PostCreationFormData {
+  topic: string;
+  purpose: string;
+  specialOccasion: string;
+  channel: SocialMediaPlatform;
+  useAsset: boolean;
+  assetUrls: string[];
+  isProductImageCreator: boolean;
+}
+
+export interface PostCreationPromptData {
+  prompt: string;
+  channel: SocialMediaPlatform;
+  useAsset: boolean;
+  assetUrls: string[];
+  isProductImageCreator: boolean;
+}
+
+export interface MergeProductImagesRequest {
+  asset1Url: string; // Primary asset: product or item
+  asset2Url: string; // Secondary asset: person, model, or second product
+  prompt?: string;
+  headline?: string;
+  subtext?: string;
+  brandColors?: string[];
+  logoUrl?: string;
+}
+
+export interface OneDayPostCreationResult {
+  id: string;
+  channel: SocialMediaPlatform;
+  copy: string;
+  headline?: string;
+  subtext?: string;
+  highlightWords?: string[];
+  eyebrow?: string;
+  imageUrl?: string;
+  visualPrompt?: string;
+  isMergedImage?: boolean;
+  campaignId?: string;
+  isFlattened?: boolean;
+  visualData?: any;
+  layoutAnchor?: string;
+  typographicIntent?: 'attribution_badge' | 'taxonomy_strip' | 'manifesto_body' | 'hero_headline_only' | 'metric_callout';
+  primaryText?: string;
+  secondaryText?: string;
+  kickerText?: string;
+  compositionMode?:
+    | 'in_scene_overlay'
+    | 'editorial_base_plate'
+    | 'cinema_triptych'
+    | 'typographic_manifesto'
+    | 'brand_mesh_gradient'
+    | 'metric_proof_plate'
+    | 'product_studio_plate'
+    | 'step_routine_collage';
+  frames?: string[];
+  scene?: ArgonSceneGraph;
+}
+
+export interface ArgonSceneGraph {
+  rationale?: string;
+  canvas: {
+    width: number;
+    height: number;
+    backgroundColor: string;
+    backgroundImage?: string;
+  };
+  typography: {
+    headlineFont: string;
+    bodyFont: string;
+    headlineWeight: number | string;
+    textTransform: 'uppercase' | 'none' | 'capitalize';
+    letterSpacing: string;
+    lineHeight: number;
+  };
+  palette: {
+    textPrimary: string;
+    textSecondary: string;
+    accent: string;
+    surface: string;
+    border: string;
+    isDarkMode: boolean;
+  };
+  panels: Array<{
+    id: string;
+    rect: { x: number; y: number; width: number; height: number };
+    imageUrl?: string;
+    backgroundColor?: string;
+    overlayGradient?: string;
+    stepBadge?: string;
+    border?: string;
+    borderRadius?: string;
+  }>;
+  textBlocks: Array<{
+    id: string;
+    rect?: {
+      top?: string;
+      bottom?: string;
+      left?: string;
+      right?: string;
+      x?: number;
+      y?: number;
+    };
+    maxWidth?: string;
+    align: 'left' | 'center' | 'right';
+    spans: Array<{
+      text: string;
+      color?: string;
+      isAccent?: boolean;
+      fontStyle?: 'normal' | 'italic';
+      fontFamily?: string;
+    }>;
+    subtext?: {
+      text: string;
+      color?: string;
+      fontSize?: string;
+    };
+  }>;
+  graphicAccents?: Array<{
+    type: 'bar' | 'circle' | 'line';
+    rect: { x: number; y: number; width: number; height: number };
+    fill: string;
+  }>;
+  logo?: {
+    url: string;
+    rect: { top?: string; bottom?: string; left?: string; right?: string };
+    height: string;
+  };
+}
+

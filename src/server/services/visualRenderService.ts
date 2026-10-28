@@ -6,9 +6,11 @@ import {
   safeUrlOrEmpty,
   TEMPLATE_CSP_META,
 } from '../../lib/sanitizeTemplateHtml';
+import { resolveSmartLayout, formatHighlightedHeadline } from '../../lib/dynamicLayoutResolver';
 import { runWithRenderLock } from './renderPoolService';
 import { admin, db } from '../config/firebase';
 import { logBackendTokenUsage } from '../utils/firestoreStorage';
+import { ArgonSceneGraph } from '../../types';
 
 export interface RenderVisualCardParams {
   visualType?: string;
@@ -48,8 +50,44 @@ export async function renderVisualCard(params: RenderVisualCardParams): Promise<
   let selectedBlueprintId = '';
   let htmlContent = '';
 
+  // -1. Declarative Scene Graph Architecture (Section 3 & 4)
+  if (visualData?.scene) {
+    const scene: ArgonSceneGraph = visualData.scene;
+    htmlContent = `<div style="width: 1080px; height: 1350px; position: relative; background-color: ${scene.canvas.backgroundColor}; ${scene.canvas.backgroundImage ? `background-image: ${scene.canvas.backgroundImage};` : ''} font-family: ${scene.typography.bodyFont}; overflow: hidden; isolation: isolate;">
+      ${scene.panels.map(p => `
+        <div style="position: absolute; left: ${p.rect.x}%; top: ${p.rect.y}%; width: ${p.rect.width}%; height: ${p.rect.height}%; background-color: ${p.backgroundColor || 'transparent'}; border: ${p.border || 'none'}; border-radius: ${p.borderRadius || '0px'}; overflow: hidden;">
+          ${p.imageUrl ? `<img src="${safeUrlOrEmpty(p.imageUrl)}" style="width: 100%; height: 100%; object-fit: cover;" />` : ''}
+          ${p.overlayGradient ? `<div style="position: absolute; inset: 0; background: ${p.overlayGradient};"></div>` : ''}
+          ${p.stepBadge ? `<span style="position: absolute; top: 16px; left: 16px; font-size: 32px; font-weight: 900; line-height: 1; font-family: ${scene.typography.headlineFont}; color: ${scene.palette.accent}; opacity: 0.85;">${p.stepBadge}</span>` : ''}
+        </div>
+      `).join('')}
+      ${(scene.graphicAccents || []).map(a => `
+        <div style="position: absolute; left: ${a.rect.x}%; top: ${a.rect.y}%; width: ${a.rect.width}%; height: ${a.rect.height}%; background-color: ${a.fill}; pointer-events: none;"></div>
+      `).join('')}
+      ${scene.textBlocks.map(b => {
+        const styleParts = [
+          b.rect?.top ? `top: ${b.rect.top};` : '',
+          b.rect?.bottom ? `bottom: ${b.rect.bottom};` : '',
+          b.rect?.left ? `left: ${b.rect.left};` : '',
+          b.rect?.right ? `right: ${b.rect.right};` : '',
+          b.rect?.x !== undefined ? `left: ${b.rect.x}%;` : '',
+          b.rect?.y !== undefined ? `top: ${b.rect.y}%;` : '',
+          `max-width: ${b.maxWidth || '90%'};`,
+          `text-align: ${b.align};`,
+        ].filter(Boolean).join(' ');
+        return `
+        <div style="position: absolute; z-index: 10; display: flex; flex-direction: column; ${styleParts}">
+          <h1 style="font-family: ${scene.typography.headlineFont}; font-weight: ${scene.typography.headlineWeight}; text-transform: ${scene.typography.textTransform}; letter-spacing: ${scene.typography.letterSpacing}; line-height: ${scene.typography.lineHeight}; font-size: 52px; margin: 0;">
+            ${b.spans.map(s => `<span style="color: ${s.isAccent ? scene.palette.accent : (s.color || scene.palette.textPrimary)}; font-style: ${s.fontStyle || 'normal'}; font-family: ${s.fontFamily || scene.typography.headlineFont};">${escapeHtmlText(s.text)}</span>`).join('')}
+          </h1>
+          ${b.subtext ? `<p style="margin-top: 16px; font-size: ${b.subtext.fontSize || '24px'}; color: ${b.subtext.color || scene.palette.textSecondary}; line-height: 1.45;">${escapeHtmlText(b.subtext.text)}</p>` : ''}
+        </div>`;
+      }).join('')}
+      ${scene.logo ? `<img src="${safeUrlOrEmpty(scene.logo.url)}" style="position: absolute; ${(scene.logo.rect?.top ? `top: ${scene.logo.rect.top};` : '')} ${(scene.logo.rect?.bottom ? `bottom: ${scene.logo.rect.bottom};` : '')} ${(scene.logo.rect?.left ? `left: ${scene.logo.rect.left};` : '')} ${(scene.logo.rect?.right ? `right: ${scene.logo.rect.right};` : '')} height: ${scene.logo.height}; object-fit: contain; z-index: 20;" />` : ''}
+    </div>`;
+  }
   // 0. Check if hydrated renderedHtml is passed for V3 Master Templates
-  if (visualData?.renderedHtml || visualData?.customHtml) {
+  else if (visualData?.renderedHtml || visualData?.customHtml) {
     htmlContent = visualData.renderedHtml || visualData.customHtml;
   } else if (safeVisualType === 'grounded-research' || visualData?.rawHtml) {
     const { html: templateHtml, violations } = sanitizeTemplateHtml(visualData.rawHtml || '');
@@ -79,7 +117,45 @@ export async function renderVisualCard(params: RenderVisualCardParams): Promise<
   else if (visualData?.layoutId && LAYOUT_BLUEPRINTS[visualData.layoutId]) {
     selectedBlueprintId = visualData.layoutId;
   }
-  // 3. If "custom-overlay" is chosen but no specific layoutId is passed, run auto-rotation
+  // 3. Native Section 8 Dynamic Elastic Overlay: When safeVisualType is custom-overlay and imageUrl exists
+  else if (safeVisualType === 'custom-overlay' && imageUrl) {
+    const eyebrow = visualData?.eyebrow || '';
+    const highlightWords = visualData?.highlightWords || visualData?.highlight_words || [];
+    const brandColor = visualData?.primaryColor || primaryColor;
+    const customAnchor = visualData?.layoutAnchor;
+
+    const smartLayout = resolveSmartLayout(
+      headline,
+      visualData?.visionAnalysis || visualData?.saliency,
+      {
+        fontFamily,
+        brandColor,
+        containerSize: 1080,
+        baseScale: 1.0,
+        customAnchor: customAnchor || undefined,
+      }
+    );
+
+    const logoPlacementStyles = smartLayout.logoPosition === 'top-left'
+      ? 'top: 60px; left: 60px;'
+      : smartLayout.logoPosition === 'bottom-right'
+      ? 'bottom: 60px; right: 60px;'
+      : 'top: 60px; right: 60px;';
+
+    htmlContent = `<div style="width: 1080px; height: 1350px; position: relative; background: #000; overflow: hidden; isolation: isolate;">
+  <img src="${safeUrlOrEmpty(imageUrl)}" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;" />
+  ${smartLayout.scrimRequired ? `<div style="position: absolute; inset: 0; background: ${smartLayout.scrimStyle.background}; pointer-events: none; z-index: 1;"></div>` : ''}
+  <div style="position: absolute; left: ${smartLayout.containerStyle.left}; top: ${smartLayout.containerStyle.top}; width: ${smartLayout.containerStyle.width}; display: flex; flex-direction: column; align-items: ${smartLayout.containerStyle.alignItems}; z-index: 2;">
+    ${eyebrow ? `<span style="font-family: 'Inter Tight', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${smartLayout.accentColor}; margin-bottom: 12px; display: inline-block;">${escapeHtmlText(eyebrow)}</span>` : ''}
+    <h1 style="font-family: ${smartLayout.headlineStyle.fontFamily}; font-size: ${smartLayout.headlineStyle.fontSize}; line-height: ${smartLayout.headlineStyle.lineHeight}; color: ${smartLayout.headlineStyle.color}; font-weight: ${smartLayout.headlineStyle.fontWeight}; letter-spacing: ${smartLayout.headlineStyle.letterSpacing}; text-shadow: ${smartLayout.headlineStyle.textShadow}; margin: 0; text-wrap: balance;">
+      ${formatHighlightedHeadline(headline, highlightWords, smartLayout.accentColor || '#E9B638')}
+    </h1>
+    ${visualData?.subtext ? `<p style="font-family: 'Inter Tight', sans-serif; font-size: ${smartLayout.subtextStyle.fontSize}; line-height: 1.45; color: ${smartLayout.subtextColor}; margin-top: 24px; text-shadow: ${smartLayout.subtextStyle.textShadow}; text-wrap: balance; font-weight: 400; opacity: 0.90;">${escapeHtmlText(visualData.subtext)}</p>` : ''}
+  </div>
+  ${activeLogo ? `<div style="position: absolute; ${logoPlacementStyles}; z-index: 20;"><img src="${escapeHtmlAttr(activeLogo)}" style="height: 56px; max-height: 64px; width: auto; max-width: 240px; object-fit: contain; filter: ${smartLayout.isDarkBackground ? 'drop-shadow(0 2px 8px rgba(0,0,0,0.65))' : 'drop-shadow(0 1px 4px rgba(255,255,255,0.7))'};" /></div>` : ''}
+</div>`;
+  }
+  // 4. If "custom-overlay" is chosen but no specific layoutId or imageUrl is passed, run auto-rotation
   else if (safeVisualType === 'custom-overlay') {
     const history = Array.isArray(recentLayoutHistory) ? recentLayoutHistory : [];
     const chosenBlueprint = selectLayout(history);
@@ -222,7 +298,7 @@ ${activeLogo ? `<div style="position: absolute; ${logoStyles}; z-index: 100;"><i
 ${TEMPLATE_CSP_META}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Inter+Tight:ital,wght@0,400..900;1,400..900&family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 body { margin: 0; padding: 0; }
 h1, h2, h3, h4, h5, p, div { box-sizing: border-box; }
@@ -237,7 +313,7 @@ ${htmlContent}
     return await runWithRenderLock(async (browser) => {
       const page = await browser.newPage();
       try {
-        await page.setViewport({ width: 1080, height: 1080, deviceScaleFactor: 1 });
+        await page.setViewport({ width: 1080, height: 1350, deviceScaleFactor: 1 });
         await page.setContent(targetHtml, { waitUntil: ['domcontentloaded', 'networkidle2'], timeout: 20000 }).catch(() => {});
 
         await page.evaluate(async () => {

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Crown, Building2 } from "lucide-react";
-import { ThemeToggle } from "./ThemeToggle";
 
 interface UniversalNavbarProps {
   forcedTheme?: 'dark' | 'light';
@@ -87,11 +86,6 @@ export function UniversalNavbar({ forcedTheme }: UniversalNavbarProps) {
             <Link to="/login?mode=signup" className="px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all hover:bg-[#6D28D9] bg-[#7C3AED] text-white shadow-sm whitespace-nowrap">
               Start free trial
             </Link>
-
-            {/* Utility Theme Toggle — Far Right Border Separated */}
-            <div className={`border-l pl-3 sm:pl-4 flex items-center ${isDarkNavbar ? 'border-white/15' : 'border-slate-300'}`}>
-              <ThemeToggle variant="icon" />
-            </div>
           </div>
         </div>
       </div>

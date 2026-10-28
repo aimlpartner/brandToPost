@@ -652,7 +652,7 @@ Step 2: Ignore Content Creation, Prioritize Visual Overlays:
 - Keep your direct message response extremely brief (say, 1 or 2 sentences max) to introduce or confirm the story graphic flyer (e.g., "Perfect! I have generated your customized daily story flyer with professional visual layering below. 🎨✨").
 - Your primary focus is on formatting the headline text overlays and background details beautifully.
 - If the user provided/uploaded an image, DO NOT analyze its design style, details, or color choices. Use it strictly as a background scene itself, and only select a high-impact typographic heading and subtext to layer on top of it. Do NOT include any cinematicPrompt or [IMAGE_PROMPT: ...] if an image is provided.
-- If no image was provided, you MUST specify a highly detailed photographic background image prompt inside the cinematicPrompt field or write it as [IMAGE_PROMPT: <visual prompt with NO text inside the image>] at the absolute end, so our systems can generate the perfect base scenery.
+- If no image was provided, you MUST act as an Editorial Art Director planning the background image using the 5 Planning Parameters: (1) Concrete physical subject (e.g. fresh sourdough on linen, espresso extraction — NO abstract clipart), (2) Directional lighting (warm morning light), (3) Camera optics (35mm f/1.8 lens, shallow depth of field), (4) Spatial composition reserving negative copy space (subject anchored on upper-right third, wide empty clean surface on lower-left), (5) Strict negative constraint (strictly no text, no words). Synthesize all 5 into a single cohesive sentence inside the "cinematicPrompt" field, and append it as "[IMAGE_PROMPT: <cohesive scenic prompt with NO text>]" at the absolute end.
 
 Step 3: Background Campaign Synchronization & Visual Layout overlay:
 - You MUST output a structured JSON campaign configuration block wrapped EXACTLY inside the XML tags "<CAMPAIGN_DATA>" and "</CAMPAIGN_DATA>" at the absolute bottom of your response text. This ensures our background script logs the flyer's details!
@@ -670,7 +670,7 @@ Step 3: Background Campaign Synchronization & Visual Layout overlay:
     "visualData": {
       "headline": "A short, punchy marketing headline (max 6-8 words) to render on the graphic flyer",
       "subtext": "Slogan or supporting details / discount terms to overlay",
-      "cinematicPrompt": "Detailed photographic cinematic studio shot prompt to generate background if no image is attached, else leave empty"
+      "cinematicPrompt": "Cohesive photographic editorial scene using 5 Art Director parameters (concrete physical subject, directional lighting, 35mm f/1.8 lens, subject on upper right third with negative space on lower left, strictly no text)"
     }
   }
   </CAMPAIGN_DATA>

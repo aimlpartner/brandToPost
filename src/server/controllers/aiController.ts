@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import {
   generateAiContentService,
   generateCampaignImagesService,
+  mergeProductImagesService,
   researchTrendsService,
   getDiscoveredTemplatesLibrary
 } from '../services/aiService';
@@ -65,23 +66,52 @@ export async function handleGenerateCampaignImages(req: Request, res: Response) 
   try {
     const { prompts, logoUrl, logoPosition } = req.body;
     if (!Array.isArray(prompts) || prompts.length === 0) {
+      console.warn('[handleGenerateCampaignImages] 400 Bad Request: prompts array is missing or empty');
       return res.status(400).json({ error: 'prompts array is required.' });
     }
 
+    console.log(`[handleGenerateCampaignImages] Incoming request with ${prompts.length} prompt(s). logoUrl: ${logoUrl ? 'Provided' : 'None'}, logoPosition: ${logoPosition || 'default'}`);
     const host = req.get('host') || 'localhost:3000';
     const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
     const userId = (req as any).user?.uid;
 
-    const imageUrls = await generateCampaignImagesService(
+    const result = await generateCampaignImagesService(
       prompts,
       logoUrl,
       logoPosition
     );
+    const imageUrls = Array.isArray(result) ? result : (result as any).imageUrls;
+    const visualAnalyses = (result as any).visualAnalyses || [];
 
-    res.json({ success: true, imageUrls });
+    console.log(`[handleGenerateCampaignImages] Successfully resolved ${imageUrls.length} image URL(s):`, imageUrls);
+    res.json({ success: true, imageUrls, visualAnalyses });
   } catch (error: any) {
-    console.error('Image generation error:', error);
+    console.error('[handleGenerateCampaignImages] Controller Error:', error);
     res.status(500).json({ error: error.message });
+  }
+}
+
+export async function handleMergeProductImages(req: Request, res: Response) {
+  try {
+    const { asset1Url, asset2Url, prompt, headline, subtext, brandColors, logoUrl } = req.body;
+    if (!asset1Url || !asset2Url) {
+      return res.status(400).json({ error: 'Both asset1Url and asset2Url are required for merging.' });
+    }
+
+    const imageUrl = await mergeProductImagesService({
+      asset1Url,
+      asset2Url,
+      prompt,
+      headline,
+      subtext,
+      brandColors,
+      logoUrl
+    });
+
+    res.json({ success: true, imageUrl });
+  } catch (error: any) {
+    console.error('[handleMergeProductImages] Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to merge product images' });
   }
 }
 

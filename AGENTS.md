@@ -71,10 +71,10 @@ AI assistants editing front-end files must strictly adhere to the brand design p
 
 When working with prompt engines or specialist context layers, align prompts with these agent profiles:
 
-1.  **Arthur (Voice & DNA Clone)**: Calibrated for Founder Persona. Matches the founder's heuristics, vocabulary preferences, and values so drafted copy reads naturally, not robotic.
+1.  **Arthur (Voice & DNA Clone — Gemini 3.1 Pro Preview)**: Calibrated for Founder Persona. Matches the founder's heuristics, vocabulary preferences, and values so drafted copy reads naturally, not robotic.
 2.  **Sarah (Market Researcher)**: Responsible for live web scrapes. Extracts market metrics, pain points, competitor complaints, and active trends.
 3.  **Alex (Multi-Channel Copywriter)**: Platform-native copy writer. Tailors character lengths, breaks, threads, and styling specifically for LinkedIn, X, Reddit, Facebook, or Instagram.
-4.  **Chloe (Creative Director)**: Ideates layout spacing rules, graphic concepts, and negative space formatting.
+4.  **Chloe (Creative Director — Gemini 4 Argon)**: Formulates high-impact photographic and editorial image prompts, lighting rules, negative space composition, and art direction parameters.
 5.  **Julian (Visual Publisher)**: Integrates the headless browser stack to construct HTML layouts, layer brand graphics, and snap PNG templates.
 6.  **Zack (Video Screenwriter)**: Formulates B2B video scripts, Luma/Sora/Runway prompts, sound effect cues, and direct scripts.
 7.  **Maya (Autopilot Manager)**: Orchestrates database polling, checks UTC schedulers, coordinates queues, and logs automation histories.

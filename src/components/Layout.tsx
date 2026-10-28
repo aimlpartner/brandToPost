@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useAuth } from "../contexts/AuthContext";
 import { useProducts } from "../contexts/ProductContext";
 import { GuidedTour } from "./GuidedTour";
-import { ThemeToggle } from "./ThemeToggle";
+import { useResizableSidebar } from "../hooks/useResizableSidebar";
 
 const bottomNavItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -39,6 +39,17 @@ export function Layout() {
   const { user, userProfile, loading: authLoading } = useAuth();
   const { activeProduct, isLoaded } = useProducts();
   
+  const {
+    sidebarRef,
+    width: sidebarWidth,
+    isResizing,
+    startResizing,
+    resetWidth,
+    handleKeyDown,
+    minWidth,
+    maxWidth,
+  } = useResizableSidebar();
+
   const [direction, setDirection] = useState(1);
 
   useEffect(() => {
@@ -93,11 +104,10 @@ export function Layout() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <ThemeToggle variant="icon" />
           <button
-            onClick={() => navigate("/dashboard/campaigns?create=true")}
+            onClick={() => navigate("/dashboard/post-creation")}
             className="p-2 text-gray-400 hover:text-slate-800 hover:bg-[#7C3AED]/20 rounded-lg transition-colors cursor-pointer"
-            title="Create Campaign"
+            title="Create Post"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -119,9 +129,51 @@ export function Layout() {
       </div>
 
       {/* Sidebar - Desktop */}
-      <div className="hidden md:flex relative flex-shrink-0 w-[220px] h-full z-10">
+      <aside
+        ref={sidebarRef}
+        style={{ width: `${sidebarWidth}px` }}
+        className={cn(
+          "hidden md:flex relative flex-shrink-0 h-full z-10 select-none md:select-auto",
+          !isResizing && "transition-[width] duration-150 ease-out"
+        )}
+      >
         <Sidebar onClose={() => setIsMobileMenuOpen(false)} />
-      </div>
+        
+        {/* Resize Handle */}
+        <div
+          role="separator"
+          tabIndex={0}
+          aria-label="Resize sidebar"
+          aria-orientation="vertical"
+          aria-valuenow={sidebarWidth}
+          aria-valuemin={minWidth}
+          aria-valuemax={maxWidth}
+          onMouseDown={startResizing}
+          onTouchStart={startResizing}
+          onDoubleClick={resetWidth}
+          onKeyDown={handleKeyDown}
+          title="Drag to resize (Double-click to reset)"
+          className={cn(
+            "absolute top-0 -right-1.5 bottom-0 w-3 z-30 cursor-col-resize group flex items-center justify-center select-none outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]/50",
+            isResizing && "cursor-col-resize"
+          )}
+        >
+          {/* Subtle indicator bar on hover or drag */}
+          <div
+            className={cn(
+              "w-[2px] h-full transition-colors duration-150",
+              isResizing
+                ? "bg-[#7C3AED] shadow-[0_0_6px_rgba(124,58,237,0.4)]"
+                : "bg-transparent group-hover:bg-[#7C3AED]/40"
+            )}
+          />
+        </div>
+      </aside>
+
+      {/* Global drag shield to prevent iframe/selection capture while resizing */}
+      {isResizing && (
+        <div className="fixed inset-0 z-50 cursor-col-resize select-none pointer-events-auto" />
+      )}
 
       {/* Mobile Overlay & Drawer */}
       <AnimatePresence>

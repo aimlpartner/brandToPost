@@ -7,9 +7,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { IndividualLayout } from "./components/IndividualLayout";
 import { LandingPage } from "./pages/LandingPage";
+import { NewLandingPage } from "./pages/NewLandingPage";
 import { Waitlist } from "./pages/Waitlist";
 import { Dashboard } from "./pages/Dashboard";
 import { ProductDNA } from "./pages/ProductDNA";
+import { PostCreation } from "./pages/PostCreation";
 import { Campaigns } from "./pages/Campaigns";
 import { Scripts } from "./pages/Scripts";
 import { Creatives } from "./pages/Creatives";
@@ -58,6 +60,8 @@ export default function App() {
               <Route path="" element={<LandingPage />} />
               <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
+              <Route path="/new-landing" element={<NewLandingPage />} />
+              <Route path="/new" element={<NewLandingPage />} />
               <Route path="/founder" element={<MasterFounderFeaturePage />} />
               <Route path="/master-founder-feature" element={<MasterFounderFeaturePage />} />
               <Route path="/agency" element={<MasterAgencyFeaturePage />} />
@@ -101,6 +105,7 @@ export default function App() {
                 }
               />
               <Route path="/shared/:campaignId" element={<SharedCampaign />} />
+              <Route path="/post-creation" element={<Navigate to="/dashboard/post-creation" replace />} />
               <Route element={<ProtectedRoute />}>
                 <Route
                   path="/onboarding"
@@ -133,6 +138,7 @@ export default function App() {
                 >
                   <Route index element={<Dashboard />} />
                   <Route path="dna" element={<ProductDNA />} />
+                  <Route path="post-creation" element={<PostCreation />} />
                   <Route path="creatives" element={<Creatives />} />
                   <Route path="campaigns" element={<Campaigns />} />
                   <Route path="scripts" element={<Scripts />} />

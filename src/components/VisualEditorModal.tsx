@@ -1,177 +1,105 @@
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
-import { X, Image as ImageIcon, Type, Layout, Check, RotateCcw, Upload, Move, Eye, EyeOff, Layers } from "lucide-react";
-import { Stage, Layer, Image as KonvaImage, Text, Rect, Group, Transformer } from "react-konva";
-import useImage from "use-image";
+import {
+  X,
+  Layers as LayersIcon,
+  Type,
+  Sparkles,
+  Upload,
+  Image as ImageIcon,
+  Eye,
+  EyeOff,
+  Check,
+  RotateCcw,
+  Download,
+  Box,
+  Palette,
+  Sliders,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Maximize2,
+  Trash2,
+  Plus
+} from "lucide-react";
+import { toPng } from "html-to-image";
 import { Creative } from "../types";
+import { computeTypographicScale, sampleImageLuminance, LayoutAnchor, formatHighlightedHeadline } from "../lib/dynamicLayoutResolver";
 
-const extractColors = (cssStr: string) => {
-   if (!cssStr) return [];
-   const regex = /(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}|transparent)/gi;
-   const matches = [];
-   let match;
-   while ((match = regex.exec(cssStr)) !== null) {
-      matches.push({
-         value: match[0],
-         index: match.index
-      });
-   }
-   return matches;
-};
+export type LayerId = "bg" | "photo" | "text" | "logo" | "sticker";
+export type ToolType = "layers" | "text" | "branding" | "elements" | "upload" | "images";
 
-const parseColorToHexAndOpacity = (c: string) => {
-    if (c === "transparent") return { hex: "#000000", opacity: 0 };
-    if (c.startsWith("#")) {
-       let hex = c;
-       let opacity = 1;
-       if (c.length === 9) {
-          hex = c.slice(0, 7);
-          opacity = parseInt(c.slice(7, 9), 16) / 255;
-       } else if (c.length === 5) {
-          hex = `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`;
-          opacity = parseInt(`${c[4]}${c[4]}`, 16) / 255;
-       } else if (c.length === 4) {
-          hex = `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`;
-       }
-       return { hex, opacity };
-    }
-    if (c.startsWith("rgb")) {
-       const parts = c.match(/[\d.]+/g);
-       if (parts && parts.length >= 3) {
-          const r = parseInt(parts[0]).toString(16).padStart(2, "0");
-          const g = parseInt(parts[1]).toString(16).padStart(2, "0");
-          const b = parseInt(parts[2]).toString(16).padStart(2, "0");
-          const a = parts[3] ? parseFloat(parts[3]) : 1;
-          return { hex: `#${r}${g}${b}`, opacity: a };
-       }
-    }
-    return { hex: "#000000", opacity: 1 };
-};
+export interface EditorPostState {
+  eyebrow?: string;
+  headline: string;
+  subtext: string;
+  highlightWords?: string[];
+  bgImageUrl: string;
+  photoUrl: string;
+  logoUrl: string;
+  brandName: string;
+  brandColor: string;
+  isCutoutActive: boolean;
+  activeSticker: boolean;
+  stickerText: string;
+  fontFamily: string;
+  titleSize: number;
+  subtitleSize: number;
+  titleColor: string;
+  subtitleColor: string;
+  textAlign: "left" | "center" | "right";
+  textPosition: "bottom" | "center" | "top";
+  logoPosition: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  logoScale: number;
+  scrimOpacity: number;
+  scrimHeight: number;
+  layoutAnchor?: LayoutAnchor;
+  textBehindCutout?: boolean;
+  autoClampScale?: boolean;
+}
 
-const hexAndOpacityToRgba = (hex: string, opacity: number) => {
-   const r = parseInt(hex.slice(1, 3), 16) || 0;
-   const g = parseInt(hex.slice(3, 5), 16) || 0;
-   const b = parseInt(hex.slice(5, 7), 16) || 0;
-   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-};
-
-const normalizeToHexColor = (colorStr: string | null | undefined): string => {
-  if (!colorStr) return "#ffffff";
-  const str = colorStr.trim().toLowerCase();
-  
-  const colorNames: Record<string, string> = {
-    white: "#ffffff",
-    black: "#000000",
-    red: "#ff0000",
-    green: "#00ff00",
-    blue: "#0000ff",
-    yellow: "#ffff00",
-    gray: "#808080",
-    grey: "#808080",
-    silver: "#c0c0c0",
-    maroon: "#800000",
-    olive: "#808000",
-    lime: "#00ff00",
-    aqua: "#00ffff",
-    teal: "#008080",
-    navy: "#000080",
-    fuchsia: "#ff00ff",
-    purple: "#800080",
-    orange: "#ffa500",
-    transparent: "#ffffff"
-  };
-  
-  if (colorNames[str]) return colorNames[str];
-  
-  if (str.startsWith("#")) {
-    if (str.length === 4) {
-      return `#${str[1]}${str[1]}${str[2]}${str[2]}${str[3]}${str[3]}`;
-    }
-    if (str.length === 7) {
-      return str;
-    }
-    if (str.length === 9) {
-      return str.slice(0, 7);
-    }
+const CURATED_BACKGROUNDS = [
+  {
+    id: "minimal-concrete",
+    name: "Architectural Concrete",
+    url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1200&auto=format&fit=crop"
+  },
+  {
+    id: "studio-warm",
+    name: "Warm Editorial Studio",
+    url: "https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=1200&auto=format&fit=crop"
+  },
+  {
+    id: "executive-dark",
+    name: "Executive Obsidian",
+    url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop"
+  },
+  {
+    id: "nordic-wood",
+    name: "Nordic Minimal Wood",
+    url: "https://images.unsplash.com/photo-1549931319-a545dcf3bc73?q=80&w=1200&auto=format&fit=crop"
+  },
+  {
+    id: "architecture-glass",
+    name: "Modern Glass Facade",
+    url: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop"
+  },
+  {
+    id: "ambient-dawn",
+    name: "Ambient Gradient Dawn",
+    url: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1200&auto=format&fit=crop"
   }
-  
-  if (str.startsWith("rgb")) {
-    const parts = str.match(/\d+/g);
-    if (parts && parts.length >= 3) {
-      const r = parseInt(parts[0]).toString(16).padStart(2, "0");
-      const g = parseInt(parts[1]).toString(16).padStart(2, "0");
-      const b = parseInt(parts[2]).toString(16).padStart(2, "0");
-      return `#${r}${g}${b}`;
-    }
-  }
-  
-  return "#ffffff";
-};
+];
 
-const extractPixelSize = (sizeStr: string | null | undefined, fallback: number): number => {
-  if (!sizeStr) return fallback;
-  const cleaned = sizeStr.trim().toLowerCase();
-  
-  const pxMatch = cleaned.match(/(\d+)px/);
-  if (pxMatch) return parseInt(pxMatch[1]);
-  
-  const remMatch = cleaned.match(/([\d.]+)rem/);
-  if (remMatch) return Math.round(parseFloat(remMatch[1]) * 16);
-  
-  const vwMatch = cleaned.match(/([\d.]+)vw/);
-  if (vwMatch) return Math.round(parseFloat(vwMatch[1]) * 10.8);
-  
-  const numMatch = cleaned.match(/[\d.]+/);
-  if (numMatch) return Math.round(parseFloat(numMatch[0]));
-  
-  return fallback;
-};
-
-const getHtmlTextWithLineBreaks = (el: HTMLElement | null): string => {
-  if (!el) return "";
-  try {
-    const tempEl = el.cloneNode(true) as HTMLElement;
-    tempEl.querySelectorAll("br").forEach(br => {
-      br.replaceWith("\n");
-    });
-    return (tempEl.textContent || "").trim();
-  } catch (e) {
-    return (el?.textContent || "").trim();
-  }
-};
-
-const getHtmlCssVal = (html: string | null | undefined, selector: string, prop: string): string | null => {
-  if (!html) return null;
-  try {
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = html;
-    const el = tempDiv.querySelector(selector) as HTMLElement;
-    if (el) {
-      const cssText = el.getAttribute("style") || "";
-      const rules = cssText.split(";");
-      for (const rule of rules) {
-        const parts = rule.split(":");
-        if (parts.length >= 2 && parts[0].trim().toLowerCase() === prop.toLowerCase()) {
-          return parts.slice(1).join(":").trim();
-        }
-      }
-    }
-    const root = tempDiv.firstElementChild as HTMLElement;
-    if (root) {
-      const cssText = root.getAttribute("style") || "";
-      const rules = cssText.split(";");
-      for (const rule of rules) {
-        const parts = rule.split(":");
-        if (parts.length >= 2 && parts[0].trim().toLowerCase() === prop.toLowerCase()) {
-          return parts.slice(1).join(":").trim();
-        }
-      }
-    }
-  } catch (e) {
-    console.error("Error parsing style in getHtmlCssVal", e);
-  }
-  return null;
-};
+const AVAILABLE_FONTS = [
+  { name: "Inter Tight", value: "'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif" },
+  { name: "EB Garamond", value: "'EB Garamond', Georgia, serif" },
+  { name: "Outfit", value: "'Outfit', sans-serif" },
+  { name: "Playfair Display", value: "'Playfair Display', serif" },
+  { name: "Space Grotesk", value: "'Space Grotesk', sans-serif" },
+  { name: "Roboto", value: "'Roboto', sans-serif" },
+  { name: "Georgia", value: "Georgia, serif" }
+];
 
 interface VisualEditorModalProps {
   isOpen: boolean;
@@ -206,96 +134,116 @@ export function VisualEditorModal({
 }: VisualEditorModalProps) {
   const activeLogo = getProxiedImageUrl(rawActiveLogo);
 
-  // Background
-  const initialBaseBg = visualData?.baseImage || originalImageUrl || imageUrl;
-  const [baseBg, setBaseBg] = useState<string>(visualData?.editorState?.baseBg || initialBaseBg);
+  // Derive initial values
+  const initialBaseBg = visualData?.editorState?.bgImageUrl || visualData?.editorState?.baseBg || visualData?.baseImage || originalImageUrl || imageUrl || CURATED_BACKGROUNDS[0].url;
+  const initialHeadline = visualData?.editorState?.headline || visualData?.editorState?.title || visualData?.headline || "Autonomous B2B Growth Engine.";
+  const initialSubtext = visualData?.editorState?.subtext || visualData?.editorState?.subtitle || visualData?.subtext || "Scale social distribution without headcount.";
+  const initialBrandName = visualData?.editorState?.brandName || visualData?.brandName || "BrandToPost";
+  const initialBrandColor = visualData?.editorState?.brandColor || visualData?.colors?.[0] || "#E9B638";
+  const initialEyebrow = visualData?.editorState?.eyebrow || visualData?.eyebrow || (visualData?.contentType ? visualData.contentType.toUpperCase().substring(0, 18) : "PERSPECTIVE");
+  const initialHighlightWords = visualData?.editorState?.highlightWords || visualData?.highlightWords || visualData?.highlight_words || [];
 
-  // Scrim Overlay
-  const [scrimHeight, setScrimHeight] = useState(visualData?.editorState?.scrimHeight ?? 80);
-  const [scrimOpacity, setScrimOpacity] = useState(visualData?.editorState?.scrimOpacity ?? 0.85);
-  const [scrimColor, setScrimColor] = useState(visualData?.editorState?.scrimColor ?? "#000000");
-
-  const [customOverlayBg, setCustomOverlayBg] = useState(() => {
-     if (visualData?.editorState?.customOverlayBg) return visualData.editorState.customOverlayBg;
-     if (!visualData?.customHtml) return "";
-     try {
-       const div = document.createElement("div");
-       div.innerHTML = visualData.customHtml;
-       const root = div.firstElementChild as HTMLElement;
-       return root?.style?.background || root?.style?.backgroundColor || "";
-     } catch (e) { return ""; }
+  const [post, setPost] = useState<EditorPostState>({
+    eyebrow: initialEyebrow,
+    headline: initialHeadline,
+    subtext: initialSubtext,
+    highlightWords: initialHighlightWords,
+    bgImageUrl: initialBaseBg,
+    photoUrl: visualData?.editorState?.photoUrl || "",
+    logoUrl: visualData?.editorState?.logoUrl || activeLogo || "",
+    brandName: initialBrandName,
+    brandColor: initialBrandColor,
+    isCutoutActive: visualData?.editorState?.isCutoutActive ?? false,
+    activeSticker: visualData?.editorState?.activeSticker ?? true,
+    stickerText: visualData?.editorState?.stickerText || visualData?.contentType || "CASE STUDY",
+    fontFamily: visualData?.editorState?.fontFamily || "'EB Garamond', Georgia, serif",
+    titleSize: visualData?.editorState?.titleSize || 56,
+    subtitleSize: visualData?.editorState?.subtitleSize || 24,
+    titleColor: visualData?.editorState?.titleColor || "#FFFFFF",
+    subtitleColor: visualData?.editorState?.subtitleColor || "#E2E8F0",
+    textAlign: visualData?.editorState?.textAlign || "left",
+    textPosition: visualData?.editorState?.textPosition || (
+      (visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor) === "top_left_banner" ? "top" :
+      (visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor) === "centered_minimal" ? "center" : "bottom"
+    ),
+    logoPosition: visualData?.editorState?.logoPosition || (
+      (visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor) === "top_left_banner" ? "bottom-right" : "top-right"
+    ),
+    logoScale: visualData?.editorState?.logoScale || 1,
+    scrimOpacity: visualData?.editorState?.scrimOpacity ?? 0.85,
+    scrimHeight: visualData?.editorState?.scrimHeight ?? 75,
+    layoutAnchor: visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor || "bottom_left_editorial",
+    textBehindCutout: visualData?.editorState?.textBehindCutout ?? true,
+    autoClampScale: visualData?.editorState?.autoClampScale ?? false
   });
 
-  // Typography Layer
-  const [title, setTitle] = useState(() => {
-    if (visualData?.editorState?.title) return visualData.editorState.title;
-    if (visualData?.customHtml) {
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = visualData.customHtml;
-      return (tempDiv.querySelector("h1")?.textContent || tempDiv.querySelector("h2")?.textContent || "").trim() || visualData?.headline || "";
+  const [activeTool, setActiveTool] = useState<ToolType>("layers");
+  const [selectedLayer, setSelectedLayer] = useState<LayerId | null>("text");
+  const [isApart, setIsApart] = useState<boolean>(false);
+  const [hiddenLayers, setHiddenLayers] = useState<LayerId[]>([]);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [scale, setScale] = useState<number>(0.55);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const hasInitializedRef = useRef<boolean>(false);
+
+  // Auto-Clamp Typographic Scale using Native Formula
+  const handleAutoClampScale = (targetHeadline = post.headline) => {
+    const { fontSize } = computeTypographicScale(targetHeadline, 1080);
+    setPost((p) => ({
+      ...p,
+      titleSize: fontSize,
+      subtitleSize: Math.max(18, Math.round(fontSize * 0.44))
+    }));
+  };
+
+  // Auto-Balance Contrast via background luminance sampling
+  const handleAutoBalanceContrast = async () => {
+    if (!post.bgImageUrl) return;
+    const luminance = await sampleImageLuminance(post.bgImageUrl, post.textPosition === 'top' ? 'top-left' : 'bottom-left');
+    const isDark = luminance < 125;
+    setPost((p) => ({
+      ...p,
+      titleColor: isDark ? "#FAF7F2" : "#181613",
+      subtitleColor: isDark ? "#E2E8F0" : "#4A453E"
+    }));
+  };
+
+  // Apply Native layout anchor presets
+  const handleApplyLayoutAnchor = (anchor: LayoutAnchor) => {
+    let textPosition: "bottom" | "center" | "top" = "bottom";
+    let textAlign: "left" | "center" | "right" = "left";
+    let scrimHeight = 75;
+
+    if (anchor === "top_left_banner") {
+      textPosition = "top";
+      textAlign = "left";
+      scrimHeight = 65;
+    } else if (anchor === "centered_minimal") {
+      textPosition = "center";
+      textAlign = "center";
+      scrimHeight = 55;
+    } else if (anchor === "bottom_full_cinematic") {
+      textPosition = "bottom";
+      textAlign = "left";
+      scrimHeight = 85;
+    } else {
+      textPosition = "bottom";
+      textAlign = "left";
+      scrimHeight = 75;
     }
-    return visualData?.headline || "";
-  });
-  const [subtitle, setSubtitle] = useState(() => {
-    if (visualData?.editorState?.subtitle) return visualData.editorState.subtitle;
-    if (visualData?.customHtml) {
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = visualData.customHtml;
-      return (tempDiv.querySelector("p")?.textContent || "").trim() || visualData?.subtext || "";
-    }
-    return visualData?.subtext || "";
-  });
 
-  const [titleSize, setTitleSize] = useState(() => {
-     if (visualData?.editorState?.titleSize) return visualData.editorState.titleSize;
-     const sizeStr = getHtmlCssVal(visualData?.customHtml, "h1, h2", "font-size");
-     return extractPixelSize(sizeStr, 64);
-  });
-  
-  const [subtitleSize, setSubtitleSize] = useState(() => {
-     if (visualData?.editorState?.subtitleSize) return visualData.editorState.subtitleSize;
-     const sizeStr = getHtmlCssVal(visualData?.customHtml, "p", "font-size");
-     return extractPixelSize(sizeStr, 28);
-  });
+    setPost((p) => ({
+      ...p,
+      layoutAnchor: anchor,
+      textPosition,
+      textAlign,
+      scrimHeight
+    }));
+  };
 
-  const [fontFamily, setFontFamily] = useState(() => {
-     if (visualData?.editorState?.fontFamily) return visualData.editorState.fontFamily;
-     if (visualData?.layout?.fontFamily) return visualData.layout.fontFamily;
-     if (visualData?.fonts?.primary) return visualData.fonts.primary.includes(" ") && !visualData.fonts.primary.includes("'") ? `'${visualData.fonts.primary}'` : visualData.fonts.primary;
-     return "Inter";
-  });
-  
-  const [titleColor, setTitleColor] = useState(() => {
-     if (visualData?.editorState?.titleColor) return visualData.editorState.titleColor;
-     const col = getHtmlCssVal(visualData?.customHtml, "h1, h2", "color");
-     return normalizeToHexColor(col || visualData?.layout?.titleColor || "#ffffff");
-  });
-  
-  const [subtitleColor, setSubtitleColor] = useState(() => {
-     if (visualData?.editorState?.subtitleColor) return visualData.editorState.subtitleColor;
-     const col = getHtmlCssVal(visualData?.customHtml, "p", "color");
-     return normalizeToHexColor(col || visualData?.layout?.subtitleColor || "#e5e7eb");
-  });
-  
-  const [textAlign, setTextAlign] = useState<"left" | "center" | "right">(visualData?.editorState?.textAlign || visualData?.layout?.textAlign || "left");
-  const [textWidth, setTextWidth] = useState(visualData?.editorState?.textWidth ?? 900);
-
-  const [extraTextBlocks, setExtraTextBlocks] = useState<{ id: number; current: string }[]>(() => {
-    if (visualData?.editorState?.extraTextBlocks) return visualData.editorState.extraTextBlocks;
-    return [];
-  });
-
-  const [showLogo, setShowLogo] = useState(visualData?.editorState?.showLogo ?? true);
-  const [logoScale, setLogoScale] = useState(visualData?.editorState?.logoScale ?? 1);
-
-  // Position States
-  const [textX, setTextX] = useState(visualData?.editorState?.textX ?? 80);
-  const [textY, setTextY] = useState(visualData?.editorState?.textY ?? 680);
-  const [logoX, setLogoX] = useState(visualData?.editorState?.logoX ?? 820);
-  const [logoY, setLogoY] = useState(visualData?.editorState?.logoY ?? 80);
-
-  const hasInitializedRef = useRef(false);
-
+  // Initialize state when opened
   useEffect(() => {
     if (!isOpen) {
       hasInitializedRef.current = false;
@@ -305,85 +253,60 @@ export function VisualEditorModal({
     if (hasInitializedRef.current) return;
     hasInitializedRef.current = true;
 
-    // Background Image
-    const initialBaseBg = visualData?.baseImage || originalImageUrl || imageUrl;
-    setBaseBg(visualData?.editorState?.baseBg || initialBaseBg || "");
+    const baseBg = visualData?.editorState?.bgImageUrl || visualData?.editorState?.baseBg || visualData?.baseImage || originalImageUrl || imageUrl || CURATED_BACKGROUNDS[0].url;
+    setPost({
+      headline: visualData?.editorState?.headline || visualData?.editorState?.title || visualData?.headline || "Autonomous B2B Growth Engine.",
+      subtext: visualData?.editorState?.subtext || visualData?.editorState?.subtitle || visualData?.subtext || "Scale social distribution without headcount.",
+      bgImageUrl: baseBg,
+      photoUrl: visualData?.editorState?.photoUrl || "",
+      logoUrl: visualData?.editorState?.logoUrl || activeLogo || "",
+      brandName: visualData?.editorState?.brandName || visualData?.brandName || "BrandToPost",
+      brandColor: visualData?.editorState?.brandColor || visualData?.colors?.[0] || "#E9B638",
+      isCutoutActive: visualData?.editorState?.isCutoutActive ?? false,
+      activeSticker: visualData?.editorState?.activeSticker ?? true,
+      stickerText: visualData?.editorState?.stickerText || visualData?.contentType || "CASE STUDY",
+      fontFamily: visualData?.editorState?.fontFamily || "'Inter Tight', sans-serif",
+      titleSize: visualData?.editorState?.titleSize || 56,
+      subtitleSize: visualData?.editorState?.subtitleSize || 24,
+      titleColor: visualData?.editorState?.titleColor || "#FFFFFF",
+      subtitleColor: visualData?.editorState?.subtitleColor || "#E2E8F0",
+      textAlign: visualData?.editorState?.textAlign || "left",
+      textPosition: visualData?.editorState?.textPosition || (
+        (visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor) === "top_left_banner" ? "top" :
+        (visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor) === "centered_minimal" ? "center" : "bottom"
+      ),
+      logoPosition: visualData?.editorState?.logoPosition || (
+        (visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor) === "top_left_banner" ? "bottom-right" : "top-right"
+      ),
+      logoScale: visualData?.editorState?.logoScale || 1,
+      scrimOpacity: visualData?.editorState?.scrimOpacity ?? 0.85,
+      scrimHeight: visualData?.editorState?.scrimHeight ?? 75,
+      layoutAnchor: visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor || "bottom_left_editorial",
+      textBehindCutout: visualData?.editorState?.textBehindCutout ?? true,
+      autoClampScale: visualData?.editorState?.autoClampScale ?? false
+    });
 
-    // Scrim
-    setScrimHeight(visualData?.editorState?.scrimHeight ?? 80);
-    setScrimOpacity(visualData?.editorState?.scrimOpacity ?? 0.85);
-    setScrimColor(visualData?.editorState?.scrimColor ?? "#000000");
+    setHiddenLayers([]);
+    setIsApart(false);
+    setSelectedLayer("text");
+  }, [isOpen, visualData, imageUrl, activeLogo, originalImageUrl]);
 
-    // Copy Content
-    setTitle(visualData?.editorState?.title ?? (visualData?.headline || ""));
-    setSubtitle(visualData?.editorState?.subtitle ?? (visualData?.subtext || ""));
-
-    // Sizes
-    setTitleSize(visualData?.editorState?.titleSize ?? 64);
-    setSubtitleSize(visualData?.editorState?.subtitleSize ?? 28);
-
-    // Font family
-    let fFamily = "";
-    if (visualData?.editorState?.fontFamily) {
-      fFamily = visualData.editorState.fontFamily;
-    } else if (visualData?.layout?.fontFamily) {
-      fFamily = visualData.layout.fontFamily;
-    } else if (visualData?.fonts?.primary) {
-      fFamily = visualData.fonts.primary.includes(" ") && !visualData.fonts.primary.includes("'") 
-        ? `'${visualData.fonts.primary}'` 
-        : visualData.fonts.primary;
-    } else {
-      fFamily = "Inter";
-    }
-    setFontFamily(fFamily);
-
-    // Colors & Align
-    setTitleColor(visualData?.editorState?.titleColor ?? "#ffffff");
-    setSubtitleColor(visualData?.editorState?.subtitleColor ?? "#e5e7eb");
-    setTextAlign(visualData?.editorState?.textAlign || "left");
-    setTextWidth(visualData?.editorState?.textWidth ?? 900);
-
-    // Logo & Visibility
-    setShowLogo(visualData?.editorState?.showLogo ?? true);
-    setLogoScale(visualData?.editorState?.logoScale ?? 1);
-
-    // Coordinates
-    setTextX(visualData?.editorState?.textX ?? 80);
-    setTextY(visualData?.editorState?.textY ?? 680);
-    setLogoX(visualData?.editorState?.logoX ?? 820);
-    setLogoY(visualData?.editorState?.logoY ?? 80);
-
-  }, [isOpen, visualData, imageUrl, activeLogo, originalImageUrl, visualType]);
-
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<"background" | "scrim" | "typography" | "logo">("typography");
-  const [selectedNode, setSelectedNode] = useState<"text" | "logo" | null>(null);
-  const [redrawCounter, setRedrawCounter] = useState(0);
-
-  // References
-  const stageRef = useRef<any>(null);
-  const textRef = useRef<any>(null);
-  const logoRef = useRef<any>(null);
-  const trRef = useRef<any>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.5);
-
-  const primaryColor = visualData?.visualData?.colors?.[0] || "#4F46E5";
-  const secondaryColor = visualData?.visualData?.colors?.[1] || "#111827";
-
-  // Stage resize calculations
+  // Stage scaling calculation for 1:1 1080x1080 container
   useLayoutEffect(() => {
     if (!isOpen || !containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      const fitScale = Math.min((width - 40) / 1080, (height - 40) / 1080);
+    const updateScale = () => {
+      if (!containerRef.current) return;
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      const padding = 64;
+      const availableW = Math.max(280, width - padding);
+      const availableH = Math.max(280, height - padding);
+      const fitScale = Math.min(availableW / 1080, availableH / 1080, 0.72);
       setScale(fitScale);
-    });
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
     observer.observe(containerRef.current);
-    
-    const { width, height } = containerRef.current.getBoundingClientRect();
-    setScale(Math.min((width - 40) / 1080, (height - 40) / 1080));
-    
     return () => observer.disconnect();
   }, [isOpen]);
 
@@ -393,706 +316,964 @@ export function VisualEditorModal({
     return () => document.body.classList.remove("modal-open");
   }, [isOpen]);
 
-  const fonts = useMemo(() => {
-    const list = [
-      { name: "Inter", value: "Inter" },
-      { name: "Georgia", value: "Georgia" },
-      { name: "Arial", value: "Arial" },
-      { name: "Verdana", value: "Verdana" }
-    ];
+  const toggleLayerVisibility = (id: LayerId) => {
+    setHiddenLayers((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
 
-    if (visualData?.fonts?.primary) {
-      const pFont = visualData.fonts.primary.replace(/["']/g, "");
-      if (!list.find(f => f.name === pFont)) {
-        list.push({ name: pFont, value: pFont });
-      }
-    }
-    return list;
-  }, [visualData?.fonts]);
+  // 3D coordinate calculator for "Apart Mode"
+  const getLayerStyle = (layerId: LayerId, layerIndex: number): React.CSSProperties => {
+    const isVisible = !hiddenLayers.includes(layerId);
+    const gapPx = 48;
 
-  // Load custom Google Fonts
-  useEffect(() => {
-    const fontsToLoad = new Set<string>();
-    fonts.forEach(f => {
-      if (f.name !== "Inter" && f.name !== "Georgia" && f.name !== "Arial" && f.name !== "Verdana") {
-        fontsToLoad.add(f.name);
-      }
-    });
+    return {
+      position: "absolute",
+      inset: 0,
+      borderRadius: "20px",
+      transform: `translateZ(${isApart ? layerIndex * gapPx : 0}px)`,
+      transition: "transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s ease, opacity 0.35s ease",
+      boxShadow: isApart ? "0 20px 48px rgba(0, 0, 0, 0.45)" : "none",
+      opacity: isVisible ? 1 : isApart ? 0.15 : 0,
+      pointerEvents: isVisible ? "auto" : "none"
+    };
+  };
 
-    if (fontsToLoad.size > 0) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      const families = Array.from(fontsToLoad)
-        .map(f => `family=${f.replace(/ /g, "+")}:wght@400;500;600;700;800;900`)
-        .join("&");
-      link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
-      document.head.appendChild(link);
-
-      document.fonts.ready.then(() => {
-        setRedrawCounter(prev => prev + 1);
-      });
-
-      return () => {
-        document.head.removeChild(link);
-      };
-    }
-  }, [fonts]);
-
-  // Bind transformer to node selection
-  useEffect(() => {
-    if (!trRef.current) return;
-    if (selectedNode === "text" && textRef.current) {
-      trRef.current.nodes([textRef.current]);
-    } else if (selectedNode === "logo" && logoRef.current) {
-      trRef.current.nodes([logoRef.current]);
-    } else {
-      trRef.current.nodes([]);
-    }
-    trRef.current.getLayer().batchDraw();
-  }, [selectedNode, redrawCounter]);
-
-  // Load images
-  const [bgImage] = useImage(baseBg || "", "anonymous");
-  const [logoImage] = useImage(activeLogo || "", "anonymous");
-
+  // Save handler: flattens 3D if open, renders 1080x1080 PNG, and returns
   const handleSave = async () => {
     if (!stageRef.current) return;
-    setIsGenerating(true);
-    
-    // Clear selection so the transformer handles are hidden from the final export
-    setSelectedNode(null);
-    trRef.current?.nodes([]);
-    stageRef.current.getLayer().batchDraw();
+    setIsSaving(true);
+    setSelectedLayer(null);
+
+    const wasApart = isApart;
+    if (wasApart) {
+      setIsApart(false);
+      await new Promise((r) => setTimeout(r, 450));
+    }
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((r) => setTimeout(r, 60));
 
-      const dataUrl = stageRef.current.toDataURL({ 
-         quality: 0.95,
-         pixelRatio: 2, // High resolution (2160x2160)
-         mimeType: "image/jpeg"
+      const dataUrl = await toPng(stageRef.current, {
+        pixelRatio: 1,
+        width: 1080,
+        height: 1080,
+        cacheBust: true,
+        skipAutoScale: true
       });
-      
+
       const newVisualData = {
-        ...visualData,
+        ...(visualData || {}),
+        headline: post.headline,
+        subtext: post.subtext,
+        eyebrow: post.eyebrow,
+        highlightWords: post.highlightWords,
+        baseImage: post.bgImageUrl,
+        bgImageUrl: post.bgImageUrl,
+        brandLogoUrl: post.logoUrl,
+        isFlattened: true,
         editorState: {
-           baseBg,
-           scrimHeight,
-           scrimOpacity,
-           scrimColor,
-           title,
-           subtitle,
-           titleSize,
-           subtitleSize,
-           fontFamily,
-           titleColor,
-           subtitleColor,
-           textAlign,
-           textWidth,
-           showLogo,
-           logoScale,
-           textX,
-           textY,
-           logoX,
-           logoY,
-           extraTextBlocks,
-           customOverlayBg
+          ...post
         }
       };
 
       onSave(dataUrl, originalImageUrl || imageUrl, newVisualData);
       onClose();
-    } catch (e) {
-      console.error("Save error", e);
+    } catch (err) {
+      console.error("Failed to export canvas image:", err);
     } finally {
-      setIsGenerating(false);
+      setIsSaving(false);
+      if (wasApart) setIsApart(true);
     }
   };
 
-  const handleRestore = () => {
-    if (originalImageUrl) {
-      setBaseBg(originalImageUrl);
-      setTitle("");
-      setSubtitle("");
-    }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: "bg" | "photo" | "logo") => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        if (event.target?.result) setBaseBg(event.target.result as string);
+        if (event.target?.result) {
+          const res = event.target.result as string;
+          if (target === "bg") setPost((p) => ({ ...p, bgImageUrl: res }));
+          if (target === "photo") setPost((p) => ({ ...p, photoUrl: res }));
+          if (target === "logo") setPost((p) => ({ ...p, logoUrl: res }));
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Normalize visualType for layout preview
-  let safeVisualType = visualType ? visualType.toLowerCase() : "";
-  const validTypes = ["creative-story", "data-infographic", "powerful-quote", "abstract-announcement", "custom-overlay"];
-  if (safeVisualType && !validTypes.includes(safeVisualType)) {
-    if (safeVisualType.includes("quote")) safeVisualType = "powerful-quote";
-    else if (safeVisualType.includes("data") || safeVisualType.includes("info")) safeVisualType = "data-infographic";
-    else if (safeVisualType.includes("abstract") || safeVisualType.includes("announce")) safeVisualType = "abstract-announcement";
-    else if (safeVisualType.includes("custom")) safeVisualType = "custom-overlay";
-    else safeVisualType = "";
-  }
-
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-950/80">
-      <div className="bg-white w-full max-w-7xl h-[95vh] flex flex-col rounded-[22px] shadow-[0_25px_60px_rgba(0,0,0,0.15)] border border-slate-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
+      <div className="bg-[#0C0D12] text-slate-100 w-full max-w-[1400px] h-[94vh] flex flex-col rounded-2xl shadow-[0_25px_80px_rgba(0,0,0,0.6)] border border-white/10 overflow-hidden font-sans">
         
-        {/* Header */}
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-amber-500/5">
+        {/* Top Header Bar */}
+        <header className="h-14 border-b border-white/10 px-5 flex items-center justify-between bg-[#08080C] shrink-0">
           <div className="flex items-center gap-3">
-            <Layout className="w-5 h-5 text-[#7C3AED]" />
-            <h2 className="text-xl font-bold font-display text-slate-800 tracking-tight">
-              Visual Editor (Canvas v3)
-            </h2>
-            <span className="text-xs font-sans font-semibold text-amber-700 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-md flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              🚧 Under Engineering Calibration
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E9B638]/20 text-[#E9B638] font-bold text-sm">
+              ★
             </span>
+            <div>
+              <h1 className="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+                BrandToPost Canvas Editor
+                <span className="text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
+                  1:1 Post Engine
+                </span>
+              </h1>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        <div className="flex-1 overflow-hidden flex flex-col md:flex-row relative">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="inline-flex items-center gap-2 bg-[#E9B638] hover:bg-[#D4A32D] text-slate-950 font-semibold px-4 py-2 rounded-xl text-xs transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+            >
+              {isSaving ? (
+                <>
+                  <span className="animate-spin h-3.5 w-3.5 border-2 border-slate-950 border-t-transparent rounded-full" />
+                  Exporting 1080x1080...
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Save & Apply
+                </>
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Workspace Body */}
+        <div className="flex-1 overflow-hidden flex flex-row relative">
           
-          {/* Full-Coverage Frosted Blur Backdrop Overlay Banner */}
-          <div className="absolute inset-0 z-[100] backdrop-blur-xl bg-slate-950/65 flex flex-col items-center justify-start pt-12 md:pt-16 pb-16 px-8 text-center space-y-5">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-3xl shadow-xl shadow-amber-500/10">
-              🚧
-            </div>
+          {/* 1. Left Tool Rail */}
+          <aside className="w-20 border-r border-white/10 bg-[#08080C] flex flex-col items-center py-5 shrink-0 z-20">
+            <nav className="flex flex-col gap-2.5 w-full px-2">
+              {(
+                [
+                  { id: "layers", label: "Layers", icon: LayersIcon },
+                  { id: "text", label: "Text", icon: Type },
+                  { id: "branding", label: "Branding", icon: Palette },
+                  { id: "elements", label: "Elements", icon: Box },
+                  { id: "images", label: "Images", icon: ImageIcon },
+                  { id: "upload", label: "Upload", icon: Upload }
+                ] as const
+              ).map((tool) => {
+                const IconComponent = tool.icon;
+                const isActive = activeTool === tool.id;
+                return (
+                  <button
+                    key={tool.id}
+                    onClick={() => setActiveTool(tool.id)}
+                    className={`flex flex-col items-center justify-center gap-1.5 py-2.5 px-1 rounded-xl text-[11px] font-medium transition-all cursor-pointer ${
+                      isActive
+                        ? "bg-white/15 text-white shadow-sm font-semibold"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <IconComponent className={`w-4 h-4 ${isActive ? "text-[#E9B638]" : ""}`} />
+                    <span>{tool.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
 
-            <div className="space-y-3 max-w-xl">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-sans font-semibold tracking-wider uppercase backdrop-blur-md">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                <span>🚧 Active Engineering & Construction Zone</span>
-              </div>
-
-              <h2 className="text-3xl sm:text-4xl font-light font-display text-white tracking-tight leading-tight" style={{ color: '#FFFFFF' }}>
-                Visual Canvas Editor Is Locked For <br />
-                <span className="font-normal italic text-amber-400">Headless Renderer Calibration.</span>
-              </h2>
-
-              <p className="text-sm font-light text-slate-200 leading-relaxed max-w-md mx-auto">
-                Chloe & Julian (Creative Directors) headless graphic layer engine is undergoing renderer calibration and asset lockdown. Full public release coming in Q3.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4 pt-2">
-              <button 
-                onClick={onClose}
-                className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+            {/* 3D Isometric Exploded View ("Apart Mode") Toggle */}
+            <div className="mt-auto pt-4 border-t border-white/10 w-full px-2">
+              <button
+                onClick={() => setIsApart(!isApart)}
+                className={`w-full flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl text-[11px] font-semibold transition-all cursor-pointer ${
+                  isApart
+                    ? "bg-[#E9B638] text-slate-950 shadow-lg shadow-[#E9B638]/20"
+                    : "border border-white/15 text-slate-300 hover:text-white hover:border-white/30 bg-white/5"
+                }`}
+                title="Toggle 3D Layer Explosion ('Apart Mode')"
               >
-                <span>Close Editor</span>
+                <Box className="w-4 h-4" />
+                <span>3D Layers</span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${isApart ? "bg-black/20 text-slate-950" : "text-[#E9B638]"}`}>
+                  {isApart ? "ACTIVE" : "OFF"}
+                </span>
               </button>
             </div>
-          </div>
+          </aside>
 
-          {/* Stage Area */}
-          <div ref={containerRef} className="flex-1 bg-slate-100 overflow-hidden relative flex flex-col items-center justify-center pattern-dots pattern-slate-300 pattern-bg-slate-50 pattern-opacity-30 pattern-size-4 filter blur-[8px] opacity-60 pointer-events-none select-none">
-             {isGenerating && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#7C3AED] mx-auto mb-4"></div>
-                        <p className="text-white font-medium">Exporting Canvas Layers...</p>
-                    </div>
+          {/* 2. Secondary Settings Sidebar Panel */}
+          <aside className="w-80 border-r border-white/10 bg-[#0F1017] p-5 overflow-y-auto shrink-0 z-20">
+            <div className="mb-5 flex items-center justify-between pb-3 border-b border-white/10">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                {activeTool.toUpperCase()} CONTROLS
+              </h2>
+            </div>
+
+            {/* LAYERS PANEL */}
+            {activeTool === "layers" && (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-400">
+                  Select a layer to adjust properties. Toggle visibility or view in 3D Apart Mode.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {(
+                    [
+                      { id: "sticker", label: "Layer 4: Badge / Sticker", tag: "Chip" },
+                      { id: "logo", label: "Layer 3: Brand Vector Logo", tag: "SVG/PNG" },
+                      { id: "text", label: "Layer 2: Typography Overlay", tag: "Live Text" },
+                      { id: "photo", label: "Layer 1: Product Cutout / Asset", tag: "Photo" },
+                      { id: "bg", label: "Layer 0: Background Plate", tag: "Plate" }
+                    ] as const
+                  ).map((layer) => {
+                    const isSelected = selectedLayer === layer.id;
+                    const isVisible = !hiddenLayers.includes(layer.id);
+                    return (
+                      <div
+                        key={layer.id}
+                        onClick={() => setSelectedLayer(layer.id)}
+                        className={`flex items-center justify-between rounded-xl border p-3 text-xs transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-[#E9B638] bg-[#E9B638]/10 text-white font-medium shadow-sm"
+                            : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] text-amber-400/80">{layer.tag}</span>
+                          <span className="font-medium">{layer.label}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleLayerVisibility(layer.id);
+                          }}
+                          className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
+                          title={isVisible ? "Hide layer" : "Show layer"}
+                        >
+                          {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-red-400" />}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-             )}
-             
-             {/* 1080x1080 Stage scaled via scale factor */}
-             <div 
-               style={{ 
-                 width: 1080, 
-                 height: 1080, 
-                 transform: `scale(${scale})`, 
-                 transformOrigin: "center center", 
-                 transition: "transform 0.1s ease-out",
-                 boxShadow: "0 30px 90px rgba(15, 23, 42, 0.15), 0 10px 30px rgba(15, 23, 42, 0.08)"
-               }}
-             >
-                <Stage 
-                  width={1080} 
-                  height={1080} 
-                  ref={stageRef}
-                  onMouseDown={(e) => {
-                    if (e.target === e.target.getStage()) {
-                      setSelectedNode(null);
-                    }
-                  }}
-                >
-                  <Layer>
-                    {/* Background Rect */}
-                    <Rect x={0} y={0} width={1080} height={1080} fill="#000000" />
 
-                    {/* Template Rendering Core */}
-                    {safeVisualType === "creative-story" && (
-                      <>
-                        {bgImage && (
-                          <KonvaImage image={bgImage} x={0} y={0} width={1080} height={1080} />
-                        )}
-                        <Rect x={0} y={0} width={1080} height={1080} fill="rgba(0,0,0,0.6)" />
-                      </>
-                    )}
-
-                    {safeVisualType === "abstract-announcement" && (
-                      <>
-                        <Rect x={0} y={0} width={1080} height={1080} fill={secondaryColor || "#0B0F19"} />
-                        {bgImage && (
-                          <KonvaImage image={bgImage} x={0} y={0} width={1080} height={1080} opacity={0.3} />
-                        )}
-                        {/* Rounded center overlay */}
-                        <Rect
-                          x={140}
-                          y={240}
-                          width={800}
-                          height={600}
-                          fill="rgba(255,255,255,0.08)"
-                          stroke="rgba(255,255,255,0.15)"
-                          strokeWidth={2}
-                          cornerRadius={48}
-                          listening={false}
-                        />
-                      </>
-                    )}
-
-                    {safeVisualType === "data-infographic" && (
-                      <>
-                        <Rect x={0} y={0} width={1080} height={1080} fill="#F8FAFC" />
-                        {/* Static stats cards inside canvas background */}
-                        {(() => {
-                          const items = (visualData?.stats && visualData.stats.length > 0 ? visualData.stats : [
-                            { label: "Default Metric A", value: "85%" },
-                            { label: "Default Metric B", value: "2.4x" },
-                            { label: "Default Metric C", value: "$4M+" },
-                            { label: "Default Metric D", value: "99%" }
-                          ]).slice(0, 4);
-
-                          const cardBgs = ["#EFF6FF", "#FFF7ED", "#FAF5FF", "#ECFDF5"];
-                          const textColors = ["#1E40AF", "#9A3412", "#6B21A8", "#065F46"];
-                          const coords = [
-                            { x: 80, y: 350 },
-                            { x: 560, y: 350 },
-                            { x: 80, y: 680 },
-                            { x: 560, y: 680 }
-                          ];
-
-                          return items.map((stat, i) => {
-                            const pos = coords[i];
-                            return (
-                              <Group key={i}>
-                                <Rect
-                                  x={pos.x}
-                                  y={pos.y}
-                                  width={440}
-                                  height={260}
-                                  fill={cardBgs[i % cardBgs.length]}
-                                  cornerRadius={32}
-                                  stroke="#E2E8F0"
-                                  strokeWidth={1}
-                                  listening={false}
-                                />
-                                <Text
-                                  x={pos.x + 40}
-                                  y={pos.y + 40}
-                                  text={stat.label}
-                                  fontFamily={fontFamily}
-                                  fontSize={28}
-                                  fill={textColors[i % textColors.length]}
-                                  fontStyle="bold"
-                                  opacity={0.8}
-                                  listening={false}
-                                />
-                                <Text
-                                  x={pos.x + 40}
-                                  y={pos.y + 110}
-                                  text={stat.value}
-                                  fontFamily={fontFamily}
-                                  fontSize={84}
-                                  fill={textColors[i % textColors.length]}
-                                  fontStyle="900"
-                                  listening={false}
-                                />
-                              </Group>
-                            );
-                          });
-                        })()}
-                      </>
-                    )}
-
-                    {safeVisualType === "powerful-quote" && (
-                      <>
-                        <Rect x={0} y={0} width={1080} height={1080} fill={secondaryColor || "#000000"} />
-                        <Text
-                          x={80}
-                          y={120}
-                          width={920}
-                          text={'"'}
-                          fontFamily="Georgia, serif"
-                          fontSize={160}
-                          fill="rgba(255,255,255,0.15)"
-                          align="center"
-                          listening={false}
-                        />
-                        <Rect
-                          x={490}
-                          y={580}
-                          width={100}
-                          height={8}
-                          fill={primaryColor}
-                          listening={false}
-                        />
-                      </>
-                    )}
-
-                    {safeVisualType === "custom-overlay" && (
-                      <>
-                        {bgImage && (
-                          <KonvaImage image={bgImage} x={0} y={0} width={1080} height={1080} />
-                        )}
-                      </>
-                    )}
-
-                    {/* Gradient Scrim Overlay */}
-                    <Rect
-                      x={0}
-                      y={1080 - (1080 * (scrimHeight / 100))}
-                      width={1080}
-                      height={1080 * (scrimHeight / 100)}
-                      fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-                      fillLinearGradientEndPoint={{ x: 0, y: 1080 * (scrimHeight / 100) }}
-                      fillLinearGradientColorStops={[
-                        0, "rgba(0,0,0,0)", 
-                        1, hexAndOpacityToRgba(scrimColor, scrimOpacity)
-                      ]}
-                      listening={false}
+                {/* Layer Interleaving: Text Behind Cutout */}
+                <div className="pt-3 border-t border-white/10 mt-2">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                    <div className="pr-2">
+                      <span className="text-xs font-semibold text-white block">Layer Interleaving (3D Cutout)</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">Places typography behind subject cutout (Native magazine style)</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={post.textBehindCutout}
+                      onChange={(e) => setPost({ ...post, textBehindCutout: e.target.checked })}
+                      className="h-4 w-4 rounded accent-[#E9B638] cursor-pointer"
                     />
+                  </div>
+                </div>
+              </div>
+            )}
 
-                    {/* Draggable Logo */}
-                    {showLogo && logoImage && (
-                      <KonvaImage
-                        ref={logoRef}
-                        image={logoImage}
-                        x={logoX}
-                        y={logoY}
-                        width={180 * logoScale}
-                        height={70 * logoScale}
-                        draggable
-                        onClick={() => setSelectedNode("logo")}
-                        onTap={() => setSelectedNode("logo")}
-                        onDragEnd={(e) => {
-                          setLogoX(e.target.x());
-                          setLogoY(e.target.y());
-                        }}
-                        sceneFunc={(context, shape) => {
-                          const img = (shape as any).image();
-                          if (img) {
-                            const ratio = img.width / img.height;
-                            const w = Math.min(180 * logoScale, 70 * logoScale * ratio);
-                            const h = Math.min(70 * logoScale, (180 * logoScale) / ratio);
-                            context.drawImage(img, 0, 0, w, h);
-                          }
-                        }}
+            {/* TEXT PANEL */}
+            {activeTool === "text" && (
+              <div className="space-y-5">
+                {/* Native Layout Anchor Presets */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Layout Anchor Preset (Native)</label>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Constraint-based dynamic anchor solver</p>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {[
+                      { id: 'bottom_left_editorial', label: 'Editorial Bottom' },
+                      { id: 'top_left_banner', label: 'Top-Left Banner' },
+                      { id: 'centered_minimal', label: 'Centered Minimal' },
+                      { id: 'bottom_full_cinematic', label: 'Cinematic Full' },
+                    ].map((anchor) => (
+                      <button
+                        key={anchor.id}
+                        type="button"
+                        onClick={() => handleApplyLayoutAnchor(anchor.id as LayoutAnchor)}
+                        className={`py-2 px-2.5 rounded-xl text-[11px] font-medium border text-left transition-colors cursor-pointer ${
+                          post.layoutAnchor === anchor.id
+                            ? 'bg-[#E9B638]/20 border-[#E9B638] text-white font-semibold'
+                            : 'border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        {anchor.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Category Tag / Eyebrow (Native Level 1)</label>
+                  <input
+                    type="text"
+                    value={post.eyebrow || ''}
+                    onChange={(e) => setPost({ ...post, eyebrow: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/40 p-2.5 text-xs text-white outline-none focus:border-[#E9B638] uppercase font-bold tracking-widest"
+                    placeholder="e.g. PERSPECTIVE, CASE STUDY, STRATEGY..."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Headline Copy</label>
+                  <textarea
+                    value={post.headline}
+                    onChange={(e) => {
+                      const newText = e.target.value;
+                      setPost((prev) => {
+                        const next = { ...prev, headline: newText };
+                        if (prev.autoClampScale) {
+                          const { fontSize } = computeTypographicScale(newText, 1080);
+                          next.titleSize = fontSize;
+                          next.subtitleSize = Math.max(18, Math.round(fontSize * 0.44));
+                        }
+                        return next;
+                      });
+                    }}
+                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/40 p-3 text-xs text-white outline-none focus:border-[#E9B638] transition-colors resize-y leading-relaxed"
+                    rows={4}
+                    placeholder="Enter bold hook headline..."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Subtext / Subtitle</label>
+                  <textarea
+                    value={post.subtext}
+                    onChange={(e) => setPost({ ...post, subtext: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/40 p-3 text-xs text-white outline-none focus:border-[#E9B638] transition-colors resize-y leading-relaxed"
+                    rows={2}
+                    placeholder="Enter clarifying subtext..."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Brand Font Family</label>
+                  <select
+                    value={post.fontFamily}
+                    onChange={(e) => setPost({ ...post, fontFamily: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/40 p-2.5 text-xs text-white outline-none focus:border-[#E9B638]"
+                  >
+                    {AVAILABLE_FONTS.map((f) => (
+                      <option key={f.name} value={f.value} className="bg-slate-900">
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-300">Headline Size ({post.titleSize}px)</label>
+                      <button
+                        type="button"
+                        onClick={() => handleAutoClampScale()}
+                        className="text-[10px] font-bold text-[#E9B638] hover:underline cursor-pointer"
+                        title="Auto-scale font size using Native formula"
+                      >
+                        Auto-Scale
+                      </button>
+                    </div>
+                    <input
+                      type="range"
+                      min={32}
+                      max={84}
+                      value={post.titleSize}
+                      onChange={(e) => setPost({ ...post, titleSize: Number(e.target.value) })}
+                      className="mt-2 w-full accent-[#E9B638]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300">Subtext Size ({post.subtitleSize}px)</label>
+                    <input
+                      type="range"
+                      min={16}
+                      max={40}
+                      value={post.subtitleSize}
+                      onChange={(e) => setPost({ ...post, subtitleSize: Number(e.target.value) })}
+                      className="mt-2 w-full accent-[#E9B638]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Text Alignment</label>
+                  <div className="grid grid-cols-3 gap-2 mt-1.5">
+                    {(["left", "center", "right"] as const).map((align) => (
+                      <button
+                        key={align}
+                        type="button"
+                        onClick={() => setPost({ ...post, textAlign: align })}
+                        className={`py-2 rounded-xl text-xs font-medium border capitalize flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                          post.textAlign === align
+                            ? "bg-[#E9B638]/20 border-[#E9B638] text-white"
+                            : "border-white/10 bg-white/5 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {align === "left" && <AlignLeft className="w-3.5 h-3.5" />}
+                        {align === "center" && <AlignCenter className="w-3.5 h-3.5" />}
+                        {align === "right" && <AlignRight className="w-3.5 h-3.5" />}
+                        {align}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Vertical Alignment</label>
+                  <div className="grid grid-cols-3 gap-2 mt-1.5">
+                    {(["bottom", "center", "top"] as const).map((pos) => (
+                      <button
+                        key={pos}
+                        type="button"
+                        onClick={() => setPost({ ...post, textPosition: pos })}
+                        className={`py-2 rounded-xl text-xs font-medium border capitalize transition-colors cursor-pointer ${
+                          post.textPosition === pos
+                            ? "bg-[#E9B638]/20 border-[#E9B638] text-white"
+                            : "border-white/10 bg-white/5 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {pos}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-300">Title Color</label>
+                      <button
+                        type="button"
+                        onClick={handleAutoBalanceContrast}
+                        className="text-[10px] font-bold text-[#E9B638] hover:underline cursor-pointer"
+                        title="Auto-balance contrast based on background plate luminance"
+                      >
+                        Auto-Contrast
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <input
+                        type="color"
+                        value={post.titleColor}
+                        onChange={(e) => setPost({ ...post, titleColor: e.target.value })}
+                        className="h-8 w-8 rounded-lg cursor-pointer border-0 bg-transparent"
                       />
-                    )}
-
-                    {/* Draggable wrapped typography layer */}
-                    <Group
-                      x={textX}
-                      y={textY}
-                      draggable
-                      ref={textRef}
-                      onClick={() => setSelectedNode("text")}
-                      onTap={() => setSelectedNode("text")}
-                      onDragEnd={(e) => {
-                        setTextX(e.target.x());
-                        setTextY(e.target.y());
-                      }}
-                    >
-                      {title && (
-                        <Text
-                          text={title}
-                          width={textWidth}
-                          fontSize={titleSize}
-                          fill={titleColor}
-                          fontFamily={fontFamily}
-                          fontStyle="900"
-                          align={textAlign}
-                          lineHeight={1.15}
-                        />
-                      )}
-                      {subtitle && (
-                        <Text
-                          text={subtitle}
-                          y={title ? titleSize + 24 : 0}
-                          width={textWidth}
-                          fontSize={subtitleSize}
-                          fill={subtitleColor}
-                          fontFamily={fontFamily}
-                          fontStyle="normal"
-                          align={textAlign}
-                          lineHeight={1.4}
-                        />
-                      )}
-                    </Group>
-
-                    {/* Interactive Transformer Layer */}
-                    <Transformer
-                      ref={trRef}
-                      boundBoxFunc={(oldBox, newBox) => {
-                        if (newBox.width < 50 || newBox.height < 50) return oldBox;
-                        return newBox;
-                      }}
-                    />
-                  </Layer>
-                </Stage>
-             </div>
-             
-             {/* Info overlay */}
-             <div className="absolute top-6 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-xs text-white/80 font-medium">
-                 <Move className="w-3.5 h-3.5 text-[#7C3AED]" />
-                 Click text or logo to resize. Drag elements freely.
-             </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="w-full md:w-96 bg-slate-50 border-l border-slate-100 flex flex-col overflow-hidden max-h-[40vh] md:max-h-none z-10">
-            <div className="flex border-b border-slate-200/80 overflow-x-auto bg-slate-100/40">
-              <button onClick={() => setActiveTab("typography")} className={`flex-1 py-3 px-2 text-xs font-medium border-b-2 gap-1.5 flex items-center justify-center transition-colors ${activeTab === "typography" ? "border-[#7C3AED] text-[#7C3AED] font-semibold bg-white" : "border-transparent text-slate-505 hover:text-slate-800 hover:bg-slate-100/50"}`}>
-                  <Type className="w-3.5 h-3.5" /> Text
-              </button>
-              <button onClick={() => setActiveTab("logo")} className={`flex-1 py-3 px-2 text-xs font-medium border-b-2 gap-1.5 flex items-center justify-center transition-colors ${activeTab === "logo" ? "border-[#7C3AED] text-[#7C3AED] font-semibold bg-white" : "border-transparent text-slate-505 hover:text-slate-800 hover:bg-slate-100/50"}`}>
-                  <ImageIcon className="w-3.5 h-3.5" /> Logo
-              </button>
-              <button onClick={() => setActiveTab("scrim")} className={`flex-1 py-3 px-2 text-xs font-medium border-b-2 gap-1.5 flex items-center justify-center transition-colors ${activeTab === "scrim" ? "border-[#7C3AED] text-[#7C3AED] font-semibold bg-white" : "border-transparent text-slate-505 hover:text-slate-800 hover:bg-slate-100/50"}`}>
-                  <Layers className="w-3.5 h-3.5" /> Scrim
-              </button>
-              <button onClick={() => setActiveTab("background")} className={`flex-1 py-3 px-2 text-xs font-medium border-b-2 gap-1.5 flex items-center justify-center transition-colors ${activeTab === "background" ? "border-[#7C3AED] text-[#7C3AED] font-semibold bg-white" : "border-transparent text-slate-505 hover:text-slate-800 hover:bg-slate-100/50"}`}>
-                  <ImageIcon className="w-3.5 h-3.5" /> Bg
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
-              
-              {/* Typography */}
-              {activeTab === "typography" && (
-                <div className="space-y-6 animate-in fade-in duration-200">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Content</label>
-                    <textarea 
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg p-3 text-sm text-slate-800 h-20 focus:ring-2 focus:ring-[#7C3AED]/20 focus:border-[#7C3AED] outline-none resize-none placeholder-slate-400 shadow-sm"
-                      placeholder="Headline text..."
-                    />
-                    <textarea 
-                      value={subtitle}
-                      onChange={(e) => setSubtitle(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg p-3 text-sm text-slate-800 h-20 focus:ring-2 focus:ring-[#7C3AED]/20 focus:border-[#7C3AED] outline-none resize-none placeholder-slate-400 shadow-sm"
-                      placeholder="Subtext / paragraph..."
-                    />
+                      <span className="font-mono text-xs text-slate-300">{post.titleColor}</span>
+                    </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex justify-between items-center">
-                       <span>Typography Base</span>
-                       <div className="flex bg-slate-200/60 rounded-md p-1 border border-slate-300/40">
-                          {(["left", "center", "right"] as const).map(align => (
-                            <button
-                              key={align}
-                              onClick={() => setTextAlign(align)}
-                              className={`px-2 py-1 text-[10px] uppercase tracking-wider rounded font-medium ${textAlign === align ? "bg-[#7C3AED] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
-                            >
-                              {align}
-                            </button>
-                          ))}
-                       </div>
-                    </label>
-                    <select 
-                      value={fontFamily}
-                      onChange={(e) => setFontFamily(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm text-slate-800 outline-none focus:border-[#7C3AED] shadow-sm"
-                    >
-                      {fonts.map(f => (
-                         <option key={f.value} value={f.value}>{f.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-4">
-                     <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-sm">
-                       <div className="flex justify-between items-center">
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Headline Size</div>
-                          <div className="flex items-center gap-2">
-                              <input type="number" min="10" max="250" value={titleSize} onChange={(e) => setTitleSize(parseInt(e.target.value))} className="w-16 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-sm text-slate-800 text-right font-semibold" />
-                              <span className="text-xs text-slate-400 font-semibold">px</span>
-                              <input type="color" value={titleColor} onChange={(e) => setTitleColor(e.target.value)} className="h-6 w-8 bg-transparent border-0 rounded cursor-pointer shrink-0 ml-1" />
-                          </div>
-                       </div>
-                       <input type="range" min="32" max="150" value={titleSize} onChange={(e) => setTitleSize(parseInt(e.target.value))} className="w-full accent-[#7C3AED]" />
-                     </div>
-
-                     <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-sm">
-                       <div className="flex justify-between items-center">
-                          <div className="text-xs font-bold text-slate-505 uppercase tracking-widest">Subtitle Size</div>
-                          <div className="flex items-center gap-2">
-                              <input type="number" min="10" max="150" value={subtitleSize} onChange={(e) => setSubtitleSize(parseInt(e.target.value))} className="w-16 bg-slate-50 border border-slate-205 rounded px-2 py-1 text-sm text-slate-805 text-right font-semibold" />
-                              <span className="text-xs text-slate-404 font-semibold">px</span>
-                              <input type="color" value={subtitleColor.startsWith("rgba") ? "#ffffff" : subtitleColor} onChange={(e) => setSubtitleColor(e.target.value)} className="h-6 w-8 bg-transparent border-0 rounded cursor-pointer shrink-0 ml-1" />
-                          </div>
-                       </div>
-                       <input type="range" min="16" max="64" value={subtitleSize} onChange={(e) => setSubtitleSize(parseInt(e.target.value))} className="w-full accent-[#7C3AED]" />
-                     </div>
-                     
-                     <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-sm">
-                       <div className="flex justify-between items-center">
-                          <div className="text-xs font-bold text-slate-505 uppercase tracking-widest">Constraint Width</div>
-                          <div className="flex items-center gap-2">
-                              <input type="number" min="100" max="1080" value={textWidth} onChange={(e) => setTextWidth(parseInt(e.target.value))} className="w-16 bg-slate-50 border border-slate-205 rounded px-2 py-1 text-sm text-slate-805 text-right font-semibold" />
-                              <span className="text-xs text-slate-404 font-semibold">px</span>
-                          </div>
-                       </div>
-                       <input type="range" min="300" max="1000" step="10" value={textWidth} onChange={(e) => setTextWidth(parseInt(e.target.value))} className="w-full accent-[#7C3AED]" />
-                     </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300">Subtext Color</label>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <input
+                        type="color"
+                        value={post.subtitleColor}
+                        onChange={(e) => setPost({ ...post, subtitleColor: e.target.value })}
+                        className="h-8 w-8 rounded-lg cursor-pointer border-0 bg-transparent"
+                      />
+                      <span className="font-mono text-xs text-slate-300">{post.subtitleColor}</span>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Logo */}
-              {activeTab === "logo" && (
-                <div className="space-y-6 animate-in fade-in duration-200">
-                  {!activeLogo ? (
-                     <div className="text-sm text-slate-500 bg-slate-100 p-4 rounded-lg border border-slate-200 font-sans">No logo applied. Upload logo in DNA settings.</div>
-                  ) : (
-                     <div className="space-y-6">
-                        <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-100 shadow-sm">
-                           <span className="text-sm font-semibold text-slate-700">Logo Visibility</span>
-                           <button 
-                             onClick={() => setShowLogo(!showLogo)} 
-                             className={`p-2 rounded-full ${showLogo ? "bg-[#7C3AED] text-white" : "bg-slate-200 text-slate-500"} transition-colors`}
-                           >
-                              {showLogo ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                           </button>
+            {/* BRANDING PANEL */}
+            {activeTool === "branding" && (
+              <div className="space-y-5">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Brand Name</label>
+                  <input
+                    type="text"
+                    value={post.brandName}
+                    onChange={(e) => setPost({ ...post, brandName: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/40 p-2.5 text-xs text-white outline-none focus:border-[#E9B638]"
+                    placeholder="Enter brand name..."
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Brand Accent Color</label>
+                  <div className="flex items-center gap-3 mt-1.5 p-2 rounded-xl bg-black/40 border border-white/10">
+                    <input
+                      type="color"
+                      value={post.brandColor}
+                      onChange={(e) => setPost({ ...post, brandColor: e.target.value })}
+                      className="h-9 w-9 rounded-lg cursor-pointer border-0 bg-transparent"
+                    />
+                    <span className="font-mono text-xs text-slate-200">{post.brandColor}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Logo Anchor Position</label>
+                  <div className="grid grid-cols-2 gap-2 mt-1.5">
+                    {(["top-left", "top-right", "bottom-left", "bottom-right"] as const).map((pos) => (
+                      <button
+                        key={pos}
+                        type="button"
+                        onClick={() => setPost({ ...post, logoPosition: pos })}
+                        className={`py-2 rounded-xl text-xs font-medium border capitalize transition-colors cursor-pointer ${
+                          post.logoPosition === pos
+                            ? "bg-[#E9B638]/20 border-[#E9B638] text-white"
+                            : "border-white/10 bg-white/5 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {pos.replace("-", " ")}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Logo Scale ({post.logoScale.toFixed(1)}x)</label>
+                  <input
+                    type="range"
+                    min={0.6}
+                    max={2.0}
+                    step={0.1}
+                    value={post.logoScale}
+                    onChange={(e) => setPost({ ...post, logoScale: parseFloat(e.target.value) })}
+                    className="mt-2 w-full accent-[#E9B638]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Upload Vector / PNG Logo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, "logo")}
+                    className="mt-1.5 w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ELEMENTS PANEL */}
+            {activeTool === "elements" && (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                  <div>
+                    <h3 className="text-xs font-semibold text-white">Sticker / Badge Layer</h3>
+                    <p className="text-[11px] text-slate-400">Floating topical badge in upper corner</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={post.activeSticker}
+                    onChange={(e) => setPost({ ...post, activeSticker: e.target.checked })}
+                    className="h-4 w-4 rounded accent-[#E9B638] cursor-pointer"
+                  />
+                </div>
+
+                {post.activeSticker && (
+                  <>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300">Badge Text</label>
+                      <input
+                        type="text"
+                        value={post.stickerText}
+                        onChange={(e) => setPost({ ...post, stickerText: e.target.value })}
+                        className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/40 p-2.5 text-xs text-white outline-none focus:border-[#E9B638]"
+                        placeholder="e.g. CASE STUDY, DAY 1, FOUNDER TIP"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300">Scrim Gradient Depth</label>
+                      <div className="space-y-3 mt-2">
+                        <div>
+                          <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                            <span>Height</span>
+                            <span>{post.scrimHeight}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={30}
+                            max={100}
+                            value={post.scrimHeight}
+                            onChange={(e) => setPost({ ...post, scrimHeight: Number(e.target.value) })}
+                            className="w-full accent-[#E9B638]"
+                          />
                         </div>
-                        
-                        <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-sm">
-                          <div className="flex justify-between items-center">
-                             <div className="text-xs font-bold text-slate-505 uppercase tracking-widest">Logo Scale</div>
-                             <div className="flex items-center gap-2">
-                                 <input type="number" min="0.1" max="5" step="0.1" value={logoScale} onChange={(e) => setLogoScale(parseFloat(e.target.value))} className="w-16 bg-slate-50 border border-slate-202 rounded px-2 py-1 text-sm text-slate-805 text-right font-semibold" />
-                                 <span className="text-xs text-slate-404 font-semibold">x</span>
-                             </div>
+                        <div>
+                          <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                            <span>Opacity</span>
+                            <span>{Math.round(post.scrimOpacity * 100)}%</span>
                           </div>
-                          <input type="range" min="0.2" max="3" step="0.1" value={logoScale} onChange={(e) => setLogoScale(parseFloat(e.target.value))} className="w-full accent-[#7C3AED]" />
+                          <input
+                            type="range"
+                            min={0.2}
+                            max={1}
+                            step={0.05}
+                            value={post.scrimOpacity}
+                            onChange={(e) => setPost({ ...post, scrimOpacity: parseFloat(e.target.value) })}
+                            className="w-full accent-[#E9B638]"
+                          />
                         </div>
-                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Scrim Overlay */}
-              {activeTab === "scrim" && (
-                <div className="space-y-6 animate-in fade-in duration-200">
-                  <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-sm">
-                    <div className="flex justify-between items-center">
-                       <div className="text-xs font-bold text-slate-505 uppercase tracking-widest">Base Color</div>
-                       <input type="color" value={scrimColor} onChange={(e) => setScrimColor(e.target.value)} className="h-6 w-8 bg-transparent border-0 rounded cursor-pointer shrink-0" />
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-sm">
-                    <div className="flex justify-between items-center">
-                       <div className="text-xs font-bold text-slate-505 uppercase tracking-widest">Darkness (Opacity)</div>
-                       <div className="flex items-center gap-2">
-                           <input type="number" min="0" max="100" value={Math.round(scrimOpacity * 100)} onChange={(e) => setScrimOpacity(parseInt(e.target.value) / 100)} className="w-16 bg-slate-50 border border-slate-205 rounded px-2 py-1 text-sm text-slate-805 text-right font-semibold" />
-                           <span className="text-xs text-slate-404 font-semibold">%</span>
-                       </div>
-                    </div>
-                    <input type="range" min="0" max="1" step="0.05" value={scrimOpacity} onChange={(e) => setScrimOpacity(parseFloat(e.target.value))} className="w-full accent-[#7C3AED]" />
-                  </div>
-
-                  <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-sm">
-                    <div className="flex justify-between items-center">
-                       <div className="text-xs font-bold text-slate-505 uppercase tracking-widest">Scrim Height</div>
-                       <div className="flex items-center gap-2">
-                           <input type="number" min="0" max="100" value={Math.round(scrimHeight)} onChange={(e) => setScrimHeight(parseInt(e.target.value))} className="w-16 bg-slate-50 border border-slate-205 rounded px-2 py-1 text-sm text-slate-805 text-right font-semibold" />
-                           <span className="text-xs text-slate-404 font-semibold">%</span>
-                       </div>
-                    </div>
-                    <input type="range" min="10" max="100" step="5" value={scrimHeight} onChange={(e) => setScrimHeight(parseInt(e.target.value))} className="w-full accent-[#7C3AED]" />
-                  </div>
-                </div>
-              )}
-
-              {/* Background */}
-              {activeTab === "background" && (
-                <div className="space-y-6 animate-in fade-in duration-200">
-                  <label className="flex items-center justify-center gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-sm font-semibold py-3 px-4 rounded-xl cursor-pointer transition-colors shadow-lg shadow-[#7C3AED]/15 hover:shadow-[#7C3AED]/30">
-                     <Upload className="w-4 h-4" />
-                     Upload New Image
-                     <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-                  </label>
-
-                  {creatives.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="text-xs font-bold text-slate-505 uppercase tracking-widest mb-2">From Campaign</div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {creatives.map((c, i) => (
-                          <button 
-                            key={i} 
-                            onClick={() => setBaseBg(c.url)}
-                            className={`relative aspect-square rounded-xl overflow-hidden border-2 ${baseBg === c.url ? "border-[#7C3AED] shadow-md shadow-[#7C3AED]/15" : "border-slate-100 hover:border-[#7C3AED]/30"}`}
-                          >
-                            <img referrerPolicy="no-referrer" src={c.url || undefined} className="w-full h-full object-cover" alt="Creative" />
-                          </button>
-                        ))}
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
-
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-100 bg-white flex justify-between items-center z-20 sticky bottom-0">
-           <button 
-             onClick={handleRestore}
-             disabled={!originalImageUrl}
-             className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors disabled:opacity-40 font-semibold"
-           >
-             <RotateCcw className="w-4 h-4" /> Discard Changes
-           </button>
-           
-           <div className="flex items-center gap-3 relative">
-              <button onClick={onClose} className="px-4 py-2.5 text-sm font-semibold text-slate-505 hover:text-slate-800 transition-colors">
-                Cancel
-              </button>
-              <button 
-                onClick={handleSave}
-                disabled={isGenerating}
-                className="flex items-center gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-6 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-[#7C3AED]/15 hover:shadow-[#7C3AED]/30 disabled:opacity-50 disabled:pointer-events-none"
-              >
-                {isGenerating ? (
-                    <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> Exporting...</>
-                ) : (
-                    <><Check className="w-4 h-4" /> Save Export</>
+                  </>
                 )}
-              </button>
-           </div>
-        </div>
+              </div>
+            )}
 
+            {/* IMAGES PANEL */}
+            {activeTool === "images" && (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-400">
+                  Select a clean editorial background plate with zero AI text artifacts:
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {CURATED_BACKGROUNDS.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => setPost({ ...post, bgImageUrl: item.url })}
+                      className={`group relative aspect-square rounded-xl overflow-hidden border cursor-pointer transition-all ${
+                        post.bgImageUrl === item.url
+                          ? "border-[#E9B638] ring-2 ring-[#E9B638]/30 shadow-md"
+                          : "border-white/10 hover:border-white/30"
+                      }`}
+                    >
+                      <img src={item.url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2">
+                        <span className="text-[10px] font-semibold text-white truncate">{item.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* UPLOAD PANEL */}
+            {activeTool === "upload" && (
+              <div className="space-y-5">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Upload Clean Background Plate</label>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Replaces Layer 0 background canvas</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, "bg")}
+                    className="mt-2 w-full text-xs text-slate-400 file:mr-3 file:py-2.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#E9B638] file:text-slate-950 hover:file:bg-[#D4A32D] cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">Upload Subject Photo / Cutout (Layer 1)</label>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Transparent PNG product asset or photo</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, "photo")}
+                    className="mt-2 w-full text-xs text-slate-400 file:mr-3 file:py-2.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+
+          </aside>
+
+          {/* 3. Main Stage & Virtual 1:1 Canvas */}
+          <main
+            ref={containerRef}
+            onClick={() => setSelectedLayer(null)}
+            className="flex-1 bg-[#07080C] overflow-hidden relative flex items-center justify-center p-8 select-none"
+          >
+            {/* 3D Perspective Canvas Stage */}
+            <div
+              className="relative flex items-center justify-center"
+              style={{ perspective: "1200px", perspectiveOrigin: "50% 50%" }}
+            >
+              {/* Card Frame: Exactly 1080x1080 (1:1 Aspect Ratio) scaled cleanly */}
+              <div
+                ref={stageRef}
+                data-darkreader-ignore="true"
+                data-visual-artboard="true"
+                style={{
+                  width: 1080,
+                  height: 1080,
+                  transform: `${isApart ? "rotateX(22deg) rotateY(-20deg) rotateZ(4deg)" : "none"} scale(${scale})`,
+                  transformOrigin: "center center",
+                  transformStyle: "preserve-3d",
+                  transition: "transform 0.7s cubic-bezier(0.22, 1, 0.36, 1)",
+                  isolation: "isolate",
+                  colorScheme: "light"
+                }}
+                className="darkreader-ignore relative rounded-2xl overflow-visible bg-black shadow-[0_30px_90px_rgba(0,0,0,0.7)]"
+              >
+                
+                {/* Layer 0: Background Plate (AI / Gradient / Clean Photo) */}
+                <div
+                  style={getLayerStyle("bg", 0)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedLayer("bg");
+                  }}
+                  className="overflow-hidden border border-white/5 cursor-pointer"
+                >
+                  {post.bgImageUrl ? (
+                    <img
+                      src={post.bgImageUrl}
+                      alt="Background Plate"
+                      className="h-full w-full object-cover"
+                      crossOrigin="anonymous"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-950 to-black" />
+                  )}
+
+                  {/* Adaptive Directional Scrim */}
+                  <div
+                    className="absolute inset-0 pointer-events-none transition-opacity"
+                    style={{
+                      height: `${post.scrimHeight}%`,
+                      top: post.textPosition === 'top' ? 0 : `${100 - post.scrimHeight}%`,
+                      background: post.textPosition === 'top'
+                        ? `linear-gradient(to bottom, rgba(8, 8, 12, ${post.scrimOpacity}) 0%, rgba(8, 8, 12, ${post.scrimOpacity * 0.6}) 55%, transparent 100%)`
+                        : `linear-gradient(to top, rgba(8, 8, 12, ${post.scrimOpacity}) 0%, rgba(8, 8, 12, ${post.scrimOpacity * 0.6}) 55%, transparent 100%)`
+                    }}
+                  />
+
+                  {selectedLayer === "bg" && <SelectionHandles />}
+                </div>
+
+                {/* Layer 1 & 2: Interleaved Typography and Photo Cutout */}
+                {(() => {
+                  const typographyLayer = (layerIndex: number) => (
+                    <div
+                      key="layer-text"
+                      style={getLayerStyle("text", layerIndex)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedLayer("text");
+                      }}
+                      className={`flex flex-col p-16 z-20 cursor-pointer ${
+                        post.textPosition === "top"
+                          ? "justify-start"
+                          : post.textPosition === "center"
+                          ? "justify-center"
+                          : "justify-end"
+                      }`}
+                    >
+                      <div
+                        style={{ textAlign: post.textAlign }}
+                        className="max-w-[92%]"
+                      >
+                        {/* Level 1: Category Tag / Eyebrow */}
+                        {post.eyebrow && (
+                          <span
+                            className="block font-bold uppercase tracking-[0.14em] text-[20px] mb-3 select-none"
+                            style={{
+                              fontFamily: "'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif",
+                              color: post.brandColor || '#E9B638',
+                              textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+                            }}
+                          >
+                            {post.eyebrow}
+                          </span>
+                        )}
+
+                        {/* Editable Headline */}
+                        <h1
+                          contentEditable
+                          suppressContentEditableWarning
+                          onBlur={(e) => {
+                            const newText = e.currentTarget.innerText;
+                            setPost((prev) => {
+                              const next = { ...prev, headline: newText };
+                              if (prev.autoClampScale) {
+                                const { fontSize } = computeTypographicScale(newText, 1080);
+                                next.titleSize = fontSize;
+                                next.subtitleSize = Math.max(18, Math.round(fontSize * 0.44));
+                              }
+                              return next;
+                            });
+                          }}
+                          className="inline-block font-bold leading-[1.12] outline-none tracking-tight transition-all"
+                          style={{
+                            fontFamily: post.fontFamily,
+                            fontSize: `${post.titleSize}px`,
+                            color: post.titleColor,
+                            textShadow: post.titleColor.toLowerCase().includes('faf') || post.titleColor.toLowerCase().includes('fff')
+                              ? "0 2px 14px rgba(12, 20, 34, 0.75), 0 1px 6px rgba(0,0,0,0.6)"
+                              : "0 1px 4px rgba(250, 247, 242, 0.6), 0 2px 8px rgba(0,0,0,0.12)",
+                            boxDecorationBreak: "clone",
+                            WebkitBoxDecorationBreak: "clone"
+                          }}
+                        >
+                          {post.headline}
+                        </h1>
+
+                        {/* Editable Subtext */}
+                        {post.subtext && (
+                          <p
+                            contentEditable
+                            suppressContentEditableWarning
+                            onBlur={(e) => setPost({ ...post, subtext: e.currentTarget.innerText })}
+                            className="mt-5 font-normal leading-relaxed outline-none transition-all"
+                            style={{
+                              fontFamily: post.fontFamily,
+                              fontSize: `${post.subtitleSize}px`,
+                              color: post.subtitleColor,
+                              textShadow: "0 1px 8px rgba(0,0,0,0.7)"
+                            }}
+                          >
+                            {post.subtext}
+                          </p>
+                        )}
+                      </div>
+
+                      {selectedLayer === "text" && <SelectionHandles />}
+                    </div>
+                  );
+
+                  const photoCutoutLayer = (layerIndex: number) => {
+                    if (!post.photoUrl) return null;
+                    return (
+                      <div
+                        key="layer-photo"
+                        style={getLayerStyle("photo", layerIndex)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedLayer("photo");
+                        }}
+                        className="overflow-hidden pointer-events-auto cursor-pointer"
+                      >
+                        <img
+                          src={post.photoUrl}
+                          alt="Subject Asset"
+                          className="h-full w-full object-contain p-12 transition-transform duration-500"
+                          crossOrigin="anonymous"
+                        />
+                        {selectedLayer === "photo" && <SelectionHandles />}
+                      </div>
+                    );
+                  };
+
+                  return post.textBehindCutout ? (
+                    <>
+                      {typographyLayer(1)}
+                      {photoCutoutLayer(2)}
+                    </>
+                  ) : (
+                    <>
+                      {photoCutoutLayer(1)}
+                      {typographyLayer(2)}
+                    </>
+                  );
+                })()}
+
+                {/* Layer 3: Vector Brand Logo */}
+                <div
+                  style={getLayerStyle("logo", 3)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedLayer("logo");
+                  }}
+                  className={`flex p-12 z-30 cursor-pointer ${
+                    post.logoPosition === "top-left"
+                      ? "items-start justify-start"
+                      : post.logoPosition === "bottom-left"
+                      ? "items-end justify-start"
+                      : post.logoPosition === "bottom-right"
+                      ? "items-end justify-end"
+                      : "items-start justify-end"
+                  }`}
+                >
+                  <div className="relative">
+                    {post.logoUrl ? (
+                      <img
+                        src={post.logoUrl}
+                        alt="Brand Logo"
+                        className="h-10 max-h-12 w-auto max-w-[180px] object-contain drop-shadow-[0_3px_12px_rgba(0,0,0,0.7)]"
+                        style={{ transform: `scale(${post.logoScale})` }}
+                        crossOrigin="anonymous"
+                      />
+                    ) : (
+                      <span className="text-xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]" style={{ color: post.brandColor }}>
+                        ★
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedLayer === "logo" && <SelectionHandles />}
+                </div>
+
+                {/* Layer 4: Floating Sticker / Topical Badge */}
+                {post.activeSticker && (
+                  <div
+                    style={getLayerStyle("sticker", 4)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedLayer("sticker");
+                    }}
+                    className="p-12 z-40 flex items-start justify-start cursor-pointer"
+                  >
+                    <div
+                      className="px-4 py-1.5 rounded-full text-xs font-black tracking-wider uppercase text-slate-950 shadow-xl transition-transform"
+                      style={{
+                        backgroundColor: post.brandColor,
+                        transform: "rotate(-3deg)"
+                      }}
+                    >
+                      {post.stickerText}
+                    </div>
+
+                    {selectedLayer === "sticker" && <SelectionHandles />}
+                  </div>
+                )}
+
+              </div>
+            </div>
+
+            {/* Bottom Floating Info Pill */}
+            <div className="absolute bottom-6 flex items-center gap-2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-xs text-slate-300">
+              <span className="h-2 w-2 rounded-full bg-[#E9B638] animate-pulse" />
+              <span>Click any element to edit inline. Toggle <b>3D Layers</b> for exploded perspective view.</span>
+            </div>
+          </main>
+
+        </div>
       </div>
     </div>,
     document.body
   );
 }
+
+// Figma/Native Style Selection Anchor Bounding Box
+const SelectionHandles: React.FC = () => {
+  const corners = ["tl", "tr", "bl", "br"] as const;
+
+  return (
+    <span
+      className="pointer-events-none absolute inset-[-6px] z-50 rounded-2xl"
+      style={{ border: "2px solid #E9B638" }}
+    >
+      {corners.map((corner) => (
+        <span
+          key={corner}
+          className="absolute h-3 w-3 rounded-sm bg-white shadow-sm"
+          style={{
+            border: "2px solid #E9B638",
+            top: corner[0] === "t" ? -6 : undefined,
+            bottom: corner[0] === "b" ? -6 : undefined,
+            left: corner[1] === "l" ? -6 : undefined,
+            right: corner[1] === "r" ? -6 : undefined
+          }}
+        />
+      ))}
+    </span>
+  );
+};
+
+export default VisualEditorModal;

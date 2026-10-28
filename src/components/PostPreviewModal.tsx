@@ -4,6 +4,7 @@ import { X, Heart, MessageCircle, Share2, Repeat2, MoreHorizontal, ThumbsUp, Sen
 import { VisualEditorModal } from './VisualEditorModal';
 import { VisualEngine } from './VisualEngine';
 import { ProductDNA } from '../types';
+import { resolveSmartLayout, analyzeImageVision, VisionAnalysis, LayoutAnchor, formatHighlightedHeadline } from '../lib/dynamicLayoutResolver';
 import { cn } from '../lib/utils';
 
 interface PostPreviewModalProps {
@@ -97,9 +98,31 @@ function TemplatePreviewFrame({ htmlContent, originalUrl, onEdit }: { htmlConten
   );
 }
 
+const getProxiedImageUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/') || url.startsWith('http://localhost') || url.startsWith('https://localhost')) {
+    return url;
+  }
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+};
+
 export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualData, dna, productName, productLogo, productTagline, onClose, inline, onImageGenerated, onUpdateVisual, isLoadingVisual, isFlattened }: PostPreviewModalProps) {
   const [isVisualEditorOpen, setIsVisualEditorOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [sampledAvgLuminance, setSampledAvgLuminance] = useState<number>(45);
+  const [previewVisionAnalysis, setPreviewVisionAnalysis] = useState<VisionAnalysis | null>(null);
+  const [selectedAnchor, setSelectedAnchor] = useState<LayoutAnchor | null>(null);
+
+  useEffect(() => {
+    const bgUrl = visualData?.editorState?.bgImageUrl || visualData?.editorState?.baseBg || visualData?.baseImage || imageUrl;
+    if (bgUrl) {
+      const hint = visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor || visualData?.visualPrompt;
+      analyzeImageVision(bgUrl, hint).then((analysis) => {
+        setPreviewVisionAnalysis(analysis);
+        setSampledAvgLuminance(analysis.averageLuminance);
+      });
+    }
+  }, [imageUrl, visualData?.editorState?.bgImageUrl, visualData?.editorState?.baseBg, visualData?.baseImage, visualData?.editorState?.layoutAnchor, visualData?.layoutAnchor, visualData?.visualPrompt]);
 
   useEffect(() => {
     if (!inline) {
@@ -145,16 +168,21 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
         </div>
       );
     }
-    // 1. FIRST Priority: If an AI-generated or uploaded image exists, display it!
-    if (currentImageUrl) {
+    // 1. If an already flattened image exists, display it directly
+    if (currentImageUrl && isAlreadyFlattened) {
       return (
-        <div className="w-full relative group">
-          <img src={currentImageUrl} alt="Post" className="w-full h-auto max-h-[500px] object-contain mx-auto" />
+        <div 
+          data-darkreader-ignore="true"
+          data-visual-artboard="true"
+          className="darkreader-ignore w-full relative group aspect-square overflow-hidden bg-slate-900"
+          style={{ isolation: 'isolate', colorScheme: 'light' }}
+        >
+          <img src={currentImageUrl} alt="Post" className="w-full h-full object-cover mx-auto" />
           {(visualType || originalUrl) && (
             <button 
               type="button"
               onClick={(e) => { e.stopPropagation(); setIsVisualEditorOpen(true); }}
-              className="absolute top-3 right-3 bg-black/70 hover:bg-black/90 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-xl z-20"
+              className="absolute top-3 right-3 bg-black/80 hover:bg-black text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-xl z-20 cursor-pointer"
             >
                <Edit className="w-3.5 h-3.5" /> Edit Visual
             </button>
@@ -163,7 +191,133 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
       );
     }
 
-    // 2. Second Priority: V3 Master Template Engine fallback — render hydrated template if no image URL exists
+    // 2. Layered Post Preview: When background image + headline/subtext exist
+    const previewHeadline = visualData?.editorState?.headline || visualData?.editorState?.title || visualData?.headline;
+    const previewSubtext = visualData?.editorState?.subtext || visualData?.editorState?.subtitle || visualData?.subtext;
+    const bgUrl = visualData?.editorState?.bgImageUrl || visualData?.editorState?.baseBg || visualData?.baseImage || currentImageUrl;
+    const photoUrl = visualData?.editorState?.photoUrl;
+    const previewEyebrow = visualData?.editorState?.eyebrow || visualData?.eyebrow;
+    const badgeText = visualData?.editorState?.stickerText || visualData?.contentType;
+    const brandColor = visualData?.editorState?.brandColor || visualData?.colors?.[0] || dna?.visualData?.colors?.[0] || dna?.primaryColor || "#7C3AED";
+    const brandName = visualData?.editorState?.brandName || productName;
+    const rawLogo = visualData?.editorState?.logoUrl || dna?.logoDarkUrl || dna?.logoUrl || productLogo;
+    const logoUrl = getProxiedImageUrl(rawLogo);
+    const resolvedFont = visualData?.editorState?.fontFamily 
+      || visualData?.fontFamily 
+      || (dna as any)?.fontFamily 
+      || dna?.visualData?.fonts?.primary 
+      || "'EB Garamond', Georgia, serif";
+    const highlightWords = visualData?.highlightWords 
+      || visualData?.highlight_words 
+      || visualData?.editorState?.highlightWords 
+      || [];
+
+    if (bgUrl && (previewHeadline || previewSubtext)) {
+      const activeAnchor = selectedAnchor || ((visualData?.editorState?.layoutAnchor || visualData?.layoutAnchor) as LayoutAnchor) || undefined;
+      // Resolve Native dynamic layout and auto-clamping typography
+      const smartLayout = resolveSmartLayout(
+        previewHeadline || '',
+        previewVisionAnalysis || {
+          subjectBox: { xMin: 0.44, yMin: 0.16, xMax: 0.88, yMax: 0.64 },
+          averageLuminance: sampledAvgLuminance
+        },
+        {
+          fontFamily: resolvedFont,
+          brandColor: brandColor,
+          customAnchor: activeAnchor,
+          containerSize: 520, // Scaled for preview modal viewport
+          baseScale: 1.0,
+        }
+      );
+
+      return (
+        <div 
+          data-darkreader-ignore="true"
+          data-visual-artboard="true"
+          className="darkreader-ignore w-full relative group aspect-square overflow-hidden bg-slate-950"
+          style={{ isolation: 'isolate', colorScheme: 'light' }}
+        >
+            {/* Layer 0: Clean Background Plate */}
+            <img src={bgUrl} alt="Post Background" className="absolute inset-0 w-full h-full object-cover" />
+            
+            {/* Layer 1: Adaptive Directional Scrim */}
+            {smartLayout.scrimRequired && (
+              <div style={smartLayout.scrimStyle} />
+            )}
+
+            {/* Layer 2: Continuous Elastic Typography Overlay (Section 8 Native Spec) */}
+            <div style={smartLayout.containerStyle}>
+              {previewEyebrow && (
+                <span style={smartLayout.eyebrowStyle} className="select-none">
+                  {previewEyebrow}
+                </span>
+              )}
+              {previewHeadline && (
+                <h1
+                  style={smartLayout.headlineStyle}
+                  className="line-clamp-3 select-none"
+                  dangerouslySetInnerHTML={{
+                    __html: formatHighlightedHeadline(
+                      previewHeadline,
+                      highlightWords,
+                      smartLayout.accentColor || brandColor || '#7C3AED'
+                    ),
+                  }}
+                />
+              )}
+              {previewSubtext && (
+                <p
+                  style={smartLayout.subtextStyle}
+                  className="line-clamp-2 select-none"
+                >
+                  {previewSubtext}
+                </p>
+              )}
+            </div>
+
+            {/* Layer 3: Subject Cutout Interleaving (Text Behind Cutout if cutout exists) */}
+            {photoUrl && (
+              <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center p-8">
+                <img src={photoUrl} alt="Subject Cutout" className="h-full w-full object-contain" />
+              </div>
+            )}
+
+            {/* Layer 4: Clean Vector Brand Logo (No box, no text) */}
+            {logoUrl && (
+              <div 
+                style={smartLayout.logoStyle}
+                className="z-20 pointer-events-none select-none"
+              >
+                <img 
+                  src={logoUrl} 
+                  alt="" 
+                  className={cn(
+                    "h-7 max-h-8 w-auto max-w-[130px] object-contain",
+                    smartLayout.isDarkBackground
+                      ? "drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]"
+                      : "drop-shadow-[0_1px_4px_rgba(255,255,255,0.7)]"
+                  )}
+                  crossOrigin="anonymous" 
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Edit Visual Button */}
+            <button 
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setIsVisualEditorOpen(true); }}
+              className="absolute top-3 right-3 bg-black/80 hover:bg-black text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-xl z-30 cursor-pointer"
+            >
+               <Edit className="w-3.5 h-3.5" /> Edit Visual
+            </button>
+          </div>
+      );
+    }
+
+    // 3. Fallback: V3 Master Template Engine
     if (visualData?.renderedHtml || visualData?.customHtml) {
       const htmlContent = visualData.renderedHtml || visualData.customHtml;
       return (
@@ -175,25 +329,16 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
       );
     }
 
-    return null;
-
-    // Only use VisualEngine for draft/unsaved posts during campaign creation flow
-    if (visualType && visualType !== 'none') {
+    // 4. Default Image fallback
+    if (currentImageUrl) {
       return (
-        <div className="w-full relative group">
-          <VisualEngine
-            visualType={visualType}
-            visualData={visualData}
-            imageUrl={visualData?.baseImage || currentImageUrl}
-            dna={dna || null}
-            fallbackText={productName}
-            activeLogo={productLogo}
-          />
-          {(visualType === 'custom-overlay' || originalUrl) && (
+        <div className="w-full relative group aspect-square overflow-hidden bg-slate-900">
+          <img src={currentImageUrl} alt="Post" className="w-full h-full object-cover mx-auto" />
+          {(visualType || originalUrl) && (
             <button 
               type="button"
               onClick={(e) => { e.stopPropagation(); setIsVisualEditorOpen(true); }}
-              className="absolute top-3 right-3 bg-black/70 hover:bg-black/90 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-xl z-20"
+              className="absolute top-3 right-3 bg-black/80 hover:bg-black text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-xl z-20 cursor-pointer"
             >
                <Edit className="w-3.5 h-3.5" /> Edit Visual
             </button>
@@ -202,20 +347,7 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
       );
     }
 
-    return (
-      <div className="w-full relative group">
-        <img src={currentImageUrl || undefined} alt="Post" className="w-full h-auto max-h-[500px] object-contain mx-auto" />
-        {(visualType === 'custom-overlay' || originalUrl) && (
-          <button 
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setIsVisualEditorOpen(true); }}
-            className="absolute top-3 right-3 bg-black/70 hover:bg-black/90 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-xl z-20"
-          >
-             <Edit className="w-3.5 h-3.5" /> Edit Visual
-          </button>
-        )}
-      </div>
-    );
+    return null;
   };
 
  const parseText = (text: string) => {
@@ -407,7 +539,7 @@ export function PostPreviewModal({ platform, copy, imageUrl, visualType, visualD
        </div>
        
        {hasVisual ? (
-         <div className="w-full bg-black flex items-center justify-center">
+         <div className="w-full overflow-hidden bg-slate-950">
            {renderVisual()}
          </div>
        ) : (

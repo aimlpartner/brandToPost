@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700&family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -140,7 +140,24 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
   font-weight: 600;
-  color: inherit;
+}
+
+[data-nav-theme="light"] h1,
+[data-nav-theme="light"] h2,
+[data-nav-theme="light"] h3,
+[data-nav-theme="light"] h4 {
+  color: #0f172a;
+}
+
+[data-nav-theme="light"] em {
+  color: #7C3AED;
+}
+
+[data-nav-theme="dark"] h1,
+[data-nav-theme="dark"] h2,
+[data-nav-theme="dark"] h3,
+[data-nav-theme="dark"] h4 {
+  color: #ffffff;
 }
 
 /* Inter Tight Typography Scale */
@@ -491,3 +508,34 @@ html.dark [class*="hover:bg-gray-50"]:hover h4,
 html.dark [class*="hover:bg-gray-50"]:hover span:not([class*="bg-"]) {
   color: #FAF9F6 !important;
 }
+
+/* ==========================================================================
+   Artboard & Visual Graphic Export Isolation
+   Ensures post previews are 100% immune to app theme (dark/light mode),
+   browser color schemes, or hover cascading styles.
+   ========================================================================== */
+[data-darkreader-ignore],
+.darkreader-ignore,
+[data-visual-artboard] {
+  color-scheme: light !important;
+  isolation: isolate !important;
+}
+
+/* Ensure post visual containers and text NEVER inherit app-theme background or text colors */
+[data-visual-artboard] h1,
+[data-visual-artboard] p,
+.darkreader-ignore h1,
+.darkreader-ignore p {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  transition: none !important;
+}
+
+html.dark [data-visual-artboard] h1,
+html.dark [data-visual-artboard] p,
+html [data-visual-artboard] h1,
+html [data-visual-artboard] p {
+  background-color: transparent !important;
+}
+

@@ -182,7 +182,6 @@ export function Campaigns() {
   const [published, setPublished] = useState<Record<string, boolean>>({});
   const [queuing, setQueuing] = useState<Record<string, boolean>>({});
   const [queued, setQueued] = useState<Record<string, boolean>>({});
-  const [isOverviewExpanded, setIsOverviewExpanded] = useState(false);
   const [isRegeneratingBlogImage, setIsRegeneratingBlogImage] = useState(false);
 
   const handleRegenerateBlogImage = async () => {
@@ -357,7 +356,6 @@ export function Campaigns() {
     setCurrentPage(1);
   }, [activeProduct?.id, searchQuery, selectedTagFilter, sortOrder, campaignTypeFilter]);
 
-  const [newTagInput, setNewTagInput] = useState("");
   const [openDayIdx, setOpenDayIdx] = useState<number | null>(0);
   const [platformFilter, setPlatformFilter] = useState<string | null>(null);
   const [generatedVisuals, setGeneratedVisuals] = useState<
@@ -700,6 +698,69 @@ export function Campaigns() {
         (pv?.imageId ? campaignImages[pv.imageId] : undefined) ||
         (dp?.imageUrl) ||
         (dp?.imageId ? campaignImages[dp.imageId] : undefined);
+
+      const isCardFlattened = !!(
+        (pv as any)?.isFlattened ||
+        (dp as any)?.isFlattened ||
+        visualData?.isFlattened ||
+        generatedVisuals[publishKey]
+      );
+
+      // If already a flattened composite (e.g., from Visual Editor), download directly
+      if (existingUrl && isCardFlattened) {
+        await handleDownloadImageBlob(existingUrl, filename);
+        return;
+      }
+
+      // If we have a background plate + headline/subtext, composite it via /api/render-visual
+      if (existingUrl && (visualData?.headline || (pv as any)?.headline || (dp as any)?.headline)) {
+        try {
+          const token = auth.currentUser ? await auth.currentUser.getIdToken() : "";
+          const headlineText = visualData?.headline || (pv as any)?.headline || (dp as any)?.headline || "";
+          const subtextText = visualData?.subtext || (pv as any)?.subtext || (dp as any)?.subtext || "";
+          const eyebrowText = visualData?.eyebrow || (pv as any)?.eyebrow || (dp as any)?.eyebrow || "";
+          const highlightWords = visualData?.highlightWords || visualData?.highlight_words || (pv as any)?.highlightWords || [];
+          const brandColor = visualData?.colors?.[0] || activeProduct?.visualData?.colors?.[0] || activeProduct?.primaryColor || "#7C3AED";
+          const fontFamily = visualData?.fontFamily || (activeProduct as any)?.fontFamily || activeProduct?.visualData?.fonts?.primary || "'EB Garamond', Georgia, serif";
+          const layoutAnchor = visualData?.layoutAnchor || (pv as any)?.layoutAnchor || (dp as any)?.layoutAnchor;
+          const badgeText = visualData?.badge_text || visualData?.contentType || activeProduct?.contentPillars?.[0] || "";
+
+          const res = await fetch("/api/render-visual", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              visualType: "custom-overlay",
+              visualData: {
+                ...visualData,
+                headline: headlineText,
+                subtext: subtextText,
+                eyebrow: eyebrowText,
+                highlightWords,
+                primaryColor: brandColor,
+                fontFamily,
+                layoutAnchor,
+                badge_text: badgeText,
+              },
+              imageUrl: existingUrl,
+              dna: activeProduct,
+              activeLogo: activeProduct?.logoDarkUrl || activeProduct?.logoUrl,
+              fallbackText: activeProduct?.name || "",
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.url) {
+              await handleDownloadImageBlob(data.url, filename);
+              return;
+            }
+          }
+        } catch (compErr) {
+          console.warn("Compositing download via /api/render-visual failed, falling back to background:", compErr);
+        }
+      }
 
       if (existingUrl) {
         await handleDownloadImageBlob(existingUrl, filename);
@@ -1771,7 +1832,6 @@ export function Campaigns() {
 
     const currentTags = campaign.tags || [];
     if (currentTags.includes(cleanTag)) {
-      setNewTagInput("");
       return;
     }
 
@@ -1786,7 +1846,6 @@ export function Campaigns() {
       if (selectedCampaign?.id === campaignId) {
         setSelectedCampaign(updatedCampaign);
       }
-      setNewTagInput("");
     } catch (error) {
       handleFirestoreError(
         error,
@@ -1850,7 +1909,7 @@ export function Campaigns() {
       }
       navigate("/dashboard/campaigns", { replace: true });
     }
-  }, [location.search, activeProduct, showModal]);
+  }, [location.search, activeProduct, showModal, navigate]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -1900,6 +1959,7 @@ export function Campaigns() {
             </button>
           </div>
         </div>
+
 
         {/* View Switcher for Weekly Campaigns vs 1-Day Posts vs Blogs */}
         <div className="flex bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 shadow-sm shrink-0">
@@ -2137,32 +2197,36 @@ export function Campaigns() {
         {selectedCampaign ? (
           <div className="space-y-4 sm:space-y-8">
             <div className="border-b border-slate-150 pb-4 sm:pb-6 px-4 sm:px-0 pt-4 sm:pt-0">
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <button
-                  onClick={() => setSelectedCampaign(null)}
-                  className="lg:hidden mr-2 p-1.5 hover:bg-slate-50 border border-slate-150 rounded-lg text-slate-500"
-                >
-                  <ArrowRight className="h-5 w-5 rotate-180" />
-                </button>
-                <span className="inline-flex items-center rounded-lg bg-[#7C3AED]/8 border border-[#7C3AED]/20 px-2.5 py-1 text-xs font-bold text-[#7C3AED]">
-                  {selectedCampaign.pillar}
-                </span>
-                <span className="inline-flex items-center rounded-lg bg-slate-50 border border-slate-200/50 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                  {selectedCampaign.contentFormat}
-                </span>
-                {selectedCampaign.isBlog && (
-                  <span className="inline-flex items-center rounded-lg bg-emerald-50 border border-emerald-250 px-2.5 py-1 text-xs font-bold text-emerald-700 shadow-sm">
-                    Blog & Newsletter
-                  </span>
-                )}
-                <div className="flex-1 hidden sm:block" />
-                <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 justify-end">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3 flex-wrap min-w-0">
+                  <button
+                    onClick={() => setSelectedCampaign(null)}
+                    className="lg:hidden mr-1 p-1.5 hover:bg-slate-50 border border-slate-150 rounded-lg text-slate-500 shrink-0"
+                  >
+                    <ArrowRight className="h-5 w-5 rotate-180" />
+                  </button>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 font-display">
+                    {selectedCampaign.theme}
+                  </h2>
+                  {selectedCampaign.isAutomated && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-violet-600 text-white shadow-[0_0_12px_rgba(124,58,237,0.5)] animate-pulse shrink-0">
+                      🤖 AI Agent Automated
+                    </span>
+                  )}
+                  {selectedCampaign.isBlog && (
+                    <span className="inline-flex items-center rounded-lg bg-emerald-50 border border-emerald-250 px-2.5 py-1 text-xs font-bold text-emerald-700 shadow-sm shrink-0">
+                      Blog & Newsletter
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 pt-0.5">
                   <button
                     onClick={() => setIsShareModalOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                    title="Share campaign"
                   >
                     <Share2 className="h-4 w-4" />
-                    Share
                   </button>
                   <button
                     onClick={async () => {
@@ -2176,300 +2240,26 @@ export function Campaigns() {
                         `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_campaign.pdf`,
                       );
                     }}
-                    className="glass-button-primary rounded-xl px-6 py-2.5 text-sm font-semibold inline-flex items-center justify-center"
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-violet-600 hover:bg-violet-700 text-white transition-colors shadow-2xs cursor-pointer"
+                    title="Download PDF"
                   >
                     <Download className="h-4 w-4" />
-                    <span className="hidden sm:inline">Download PDF</span>
-                    <span className="sm:hidden">PDF</span>
                   </button>
                 </div>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <h2 className="text-3xl font-bold text-slate-800 font-display">
-                  {selectedCampaign.theme}
-                </h2>
-                {selectedCampaign.isAutomated && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-violet-600 text-white shadow-[0_0_12px_rgba(124,58,237,0.5)] animate-pulse">
-                    🤖 AI Agent Automated
-                  </span>
-                )}
-              </div>
-              <p className="mt-4 text-lg text-slate-700 font-medium leading-relaxed font-light">
+
+              <p className="mt-3 text-lg text-slate-700 font-medium leading-relaxed font-light">
                 {selectedCampaign.coreMessage}
               </p>
             </div>
 
-            {/* Accordion Toggle Banner for Campaign Strategy & Setup */}
-            <div 
-              onClick={() => setIsOverviewExpanded(!isOverviewExpanded)}
-              className="bg-white border border-slate-200 hover:border-slate-350 sm:rounded-xl p-4 sm:p-5 shadow-sm mb-6 cursor-pointer transition-all duration-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 group"
-            >
-              <div className="flex items-start gap-3.5">
-                <div className="p-2 sm:p-2.5 rounded-xl bg-[#7C3AED]/10 text-[#7C3AED] shrink-0 mt-0.5 group-hover:scale-105 transition-transform duration-200">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-800 text-sm sm:text-base flex flex-wrap items-center gap-2">
-                    Campaign Strategy & Insights
-                    <span className="inline-flex items-center rounded-full bg-slate-105 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                      Target, Hook, CTA & Focus
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-1 max-w-xl font-light">
-                    {selectedCampaign.targetAudience ? `Audience: ${selectedCampaign.targetAudience}` : "Click to view high-level project DNA, hook, and campaign guidelines."}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between sm:justify-end gap-3 border-t border-slate-100 pt-3 sm:pt-0 sm:border-0 shrink-0">
-                <span className="text-xs font-semibold text-[#7C3AED] bg-[#7C3AED]/10 px-2.5 py-1 rounded-full group-hover:bg-[#7C3AED]/20 transition-all duration-200">
-                  {isOverviewExpanded ? "Hide Details" : "Show Details"}
-                </span>
-                <ChevronDown className={cn("h-5 w-5 text-slate-400 transition-transform duration-300 group-hover:text-slate-600", isOverviewExpanded && "rotate-180")} />
-              </div>
-            </div>
-
-            {isOverviewExpanded && (
-              <div className="animate-in fade-in slide-in-from-top-2 duration-300 ease-out">
-                {selectedCampaign.researchSummary && (
-                  <div className="bg-white border-y sm:border border-blue-200/85 sm:rounded-xl p-4 sm:p-5 shadow-sm mb-6">
-                    <div className="flex items-start gap-4">
-                      <div className="shrink-0 hidden sm:block mt-1">
-                        <img
-                          src="/B2P AVATAR.png"
-                          alt="Tror"
-                          className="w-10 h-10 rounded-full border border-blue-250 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-semibold text-[#2583EB] mb-1.5 flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 text-[#2583EB]" />
-                          Tror's Research Insights
-                        </h4>
-                        <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap font-light">
-                          {selectedCampaign.researchSummary}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Highly aligned two-column layout grid resolving any weird sizing/overflow issues */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                  {/* Left Column (2 Grid Columns wide) - Houses Target, Hook, CTAs, Repurposing */}
-                  <div className="lg:col-span-2 flex flex-col gap-6">
-                    <div className="glass-card bg-white p-6 rounded-xl border border-slate-200 flex flex-col gap-6 shadow-sm">
-                      <div className="flex gap-3.5">
-                        <Target className="h-5 w-5 text-[#7C3AED] shrink-0 mt-0.5" />
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-800">
-                            Target Audience
-                          </h4>
-                          <p className="text-sm text-slate-600 mt-1 leading-relaxed font-light">
-                            {selectedCampaign.targetAudience}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-3.5">
-                        <Zap className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-800">Hook</h4>
-                          <p className="text-sm text-slate-600 mt-1 italic leading-relaxed font-light">
-                            "{selectedCampaign.hook}"
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3.5">
-                        <MessageSquare className="h-5 w-5 text-violet-500 shrink-0 mt-0.5" />
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-800">
-                            Call to Action
-                          </h4>
-                          <p className="text-sm text-slate-600 mt-1 leading-relaxed font-light">
-                            {selectedCampaign.cta}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3.5 pt-4 border-t border-slate-105 mt-2">
-                        <RefreshCw className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
-                            Repurposing Notes
-                          </span>
-                          <p className="text-sm text-slate-600 leading-relaxed font-light">
-                            {selectedCampaign.repurposingNotes}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column (1 Grid Column wide) - Houses Campaign Inputs & Campaign Tags */}
-                  <div className="lg:col-span-1 flex flex-col gap-6">
-                    {(selectedCampaign.focus ||
-                      selectedCampaign.subCategory ||
-                      selectedCampaign.campaignThemeInput) && (
-                      <div className="glass-card bg-white p-6 rounded-xl border border-slate-200 flex flex-col gap-4 shadow-sm">
-                        <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2 pb-2 border-b border-slate-100">
-                          <Layers className="h-4 w-4 text-slate-400" />
-                          Campaign Inputs
-                        </h4>
-                        {selectedCampaign.focus && (
-                          <div className="mt-2.5">
-                            <span className="block text-xs font-semibold text-slate-450 uppercase tracking-wider mb-1">
-                              Industry / Focus
-                            </span>
-                            <p className="text-sm text-slate-650 font-medium">
-                              {selectedCampaign.focus}
-                            </p>
-                          </div>
-                        )}
-                        {selectedCampaign.subCategory && (
-                          <div className="mt-2.5">
-                            <span className="block text-xs font-semibold text-slate-455 uppercase tracking-wider mb-1">
-                              Sub-Category / Niche
-                            </span>
-                            <p className="text-sm text-slate-650 font-medium">
-                              {selectedCampaign.subCategory}
-                            </p>
-                          </div>
-                        )}
-                        {selectedCampaign.campaignThemeInput && (
-                          <div className="mt-2.5">
-                            <span className="block text-xs font-semibold text-slate-455 uppercase tracking-wider mb-1">
-                              Provided Theme
-                            </span>
-                            <p className="text-sm text-slate-650 font-medium">
-                              {selectedCampaign.campaignThemeInput}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="glass-card bg-white p-6 rounded-xl border border-slate-200 flex flex-col gap-4 shadow-sm">
-                      <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2 pb-2 border-b border-slate-100">
-                        <Tag className="h-4 w-4 text-slate-400" />
-                        Campaign Tags
-                      </h4>
-                      <div className="flex flex-wrap gap-2 items-center mt-2.5">
-                        {(selectedCampaign.tags || []).map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-semibold border border-[#7C3AED]/20"
-                          >
-                            {tag}
-                            <button
-                              onClick={() =>
-                                handleRemoveTag(selectedCampaign.id, tag)
-                              }
-                              className="hover:text-[#7C3AED]/70 focus:outline-none cursor-pointer"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </span>
-                        ))}
-                        <div className="relative border border-slate-200 rounded-md bg-slate-50 flex items-center shadow-inner">
-                          <input
-                            type="text"
-                            value={newTagInput}
-                            onChange={(e) => setNewTagInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleAddTag(selectedCampaign.id, newTagInput);
-                              }
-                            }}
-                            placeholder="Add tag..."
-                            className="text-xs px-2.5 py-1.5 focus:outline-none bg-transparent text-slate-800 placeholder:text-slate-450 w-24"
-                          />
-                          <button
-                            onClick={() =>
-                              handleAddTag(selectedCampaign.id, newTagInput)
-                            }
-                            className="pr-2.5 text-slate-400 hover:text-[#7C3AED]"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="pt-8 border-t border-slate-205">
+            <div className="pt-6">
               {!selectedCampaign.isBlog && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 px-4 sm:px-0">
-                  <div className="flex items-center gap-2">
-                    <Layers className="h-5 w-5 text-slate-400" />
-                    <h3 className="text-lg font-semibold text-slate-800 font-display">
-                      Platform Execution
-                    </h3>
-                  </div>
-
-                  <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm overflow-x-auto hide-scrollbar">
-                    {[
-                      "All",
-                      "LinkedIn",
-                      "X",
-                      "Facebook",
-                      "Instagram",
-                      "Reddit",
-                    ].map((platform) => {
-                      const pLowerCase = platform.toLowerCase();
-                      // Check if this campaign has any posts for this platform
-                      const hasPostsForPlatform =
-                        platform === "All" ||
-                        (selectedCampaign.dailyPosts &&
-                          selectedCampaign.dailyPosts.some((dp) =>
-                            dp.platformVersions.some((pv) =>
-                              isPlatformMatch(pv.platform, platform),
-                            ),
-                          )) ||
-                        (selectedCampaign.platformVersions &&
-                          selectedCampaign.platformVersions.some((pv) =>
-                            isPlatformMatch(pv.platform, platform),
-                          ));
-
-                      if (!hasPostsForPlatform && platform !== "All") return null;
-                      const isActive =
-                        platform === "All"
-                          ? platformFilter === null
-                          : isPlatformMatch(platformFilter, platform);
-
-                      return (
-                        <button
-                          key={platform}
-                          onClick={() =>
-                            setPlatformFilter(
-                              platform === "All" ? null : pLowerCase,
-                            )
-                          }
-                          className={cn(
-                            "rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center justify-center shadow-sm",
-                            platform === "All" ? "h-8 px-3" : "w-8 h-8",
-                            isActive
-                              ? "bg-[#7C3AED] text-white"
-                              : "bg-white text-slate-500 hover:bg-[#7C3AED]/5 border border-slate-200/60",
-                          )}
-                          title={platform}
-                        >
-                          {platform === "All" ? (
-                            platform
-                          ) : (
-                            <>
-                              {getPlatformLogo(platform, isActive, "w-4 h-4")}
-                              <span className="sr-only">{platform}</span>
-                            </>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="flex items-center gap-2 mb-6 px-4 sm:px-0">
+                  <Layers className="h-5 w-5 text-slate-400" />
+                  <h3 className="text-lg font-semibold text-slate-800 font-display">
+                    Platform Execution
+                  </h3>
                 </div>
               )}
 
@@ -2645,43 +2435,130 @@ export function Campaigns() {
 
                       if (filteredPVs.length === 0) return null;
 
+                      const singlePV = filteredPVs.length === 1 ? filteredPVs[0] : null;
+                      const singlePublishKey = singlePV
+                        ? `${selectedCampaign.id}-${dp.day}-${singlePV.platform}`
+                        : null;
+
                       return (
                         <div key={dayIdx} className="space-y-4">
                           <div
-                            className="flex items-center justify-between cursor-pointer select-none bg-white hover:bg-slate-50 border border-slate-200/85 p-4 rounded-xl transition-colors shadow-sm"
+                            className="flex items-center justify-between cursor-pointer select-none py-2.5 px-1 sm:px-0 transition-opacity hover:opacity-80 gap-3 group border-b border-slate-200/60"
                             onClick={() =>
                               setOpenDayIdx(
                                 openDayIdx === dayIdx ? null : dayIdx,
                               )
                             }
                           >
-                            <div className="flex items-center gap-3">
-                              {openDayIdx === dayIdx ? (
-                                <ChevronDown className="h-5 w-5 text-slate-400" />
-                              ) : (
-                                <ChevronRight className="h-5 w-5 text-slate-400" />
-                              )}
-                              <h4 className="text-md font-extrabold text-slate-800 font-display">
-                                {dp.day}
-                                {dp.date && (
-                                  <span className="text-sm text-slate-400 font-normal ml-2">
-                                    (
-                                    {new Date(dp.date).toLocaleDateString(
-                                      "en-US",
-                                      { month: "short", day: "numeric" },
-                                    )}
-                                    )
-                                  </span>
+                            <div className="flex items-center gap-3 flex-wrap min-w-0">
+                              <div className="flex items-center gap-2">
+                                {openDayIdx === dayIdx ? (
+                                  <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors shrink-0" />
+                                ) : (
+                                  <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors shrink-0" />
                                 )}
-                              </h4>
+                                <h4 className="text-md font-extrabold text-slate-800 font-display whitespace-nowrap">
+                                  {dp.day}
+                                  {dp.date && (
+                                    <span className="text-sm text-slate-400 font-normal ml-1.5">
+                                      (
+                                      {new Date(dp.date).toLocaleDateString(
+                                        "en-US",
+                                        { month: "short", day: "numeric" },
+                                      )}
+                                      )
+                                    </span>
+                                  )}
+                                </h4>
+                              </div>
+
+                              {/* Put Platform directly together in the header */}
+                              {singlePV ? (
+                                <div className="flex items-center gap-2 pl-2 border-l border-slate-200 shrink-0">
+                                  <div className="flex items-center gap-1.5" title={singlePV.platform}>
+                                    {getPlatformLogo(singlePV.platform, false, "w-4.5 h-4.5") || (
+                                      <span className="font-extrabold text-xs text-slate-800 tracking-wider">
+                                        {singlePV.platform}
+                                      </span>
+                                    )}
+                                    <span className="text-xs font-bold text-slate-800 capitalize">
+                                      {singlePV.platform}
+                                    </span>
+                                    {singlePV.improvedViaFeedback && (
+                                      <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200/50 flex items-center gap-1 shrink-0">
+                                        <Sparkles className="h-2.5 w-2.5" />
+                                        Improved
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200 shrink-0">
+                                  {filteredPVs.map((pv, pIdx) => (
+                                    <span key={pIdx} title={pv.platform}>
+                                      {getPlatformLogo(pv.platform, false, "w-4 h-4")}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            <span className="inline-flex items-center rounded-md bg-slate-50 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-500 shadow-inner">
-                              {dp.contentType}
-                            </span>
+
+                            <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0">
+
+                              {/* Action buttons unified into header when single platform */}
+                              {singlePV && singlePublishKey && (
+                                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    onClick={() =>
+                                      handleCopyText(
+                                        formatCopy(singlePV.copy),
+                                        singlePublishKey,
+                                      )
+                                    }
+                                    className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-2xs shrink-0 cursor-pointer"
+                                    title="Copy text"
+                                  >
+                                    {copiedState[singlePublishKey] ? (
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+
+                                  {(singlePV.imageUrl ||
+                                    (singlePV.imageId &&
+                                      campaignImages[singlePV.imageId]) ||
+                                    generatedVisuals[singlePublishKey] ||
+                                    (typeof dp !== "undefined" &&
+                                      dp.imageId &&
+                                      campaignImages[dp.imageId])) && (
+                                    <button
+                                      onClick={() =>
+                                        handleDownloadVisualCard(
+                                          singlePublishKey,
+                                          singlePV,
+                                          dp,
+                                          `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${singlePV.platform}.png`
+                                        )
+                                      }
+                                      disabled={downloadingKeys[singlePublishKey]}
+                                      className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-2xs shrink-0 cursor-pointer"
+                                      title="Download 1080x1080 visual graphic"
+                                    >
+                                      {downloadingKeys[singlePublishKey] ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-600" />
+                                      ) : (
+                                        <Download className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           {openDayIdx === dayIdx && (
-                            <div className="space-y-6 pt-2 sm:pl-4 sm:border-l-2 border-[#7C3AED]/20 sm:ml-2">
+                            <div className="space-y-8 pt-1 pb-2">
                               {filteredPVs.map((pv, idx) => {
                                 const isLinkedin =
                                   pv.platform.toLowerCase() === "linkedin";
@@ -2692,82 +2569,78 @@ export function Campaigns() {
                                 return (
                                   <div
                                     key={idx}
-                                    className="glass-card overflow-hidden !rounded-none sm:!rounded-xl !border-x-0 sm:!border-x border-slate-200/80 "
+                                    className="w-full flex flex-col items-center py-1"
                                   >
-                                    <div className="bg-slate-50/80 border-slate-200 px-4 sm:px-5 py-3 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
-                                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 min-w-0 flex-1">
-                                        <div className="flex items-center gap-2 shrink-0" title={pv.platform}>
-                                          {getPlatformLogo(pv.platform, false, "w-5 h-5") || (
-                                            <span className="font-extrabold text-sm text-slate-800 tracking-wider">
+                                    {/* Action toolbar shown above post only if multiple platforms exist */}
+                                    {!singlePV && (
+                                      <div className="w-full max-w-[552px] flex items-center justify-between pb-2.5 px-1 sm:px-0">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          <div className="flex items-center gap-2 shrink-0" title={pv.platform}>
+                                            {getPlatformLogo(pv.platform, false, "w-4.5 h-4.5") || (
+                                              <span className="font-extrabold text-xs text-slate-800 tracking-wider">
+                                                {pv.platform}
+                                              </span>
+                                            )}
+                                            <span className="text-xs font-bold text-slate-800 capitalize">
                                               {pv.platform}
                                             </span>
-                                          )}
-                                          <span className="sr-only">{pv.platform}</span>
-                                          {pv.improvedViaFeedback && (
-                                            <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200/50 flex items-center gap-1 shrink-0">
-                                              <Sparkles className="h-2.5 w-2.5" />
-                                              Improved
-                                            </span>
-                                          )}
+                                            {pv.improvedViaFeedback && (
+                                              <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200/50 flex items-center gap-1 shrink-0">
+                                                <Sparkles className="h-2.5 w-2.5" />
+                                                Improved
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
-                                        {pv.format && (
-                                          <span 
-                                            className="text-xs text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded inline-block truncate max-w-full font-light shadow-inner" 
-                                            title={pv.format}
-                                          >
-                                            {pv.format}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0 flex-nowrap justify-start md:justify-end">
-
-                                        <button
-                                          onClick={() =>
-                                            handleCopyText(
-                                              formatCopy(pv.copy),
-                                              publishKey,
-                                            )
-                                          }
-                                          className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-sm shrink-0"
-                                          title="Copy text"
-                                        >
-                                          {copiedState[publishKey] ? (
-                                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                                          ) : (
-                                            <Copy className="h-3.5 w-3.5" />
-                                          )}
-                                        </button>
-
-                                        {(pv.imageUrl ||
-                                          (pv.imageId &&
-                                            campaignImages[pv.imageId]) ||
-                                          generatedVisuals[publishKey] ||
-                                          (typeof dp !== "undefined" &&
-                                            dp.imageId &&
-                                            campaignImages[dp.imageId])) && (
+                                        <div className="flex items-center gap-1.5 shrink-0">
                                           <button
                                             onClick={() =>
-                                              handleDownloadVisualCard(
+                                              handleCopyText(
+                                                formatCopy(pv.copy),
                                                 publishKey,
-                                                pv,
-                                                dp,
-                                                `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${pv.platform}.png`
                                               )
                                             }
-                                            disabled={downloadingKeys[publishKey]}
-                                            className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-sm shrink-0"
-                                            title="Download 1080x1080 visual graphic"
+                                            className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-2xs shrink-0 cursor-pointer"
+                                            title="Copy text"
                                           >
-                                            {downloadingKeys[publishKey] ? (
-                                              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-600" />
+                                            {copiedState[publishKey] ? (
+                                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                                             ) : (
-                                              <Download className="h-3.5 w-3.5" />
+                                              <Copy className="h-3.5 w-3.5" />
                                             )}
                                           </button>
-                                        )}
+
+                                          {(pv.imageUrl ||
+                                            (pv.imageId &&
+                                              campaignImages[pv.imageId]) ||
+                                            generatedVisuals[publishKey] ||
+                                            (typeof dp !== "undefined" &&
+                                              dp.imageId &&
+                                              campaignImages[dp.imageId])) && (
+                                            <button
+                                              onClick={() =>
+                                                handleDownloadVisualCard(
+                                                  publishKey,
+                                                  pv,
+                                                  dp,
+                                                  `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${pv.platform}.png`
+                                                )
+                                              }
+                                              disabled={downloadingKeys[publishKey]}
+                                              className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-2xs shrink-0 cursor-pointer"
+                                              title="Download 1080x1080 visual graphic"
+                                            >
+                                              {downloadingKeys[publishKey] ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-600" />
+                                              ) : (
+                                                <Download className="h-3.5 w-3.5" />
+                                              )}
+                                            </button>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                    <div className="py-2 sm:p-5 flex flex-col items-center bg-slate-50/50 sm:rounded-b-xl px-0 sm:px-5">
+                                    )}
+                                    <div className="w-full flex justify-center">
                                       <PostPreviewModal
                                         inline
                                         platform={pv.platform}
@@ -2845,12 +2718,13 @@ export function Campaigns() {
                         return (
                           <div
                             key={idx}
-                            className="glass-card overflow-hidden !rounded-none sm:!rounded-xl !border-x-0 sm:!border-x border-slate-200/80 "
+                            className="w-full flex flex-col items-center py-1"
                           >
-                            <div className="bg-slate-50/80 border-slate-200 px-4 sm:px-5 py-3 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5 min-w-0 flex-1">
+                            {/* Clean un-nested action toolbar directly above the post */}
+                            <div className="w-full max-w-[552px] flex items-center justify-between pb-2.5 px-1 sm:px-0">
+                              <div className="flex items-center gap-2.5 min-w-0">
                                 <div className="flex items-center gap-2 shrink-0">
-                                  <span className="font-extrabold text-sm text-slate-800 tracking-wider">
+                                  <span className="font-extrabold text-xs text-slate-800 tracking-wider">
                                     {pv.platform}
                                   </span>
                                   {pv.improvedViaFeedback && (
@@ -2860,16 +2734,8 @@ export function Campaigns() {
                                     </span>
                                   )}
                                 </div>
-                                {pv.format && (
-                                  <span 
-                                    className="text-xs text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded inline-block truncate max-w-full font-light shadow-inner" 
-                                    title={pv.format}
-                                  >
-                                    {pv.format}
-                                  </span>
-                                )}
                               </div>
-                              <div className="flex items-center gap-2 shrink-0 flex-nowrap justify-start md:justify-end">
+                              <div className="flex items-center gap-1.5 shrink-0">
                                 <button
                                   onClick={() =>
                                     handleCopyText(
@@ -2877,11 +2743,11 @@ export function Campaigns() {
                                       publishKey,
                                     )
                                   }
-                                  className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-sm shrink-0"
+                                  className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-2xs shrink-0 cursor-pointer"
                                   title="Copy text"
                                 >
                                   {copiedState[publishKey] ? (
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                                   ) : (
                                     <Copy className="h-3.5 w-3.5" />
                                   )}
@@ -2899,7 +2765,7 @@ export function Campaigns() {
                                         `${selectedCampaign.theme.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${pv.platform}.png`,
                                       )
                                     }
-                                    className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-sm shrink-0"
+                                    className="inline-flex items-center justify-center h-8 w-8 text-slate-500 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-700 rounded-lg transition-colors shadow-2xs shrink-0 cursor-pointer"
                                     title="Download image"
                                   >
                                     <Download className="h-3.5 w-3.5" />
@@ -2907,7 +2773,7 @@ export function Campaigns() {
                                 )}
                               </div>
                             </div>
-                            <div className="py-2 sm:p-5 flex flex-col items-center bg-slate-50/50 sm:rounded-b-xl px-0 sm:px-5">
+                            <div className="w-full flex justify-center">
                               <PostPreviewModal
                                 inline
                                 platform={pv.platform}
@@ -3817,6 +3683,8 @@ export function Campaigns() {
           onClose={() => setPreviewPost(null)}
         />
       )}
+
+
     </div>
   );
 }

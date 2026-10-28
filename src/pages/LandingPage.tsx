@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { AgentSolitaireCards } from '../components/AgentSolitaireCards';
-import { ThemeToggle } from '../components/ThemeToggle';
 import { UniversalNavbar } from '../components/UniversalNavbar';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';

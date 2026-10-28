@@ -10,9 +10,10 @@ To maximize cognitive depth while maintaining cost control and low latencies, th
 
 | Model Identifier | Specialized Persona | Target Tasks | Primary Strengths |
 |---|---|---|---|
-| **`gemini-3.1-pro-preview`** | *The Strategic Director* | <ul><li>Product DNA Scraping Analysis</li><li>Founder Agent Persona Synthesis</li><li>Objection mapping & Psychographic discovery</li><li>Feedback revision reasoning</li></ul> | High-reasoning cognitive depth, complex multi-turn logic, strict adherence to developer systems, and large context handling. |
+| **`gemini-3.1-pro-preview`** | *The Strategic Director* | <ul><li>Product DNA Scraping Analysis</li><li>Founder Agent Persona Synthesis</li><li>Objection mapping & Psychographic discovery</li><li>B2B Campaign Strategy & Content Drafting</li><li>Feedback revision reasoning</li></ul> | High-reasoning cognitive depth, complex multi-turn logic, strict adherence to developer systems, and large context handling. |
+| **`gemini-4-argon`** | *The Creative Director* | <ul><li>Photorealistic & Editorial Image Prompts</li><li>Visual layout & lighting direction</li><li>Art Director Planning parameters</li></ul> | Google's flagship frontier reasoning model, excels at deep conceptual scene formulation, lighting balance, and visual negative space planning. |
 | **`gemini-3.5-flash`** | *The Social Publisher* | <ul><li>Structured weekly campaign calendars</li><li>Day-by-day platform copy synthesis</li><li>Industry market research mapping</li></ul> | Fast token throughput, structured JSON schema outputs, excellent multi-format generation capability. |
-| **`gemini-2.5-flash`** | *The Rapid Assistant* | <ul><li>Topic suggestion formatting</li><li>Input field suggestions</li><li>Image generation prompt formatting</li></ul> | Ultra-low latency, high cost efficiency, reliable for formatting structural arrays. |
+| **`gemini-2.5-flash`** | *The Rapid Assistant* | <ul><li>Topic suggestion formatting</li><li>Input field suggestions</li><li>High-speed token filtering</li></ul> | Ultra-low latency, high cost efficiency, reliable for formatting structural arrays. |
 | **`gemini-3.1-flash-image-preview`** | *The Backdrop Artist* | <ul><li>Cinematic creative background graphics</li><li>Square aspect ratio backdrop assets</li></ul> | Text-to-image graphic generation (Imagen backend integration), high-definition 1K textures, and layout framing. |
 
 ---
@@ -34,7 +35,7 @@ BrandToPost integrates automated evaluation pipelines to ensure model outputs ar
 ### 2.2. Schema & Structure Constraints
 To prevent LLM structural hallucinations (a common failure mode in LLM pipelines), all critical endpoints utilize the **Response Schema** parameters in the GenAI SDK.
 *   **Campaign JSON Schema**: Enforces that weekly campaigns must exactly output a `theme`, `targetAudience`, `coreMessage`, `hook`, `cta`, `contentFormat`, `dailyPosts` (mapping day, contentType, imagePrompt, customHtml layout), `repurposingNotes`, and `confidenceScore`.
-*   **Self-Healing Fallbacks**: If `gemini-3.1-pro-preview` fails or encounters rate limits (status code 429), the server falls back to `gemini-3.5-flash` to continue campaign generation without causing server errors.
+*   **Self-Healing Fallbacks**: If `gpt-5.6-sol` fails or encounters rate limits / credit limits, the server seamlessly falls back to `gemini-3.1-pro-preview` or `gemini-3.5-flash` to continue campaign generation without causing server errors.
 
 ---
 

@@ -1,7 +1,6 @@
-import path from 'path';
-import fs from 'fs/promises';
 import { db } from '../config/firebase';
 import { tempImages } from '../utils/firestoreStorage';
+import { resolveImageBuffer } from '../utils/imageUtils';
 
 // Reusable helper to publish a post with optional image to LinkedIn
 export async function publishPostToLinkedIn(
@@ -10,7 +9,7 @@ export async function publishPostToLinkedIn(
   imageUrl?: string | null,
   customAuthorUrn?: string
 ): Promise<void> {
-  let authorUrn = customAuthorUrn;
+  let authorUrn = customAuthorUrn?.trim();
 
   if (!authorUrn) {
     // Fallback to user URN if no custom URN is provided
@@ -19,11 +18,21 @@ export async function publishPostToLinkedIn(
     });
 
     if (!userRes.ok) {
-      throw new Error('Failed to fetch user info from LinkedIn');
+      const err = await userRes.text();
+      throw new Error(`Failed to fetch user info from LinkedIn (${userRes.status}): ${err}`);
     }
 
     const userData = await userRes.json();
+    if (!userData?.sub) {
+      throw new Error('LinkedIn user info did not return a valid sub identity');
+    }
     authorUrn = `urn:li:person:${userData.sub}`;
+  } else if (!authorUrn.startsWith('urn:li:')) {
+    if (/^\d+$/.test(authorUrn)) {
+      authorUrn = `urn:li:organization:${authorUrn}`;
+    } else {
+      authorUrn = `urn:li:person:${authorUrn}`;
+    }
   }
 
   let specificContent: any = {
@@ -33,113 +42,80 @@ export async function publishPostToLinkedIn(
     }
   };
 
-  let validImageUrl = imageUrl;
-  if (typeof validImageUrl === 'string' && validImageUrl.startsWith('data:image/svg+xml')) {
-    console.warn('[publishPostToLinkedIn] Received SVG data URL which is unsupported by LinkedIn feedshare-image API. Bypassing SVG media attachment.');
+  let validImageUrl = imageUrl?.trim() || null;
+  if (typeof validImageUrl === 'string' && (validImageUrl.startsWith('data:image/svg') || validImageUrl.endsWith('.svg'))) {
+    console.warn('[publishPostToLinkedIn] Received SVG which is unsupported by LinkedIn feedshare-image API. Bypassing SVG media attachment.');
     validImageUrl = null;
   }
 
   if (validImageUrl) {
-    // Register upload
-    const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        registerUploadRequest: {
-          recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-          owner: authorUrn,
-          serviceRelationships: [
+    const resolved = await resolveImageBuffer(validImageUrl);
+    if (resolved && resolved.buffer && resolved.buffer.length > 0) {
+      // Register upload
+      const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          registerUploadRequest: {
+            recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+            owner: authorUrn,
+            serviceRelationships: [
+              {
+                relationshipType: 'OWNER',
+                identifier: 'urn:li:userGeneratedContent'
+              }
+            ]
+          }
+        })
+      });
+
+      if (!registerRes.ok) {
+        const err = await registerRes.text();
+        throw new Error(`Failed to register image upload with LinkedIn (${registerRes.status}): ${err}`);
+      }
+
+      const registerData = await registerRes.json();
+      const uploadUrl = registerData.value?.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']?.uploadUrl;
+      const assetUrn = registerData.value?.asset;
+
+      if (!uploadUrl || !assetUrn) {
+        throw new Error('LinkedIn did not return valid asset upload coordinates');
+      }
+
+      // Upload image binary
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': resolved.mimeType || 'image/png'
+        },
+        body: new Uint8Array(resolved.buffer)
+      });
+
+      if (!uploadRes.ok) {
+        const upErr = await uploadRes.text();
+        throw new Error(`Failed to upload image to LinkedIn (${uploadRes.status}): ${upErr}`);
+      }
+
+      specificContent = {
+        'com.linkedin.ugc.ShareContent': {
+          shareCommentary: { text },
+          shareMediaCategory: 'IMAGE',
+          media: [
             {
-              relationshipType: 'OWNER',
-              identifier: 'urn:li:userGeneratedContent'
+              status: 'READY',
+              description: { text: 'Creative post visual' },
+              media: assetUrn,
+              title: { text: 'Visual Post' }
             }
           ]
         }
-      })
-    });
-
-    if (!registerRes.ok) {
-      const err = await registerRes.text();
-      throw new Error(`Failed to register image upload: ${err}`);
-    }
-
-    const registerData = await registerRes.json();
-    const uploadUrl = registerData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
-    const assetUrn = registerData.value.asset;
-
-    // Prepare image data
-    let imageBuffer: Buffer | ArrayBuffer;
-    let contentType = 'image/jpeg';
-
-    if (validImageUrl.startsWith('data:')) {
-      const matches = validImageUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        contentType = matches[1];
-        imageBuffer = Buffer.from(matches[2], 'base64');
-      } else {
-        throw new Error('Invalid base64 image data');
-      }
-    } else if (validImageUrl.startsWith('/api/whatsapp/images/')) {
-      const match = validImageUrl.match(/\/api\/whatsapp\/images\/([^/.]+)/);
-      if (match) {
-        const imageId = match[1];
-        const localPath = path.join(process.cwd(), 'public', 'whatsapp_images', `${imageId}.png`);
-        try {
-          imageBuffer = await fs.readFile(localPath);
-          contentType = 'image/png';
-        } catch (e) {
-          if (db) {
-            const doc = await db.collection('whatsapp_images').doc(imageId).get();
-            if (doc.exists && doc.data()?.base64Data) {
-              imageBuffer = Buffer.from(doc.data()!.base64Data, 'base64');
-              contentType = doc.data()!.mimeType || 'image/png';
-            } else {
-              throw new Error(`Image ${imageId} not found in Firestore or local disk`);
-            }
-          } else {
-            throw new Error(`Image ${imageId} not found on local disk and DB is inactive`);
-          }
-        }
-      } else {
-        throw new Error('Invalid local image URL format');
-      }
+      };
     } else {
-      const imgRes = await fetch(validImageUrl);
-      if (!imgRes.ok) throw new Error(`Failed to fetch image from URL: ${validImageUrl}`);
-      imageBuffer = await imgRes.arrayBuffer();
-      contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+      console.warn(`[publishPostToLinkedIn] Could not resolve image buffer for ${validImageUrl}. Posting text-only.`);
     }
-
-    // Upload image
-    const uploadRes = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': contentType
-      },
-      body: imageBuffer
-    });
-
-    if (!uploadRes.ok) {
-      throw new Error('Failed to upload image to LinkedIn');
-    }
-
-    specificContent = {
-      'com.linkedin.ugc.ShareContent': {
-        shareCommentary: { text },
-        shareMediaCategory: 'IMAGE',
-        media: [
-          {
-            status: 'READY',
-            description: { text: 'Image' },
-            media: assetUrn,
-            title: { text: 'Image' }
-          }
-        ]
-      }
-    };
   }
 
   // Create Post
@@ -160,7 +136,7 @@ export async function publishPostToLinkedIn(
 
   if (!postRes.ok) {
     const err = await postRes.text();
-    throw new Error(err);
+    throw new Error(`LinkedIn publishing failed (${postRes.status}): ${err}`);
   }
 }
 
@@ -171,10 +147,7 @@ export async function publishToInstagramGraphAPI(
   imageUrl: string,
   appHost: string
 ): Promise<string> {
-  const baseUrl = appHost || process.env.APP_URL || '';
-  if (!baseUrl) {
-    throw new Error('Server URL configuration is loaded incorrectly. Please make sure APP_URL is set.');
-  }
+  const baseUrl = (appHost || process.env.APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 
   // 1. Fetch Facebook Pages linked to this access token
   const pagesRes = await fetch(`https://graph.facebook.com/v18.0/me/accounts?access_token=${token}`);
@@ -208,8 +181,8 @@ export async function publishToInstagramGraphAPI(
     throw new Error('Could not automatically determine any Instagram Business/Creator accounts linked to your Facebook Pages. Please review your Meta app configuration.');
   }
 
-  let resolvedImageUrl = imageUrl;
-  if (!resolvedImageUrl) {
+  let resolvedImageUrl = (imageUrl || '').trim();
+  if (!resolvedImageUrl || resolvedImageUrl.startsWith('data:image/svg') || resolvedImageUrl.endsWith('.svg')) {
     resolvedImageUrl = 'https://placehold.co/1080x1080/4f46e5/ffffff.png?text=Creative+Campaign';
   }
 
@@ -217,7 +190,31 @@ export async function publishToInstagramGraphAPI(
   if (resolvedImageUrl.startsWith('data:image/')) {
     const tempId = Math.random().toString(36).substring(2, 9);
     tempImages[tempId] = resolvedImageUrl;
-    resolvedImageUrl = `${baseUrl.replace(/\/$/, '')}/public/temp-image/${tempId}.png`;
+    resolvedImageUrl = `${baseUrl}/public/temp-image/${tempId}.png`;
+  } else if (resolvedImageUrl.startsWith('/')) {
+    // Check if Firestore has a public Google Cloud Storage URL for this imageId
+    let foundStorageUrl: string | null = null;
+    const idMatch = resolvedImageUrl.match(/(?:campaign|whatsapp)_images\/([^/.]+)/) ||
+                    resolvedImageUrl.match(/\/api\/(?:campaign|whatsapp)\/images\/([^/.]+)/) ||
+                    resolvedImageUrl.match(/\b(img_[a-zA-Z0-9_-]+)\b/);
+    if (idMatch && db) {
+      try {
+        const imageId = idMatch[1].replace(/\.png$/i, '');
+        let docSnap = await db.collection('campaign_images').doc(imageId).get();
+        if (!docSnap.exists) {
+          docSnap = await db.collection('whatsapp_images').doc(imageId).get();
+        }
+        if (docSnap.exists && docSnap.data()?.storageUrl) {
+          foundStorageUrl = docSnap.data()!.storageUrl;
+        }
+      } catch (_) {}
+    }
+
+    if (foundStorageUrl) {
+      resolvedImageUrl = foundStorageUrl;
+    } else {
+      resolvedImageUrl = `${baseUrl}${resolvedImageUrl}`;
+    }
   }
 
   // 2. Create Media Container on Instagram
@@ -239,8 +236,26 @@ export async function publishToInstagramGraphAPI(
   const containerData = await containerRes.json();
   const creationId = containerData.id;
 
-  // Pause briefly to let Instagram's servers load and analyze the asset
-  await new Promise((resolve) => setTimeout(resolve, 3000));
+  // Poll Instagram container status until FINISHED (up to 12 seconds)
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const statusRes = await fetch(
+        `https://graph.facebook.com/v18.0/${creationId}?fields=status_code,status&access_token=${pageAccessToken}`
+      );
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        const code = (statusData.status_code || '').toUpperCase();
+        if (code === 'FINISHED') {
+          break;
+        } else if (code === 'ERROR' || code === 'EXPIRED') {
+          throw new Error(`Instagram media container processing failed: ${statusData.status || code}`);
+        }
+      }
+    } catch (pollErr: any) {
+      if (pollErr.message?.includes('processing failed')) throw pollErr;
+    }
+  }
 
   // 3. Publish Media Container
   const publishRes = await fetch(`https://graph.facebook.com/v18.0/${instagramBusinessAccountId}/media_publish`, {

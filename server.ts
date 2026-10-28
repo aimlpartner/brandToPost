@@ -18,11 +18,18 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.use(cookieParser());
 
-  // Static serving for campaign and personal branding generated images
-  app.use('/api/campaign/images', express.static(path.join(process.cwd(), 'public', 'campaign_images')));
-  app.use('/api/personal-branding/images', express.static(path.join(process.cwd(), 'public', 'campaign_images')));
-  app.use('/campaign_images', express.static(path.join(process.cwd(), 'public', 'campaign_images')));
-  app.use('/whatsapp_images', express.static(path.join(process.cwd(), 'public', 'whatsapp_images')));
+  // Static serving for campaign and personal branding generated images with CORS headers
+  const staticImageOptions = {
+    setHeaders: (res: express.Response) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+  };
+
+  app.use('/api/campaign/images', express.static(path.join(process.cwd(), 'public', 'campaign_images'), staticImageOptions));
+  app.use('/api/personal-branding/images', express.static(path.join(process.cwd(), 'public', 'campaign_images'), staticImageOptions));
+  app.use('/campaign_images', express.static(path.join(process.cwd(), 'public', 'campaign_images'), staticImageOptions));
+  app.use('/whatsapp_images', express.static(path.join(process.cwd(), 'public', 'whatsapp_images'), staticImageOptions));
 
   // Mount unified API routes
   app.use(apiRouter);
