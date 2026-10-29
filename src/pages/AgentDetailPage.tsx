@@ -219,18 +219,13 @@ export function AgentDetailPage() {
             >
               <div className="absolute -top-3 left-0 right-0 h-3" />
               {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-white/10">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-2 h-2 rounded-full bg-[#7C3AED] animate-pulse"></span>
-                    <h3 className="text-sm font-semibold text-white tracking-tight">Autonomous Platform Agents</h3>
-                    <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">
-                      8 Dedicated Engines
-                    </span>
-                  </div>
-                  <p className="text-xs text-white/50">
-                    Each agent specializes in platform-native algorithms, formatting, and high-retention storytelling.
-                  </p>
+              <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#7C3AED] animate-pulse"></span>
+                  <h3 className="text-sm font-semibold text-white tracking-tight">Autonomous Agent Fleet</h3>
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">
+                    Social + Creative
+                  </span>
                 </div>
                 <button
                   onClick={() => setAgentsOpen(false)}
@@ -241,51 +236,45 @@ export function AgentDetailPage() {
                 </button>
               </div>
 
-              {/* Agents Grid (Clean Logos, Zero Boxes) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 py-5">
+              {/* Minimalist Agents Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 py-4">
                 {AGENTS_LIST.map((agent) => (
                   <Link
                     key={agent.slug}
                     to={`/agents/${agent.slug}`}
                     onClick={() => setAgentsOpen(false)}
-                    className={`group/agent p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+                    className={`group/agent p-3.5 rounded-xl border transition-all flex items-center gap-3 ${
                       agent.slug === activeAgent.slug 
                         ? 'bg-[#7C3AED]/10 border-[#7C3AED]/40' 
-                        : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-white/20'
+                        : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-[#7C3AED]/50'
                     }`}
                   >
-                    <div>
-                      {/* Clean Logo: No box container */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                          {renderAgentIcon(agent, "w-5 h-5")}
-                        </div>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-white/30 group-hover/agent:text-white transition-colors" />
+                    <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+                      {renderAgentIcon(agent, "w-4 h-4")}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <h4 className="text-xs font-semibold text-white group-hover/agent:text-[#C084FC] transition-colors truncate">
+                          {agent.name}
+                        </h4>
+                        <ArrowUpRight className="w-3 h-3 text-white/25 group-hover/agent:text-[#C084FC] transition-colors shrink-0" />
                       </div>
-                      <h4 className="text-xs font-semibold text-white group-hover/agent:text-[#C084FC] transition-colors mb-1">
-                        {agent.name}
-                      </h4>
-                      <p className="text-[11px] text-white/50 line-clamp-2 leading-relaxed">
+                      <p className="text-[10px] font-mono text-white/45 truncate mt-0.5">
                         {agent.role}
                       </p>
-                    </div>
-
-                    <div className="mt-4 pt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-white/40">
-                      <span>Explore</span>
-                      <span className="text-[#A78BFA] group-hover/agent:translate-x-0.5 transition-transform">→</span>
                     </div>
                   </Link>
                 ))}
               </div>
 
               {/* Footer */}
-              <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 text-white/60">
+              <div className="pt-3.5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-white/50">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
-                  <span>All 8 agents coordinate under one unified Brand DNA</span>
+                  <span>Synced to your central Brand DNA</span>
                 </div>
                 <Link
-                  to="/new-landing"
+                  to="/"
                   onClick={() => setAgentsOpen(false)}
                   className="inline-flex items-center gap-1.5 font-medium text-[#A78BFA] hover:text-white transition-colors"
                 >

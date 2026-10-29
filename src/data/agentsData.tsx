@@ -453,138 +453,668 @@ export const AGENTS_LIST: AgentData[] = [
     ]
   },
   {
-    slug: "whatsapp",
-    name: "WhatsApp Agent",
-    platform: "WhatsApp Bot",
-    role: "Voice-to-Content & 10s Mobile Approvals",
-    tagline: "20-Second Voice Memos Turned into Live Posts; Zero Dashboard Logins",
-    heroHeadline: "Voice memos turned into live marketing with",
-    heroHighlight: "WhatsApp.",
-    heroSubtitle: "Drop your website link. Record a 20-second voice note while walking between meetings. Our WhatsApp Agent transcribes your thinking, cleans up the structure, and delivers ready-to-publish posts across all your feeds.",
-    heroRotatingWords: ["founders.", "CEOs.", "partners.", "advisors.", "nomads."],
-    icon: "/okara-the-only-ai-cmo-that-puts-marketing-on-autopilot.svg.svg-55.Woblo.svg",
-    iconType: "img",
-    iconSrc: "/okara-the-only-ai-cmo-that-puts-marketing-on-autopilot.svg.svg-55.Woblo.svg",
-    accentColor: "#25D366",
-    accentGlow: "rgba(37, 211, 102, 0.25)",
+    slug: "research",
+    name: "Research Agent",
+    platform: "Market & ICP Intelligence",
+    role: "Market & ICP Trends",
+    tagline: "Live Competitor Analysis, Buyer Pain-Point Mapping & Trend Extraction",
+    heroHeadline: "Autonomous market & ICP research on autopilot for",
+    heroHighlight: "founders.",
+    heroSubtitle: "Drop your website link. Our Research Agent crawls your positioning, analyzes competitor messaging gaps, and extracts real buyer pain points to ground every post in market reality.",
+    heroRotatingWords: ["founders.", "CEOs.", "consultancies.", "agencies.", "operators."],
+    icon: "research_svg",
+    iconType: "svg",
+    accentColor: "#34D399",
+    accentGlow: "rgba(52, 211, 153, 0.25)",
     whatIsItFor: {
-      lead: "Built for founders who have high-value insights in their heads but zero time to sit down and write.",
-      description: "The biggest bottleneck in founder branding is the friction of opening a laptop, logging into a SaaS tool, and typing. The WhatsApp Agent meets you where you already communicate: speak for 20 seconds, and 60 seconds later you receive a drafted LinkedIn carousel, an X thread, and an Instagram visual. Reply '1' and it is live.",
+      lead: "Built to ensure every piece of content is anchored in real buyer pain points and live market signals.",
+      description: "Generic content fails because it ignores what buyers actually care about right now. The Research Agent crawls your domain, maps your ideal customer profile (ICP), identifies competitor blind spots, and feeds high-conviction angles directly into your 30-day content calendar.",
       bullets: [
-        "Audio voice memo transcription with speech cleanup (removes 'umms', pauses, and rambling)",
-        "Automatic extraction of core arguments, metrics, and actionable frameworks",
-        "Interactive two-way chat: reply 'make it punchier' or 'add more numbers' to tweak",
-        "1-tap approval system: reply '1' to immediately publish across all your connected channels"
+        "Deep crawl of your website, product pages, case studies, and positioning",
+        "Automated extraction of buyer objections, pain points, and decision triggers",
+        "Competitor narrative analysis to uncover contrarian positioning gaps",
+        "Continuous topic ideation mapped directly to your 30-day publishing calendar"
       ],
       capabilities: [
         {
-          title: "Voice Memo Ingestion",
-          desc: "Accepts voice notes up to 5 minutes long and extracts your core intellectual property without losing nuance.",
-          tag: "Audio Engine"
+          title: "Brand DNA & ICP Mapping",
+          desc: "Extracts your exact value proposition, target buyer personas, and core differentiators in seconds.",
+          tag: "Brand DNA"
         },
         {
-          title: "Multi-Channel Transmutation",
-          desc: "Turns one spoken thought into 3 platform-native variations: a LinkedIn story, an X thread, and an Instagram card.",
-          tag: "Syndication"
+          title: "Competitor Gap Analysis",
+          desc: "Identifies overused industry clichés so your brand speaks with a distinct, contrarian perspective.",
+          tag: "Positioning"
         },
         {
-          title: "Conversational Iteration",
-          desc: "Want to change the hook or mention a partner? Just send a quick text feedback and the bot adjusts in 5 seconds.",
-          tag: "Feedback Loop"
+          title: "Pain-Point Topic Matrix",
+          desc: "Generates 30 high-intent content angles tailored to questions your buyers are actively asking.",
+          tag: "Strategy"
         },
         {
-          title: "Zero Password Logins",
-          desc: "Manage your entire brand operations without ever logging into a web dashboard or remembering passwords.",
-          tag: "Mobile-Only"
+          title: "Live Trend Synthesis",
+          desc: "Connects industry shifts directly to your product's thesis for timely authority posts.",
+          tag: "Market Intel"
         }
       ]
     },
     whyShouldYouUseIt: {
-      lead: "The fastest friction-free bridge between executive brain and public audience.",
-      description: "You have 10 great ideas every week while driving, walking, or talking to clients. 99% of them are lost because you don't write them down. WhatsApp Agent captures them effortlessly.",
+      lead: "Never stare at a blank calendar wondering what to post about next.",
+      description: "The Research Agent turns your website URL into a complete, evidence-backed 30-day content strategy in under 60 seconds.",
       benefits: [
         {
-          metric: "10 Sec",
-          title: "Approval Speed",
-          desc: "Review drafts in WhatsApp and reply '1' to go live across all 11 channels instantly."
-        },
-        {
-          metric: "0 Min",
-          title: "Keyboard Time",
-          desc: "Create full-month content schedules purely by sending audio memos on your morning walk."
+          metric: "60 Sec",
+          title: "Strategy Build",
+          desc: "Complete Brand DNA and 30-day topic matrix extracted from your URL."
         },
         {
           metric: "100%",
-          title: "Authentic Nuance",
-          desc: "Retains your real-world inflection, vocabulary, and stories directly from your voice."
+          title: "ICP Aligned",
+          desc: "Every post topic targets real buyer objections and commercial intent."
+        },
+        {
+          metric: "0 Hrs",
+          title: "Manual Research",
+          desc: "Replaces hours of manual competitor digging and topic brainstorming."
         }
       ],
       comparison: [
         {
-          feature: "Input Mechanism",
-          manual: "Typing on keyboard into Notion or Google Docs for hours",
-          withAgent: "20-second voice memo while walking to coffee"
+          feature: "Topic Ideation",
+          manual: "Hours brainstorming random topics in spreadsheets",
+          withAgent: "30 strategic, buyer-aligned angles extracted from your URL in 60s"
         },
         {
-          feature: "Draft Review",
-          manual: "Logging into complicated marketing SaaS software with 2FA",
-          withAgent: "Direct WhatsApp chat preview with instant 1-tap approval"
+          feature: "Market Grounding",
+          manual: "Generic surface-level tips that sound like everyone else",
+          withAgent: "Deeply grounded in your actual product positioning and ICP pain points"
         },
         {
-          feature: "Editing Experience",
-          manual: "Rewriting entire paragraphs manually",
-          withAgent: "Text back 'shorter' or 'more aggressive' and it re-drafts in seconds"
+          feature: "Competitor Differentiation",
+          manual: "Repeating the same topics your competitors post",
+          withAgent: "Targets narrative gaps to position your brand as the category authority"
         },
         {
-          feature: "Cross-Posting",
-          manual: "Copying text, opening 4 apps, manually uploading images",
-          withAgent: "Single confirmation broadcasts to LinkedIn, X, Insta & Facebook simultaneously"
+          feature: "Execution Handoff",
+          manual: "Static strategy decks that sit in a folder",
+          withAgent: "Feeds directly into Writing & Designer Agents to build all 30 posts"
         }
       ]
     },
     workflowSteps: [
       {
         step: "01",
-        title: "Send Voice Memo",
-        desc: "Tap record on WhatsApp. Talk about a customer win, a mistake you made, or an industry shift.",
-        codePreview: "Audio Ingest: 28s OGG received from Founder (+1 555-0199)"
+        title: "URL & Positioning Crawl",
+        desc: "Paste your website link. The agent scans your pages, value props, and case studies.",
+        codePreview: "Crawl Complete: 100% Brand DNA & Product Positioning Indexed"
       },
       {
         step: "02",
-        title: "Transcription & Distillation",
-        desc: "Gemini 3.1 Pro cleans the audio, extracts the thesis, and styles it in your founder voice.",
-        codePreview: "Thesis: 'Client churn is driven by onboarding lag, not pricing'"
+        title: "ICP & Pain-Point Extraction",
+        desc: "Maps your ideal buyer's core frustrations, objections, and buying triggers.",
+        codePreview: "ICP Matrix: 5 Core Pain Points & 12 Contrarian Angles Identified"
       },
       {
         step: "03",
-        title: "Receive Multi-Platform Drafts",
-        desc: "Bot replies with complete post previews for LinkedIn, X, and Instagram in under 45 seconds.",
-        codePreview: "WhatsApp Message: 'Here are your 3 native drafts ready for review:'"
+        title: "30-Day Topic Architecture",
+        desc: "Builds a balanced 30-day calendar mixing authority, social proof, and educational breakdowns.",
+        codePreview: "Calendar Generated: 30 High-Signal Topics Assigned to Fleet"
       },
       {
         step: "04",
-        title: "Reply '1' to Publish",
-        desc: "Send '1' to broadcast live immediately, or schedule for optimal audience engagement time.",
-        codePreview: "User: '1' -> Broadcast Status: Live across 11 Connectors"
+        title: "Autonomous Fleet Dispatch",
+        desc: "Passes briefs to the Writing, Designer, and Social Agents to generate ready-to-publish assets.",
+        codePreview: "Status: 30 Native Posts & Visuals Ready for 1-Click Schedule"
       }
     ],
     sampleOutputs: [
       {
-        type: "Voice Note to Post",
-        title: "Spoken Memo: 'Why we killed our onboarding call'",
-        hook: "Spoken: 'Hey, so I just realized our 45-min onboarding call was actually annoying clients. We swapped it for a 3-min Loom and activation went up.' -> Crafted Post: 'We eliminated our onboarding call yesterday. Here is what happened to our churn rate...'",
-        previewMeta: "Audio 24s -> LinkedIn Post (1,240 chars) + X Thread (5 tweets)",
-        badge: "Voice-to-Post"
+        type: "ICP Strategy Brief",
+        title: "30-Day Authority Matrix & Positioning Breakdown",
+        hook: "Extracted Core Thesis: 'Eliminate agency retainers with autonomous brand pipelines.' Mapped into 10 Authority Carousels, 10 Contrarian Threads, and 10 Visual Case Studies.",
+        previewMeta: "Brand DNA Profile · 30 Topic Pillars · ICP Objection Map",
+        badge: "Market Strategy"
       },
       {
-        type: "WhatsApp Review Interface",
-        title: "1-Tap Review Preview",
-        hook: "Bot: 'Here is your draft for tomorrow at 9:00 AM EST. Reply 1 to approve, 2 to reschedule, or reply with edits.'",
-        previewMeta: "Interactive Two-Way WhatsApp Bot",
-        badge: "Mobile Speed"
+        type: "Contrarian Angle Brief",
+        title: "Competitor Blind-Spot Analysis",
+        hook: "Market Gap Detected: 84% of competitors post generic tips. Recommended Angle: Publish transparent system architecture teardowns and real ROI benchmarks.",
+        previewMeta: "Positioning Intelligence · High-Conversion Hook Brief",
+        badge: "Competitor Intel"
       }
     ]
   },
+  {
+    slug: "writing",
+    name: "Writing Agent",
+    platform: "Voice Clone & Copy",
+    role: "Founder Voice & Copywriting",
+    tagline: "Cloned Founder Heuristics, High-Converting Hooks & Zero-Slop Copy",
+    heroHeadline: "Executive copywriting in your exact voice for",
+    heroHighlight: "founders.",
+    heroSubtitle: "Drop your website link. Our Writing Agent clones your sentence cadence, vocabulary heuristics, and domain authority to write sharp, human-grade copy with zero robotic AI clichés.",
+    heroRotatingWords: ["founders.", "consultancies.", "agencies.", "advisors.", "operators."],
+    icon: "writing_svg",
+    iconType: "svg",
+    accentColor: "#C084FC",
+    accentGlow: "rgba(192, 132, 252, 0.25)",
+    whatIsItFor: {
+      lead: "Engineered to eliminate generic 'ChatGPT slop' and mirror your authentic executive voice.",
+      description: "Generic AI copy destroys brand trust with predictable phrases and plastic enthusiasm. The Writing Agent analyzes your actual speaking style, site copy, and past writing to synthesize high-authority narratives, contrarian takes, and platform-native hooks that read 100% like you.",
+      bullets: [
+        "Deep stylistic fingerprinting of your sentence lengths, rhythm, and vocabulary",
+        "Strict anti-slop filter that bans clichés, em-dash overuse, and robotic intros",
+        "Psychological hook synthesis tailored to stop B2B and executive scroll",
+        "Seamless adaptation across short-form takes, threads, and long-form stories"
+      ],
+      capabilities: [
+        {
+          title: "Founder Voice Fingerprinting",
+          desc: "Maps your natural idioms, tone, and conviction level so every draft sounds unmistakably written by you.",
+          tag: "Voice Clone"
+        },
+        {
+          title: "Contrarian Hook Engine",
+          desc: "Crafts opening lines engineered for curiosity, authority, and high dwell time.",
+          tag: "Hook Architecture"
+        },
+        {
+          title: "Zero-Slop Guardrails",
+          desc: "Strips out generic AI buzzwords and enforces crisp, editorial-grade prose.",
+          tag: "Editorial"
+        },
+        {
+          title: "Cross-Format Adaptation",
+          desc: "Re-cuts a single core insight into punchy tweets, executive posts, and narrative captions.",
+          tag: "Multi-Format"
+        }
+      ]
+    },
+    whyShouldYouUseIt: {
+      lead: "Replace $6,000/month ghostwriters with an engine that actually knows your voice.",
+      description: "Onboarding a human ghostwriter takes months of painful revisions. The Writing Agent calibrates from your URL and voice notes in seconds.",
+      benefits: [
+        {
+          metric: "99%",
+          title: "Voice Match",
+          desc: "Calibrated directly on your linguistic patterns and domain terminology."
+        },
+        {
+          metric: "0",
+          title: "AI Clichés",
+          desc: "Hard-coded negative constraints eliminate robotic phrasing."
+        },
+        {
+          metric: "30x",
+          title: "Drafting Speed",
+          desc: "Turn a 20-second thought into a month of publication-ready copy."
+        }
+      ],
+      comparison: [
+        {
+          feature: "Tone Accuracy",
+          manual: "Generic ChatGPT prompts that sound robotic and repetitive",
+          withAgent: "Custom voice DNA cloned from your real website and spoken memos"
+        },
+        {
+          feature: "Turnaround Time",
+          manual: "45 minutes staring at a blinking cursor per post",
+          withAgent: "30 complete drafts generated in under 60 seconds"
+        },
+        {
+          feature: "Cost Structure",
+          manual: "$5,000+/mo retainer for a freelance ghostwriter",
+          withAgent: "Autonomous 24/7 copy engine included in your stack"
+        },
+        {
+          feature: "Revision Loop",
+          manual: "Endless Google Doc comment threads",
+          withAgent: "Reply on WhatsApp to tweak tone and publish in 1 tap"
+        }
+      ]
+    },
+    workflowSteps: [
+      {
+        step: "01",
+        title: "Linguistic DNA Extraction",
+        desc: "Crawls your website and voice notes to map vocabulary, cadence, and core arguments.",
+        codePreview: "Voice DNA: Cadence=Direct · Formality=Executive · SlopFilter=Strict"
+      },
+      {
+        step: "02",
+        title: "Thesis & Hook Synthesis",
+        desc: "Structures high-conviction angles and 3 scroll-stopping hooks per topic.",
+        codePreview: "Drafted 3 Hook Variants -> Selected Highest Curiosity Score (9.4/10)"
+      },
+      {
+        step: "03",
+        title: "Editorial Refinement",
+        desc: "Formats line breaks, pacing, and takeaways for effortless mobile reading.",
+        codePreview: "Copy Engine: 1,180 chars · 0 Clichés Detected · Ready"
+      },
+      {
+        step: "04",
+        title: "WhatsApp Review & Dispatch",
+        desc: "Sends finished copy to your phone for instant 1-tap approval.",
+        codePreview: "WhatsApp -> Reply '1' to Approve & Broadcast"
+      }
+    ],
+    sampleOutputs: [
+      {
+        type: "Executive Narrative",
+        title: "Why We Fired Our Retainer Agency",
+        hook: "We spent $42,000 on a B2B content agency last year. They delivered 4 PDFs nobody read and 12 posts that sounded like a press release. Here is what we built instead...",
+        previewMeta: "Founder Voice · 980 chars · High-Conviction Tone",
+        badge: "Voice Clone"
+      },
+      {
+        type: "Framework Breakdown",
+        title: "The 3-Part Architecture of Inbound Authority",
+        hook: "Most founders treat content like a lottery ticket. Top operators treat it like product engineering. Here are the 3 systems that compound...",
+        previewMeta: "Structured Copy · Mobile Spacing · Zero Fluff",
+        badge: "Authority Copy"
+      }
+    ]
+  },
+  {
+    slug: "designer",
+    name: "Designer Agent",
+    platform: "Visual & Brand Engine",
+    role: "Brand Visuals & Slide Decks",
+    tagline: "Automated Typography, Custom Brand Carousels & Editorial Social Graphics",
+    heroHeadline: "Bespoke brand design & carousels on autopilot for",
+    heroHighlight: "modern teams.",
+    heroSubtitle: "Drop your website link. Our Designer Agent extracts your color palette, typography, and logos to render studio-grade carousels, infographics, and 4:5 visual cards automatically.",
+    heroRotatingWords: ["modern teams.", "agencies.", "founders.", "studios.", "brands."],
+    icon: "designer_svg",
+    iconType: "svg",
+    accentColor: "#38BDF8",
+    accentGlow: "rgba(56, 189, 248, 0.25)",
+    whatIsItFor: {
+      lead: "Engineered to replace hours of manual Figma and Canva pixel-pushing.",
+      description: "Great copy needs thumb-stopping visuals, but hiring designers or spending hours in Canva slows down publishing. The Designer Agent automatically pulls your brand colors, fonts, and visual identity to render multi-slide carousels, infographic diagrams, and editorial cards.",
+      bullets: [
+        "Automatic extraction of your exact hex palette, typography, and brand marks",
+        "Multi-slide 1080x1350 carousels and 1:1 / 4:5 / 9:16 social artboards",
+        "High-contrast editorial layouts with zero cheap stock-template look",
+        "Instant headless browser rendering into crisp, publication-ready PNGs & PDFs"
+      ],
+      capabilities: [
+        {
+          title: "Brand Identity Sync",
+          desc: "Lock in your exact brand colors, fonts, and logo placement across every visual asset.",
+          tag: "Brand DNA"
+        },
+        {
+          title: "Multi-Slide Carousel Builder",
+          desc: "Designs cohesive 7-to-10 slide educational decks with visual progression.",
+          tag: "Carousels"
+        },
+        {
+          title: "Data & Workflow Infographics",
+          desc: "Turns complex processes and comparisons into clean architectural diagrams.",
+          tag: "Infographics"
+        },
+        {
+          title: "Multi-Ratio Auto-Resize",
+          desc: "Renders native 4:5, 1:1, 16:9, and 9:16 formats simultaneously.",
+          tag: "Adaptive Layout"
+        }
+      ]
+    },
+    whyShouldYouUseIt: {
+      lead: "Studio-quality visual consistency without waiting on a design queue.",
+      description: "Every post gets a custom-engineered visual that looks like it came from an in-house creative director.",
+      benefits: [
+        {
+          metric: "100%",
+          title: "On-Brand",
+          desc: "Strict adherence to your typography, palette, and layout grid."
+        },
+        {
+          metric: "4 Ratios",
+          title: "Auto-Rendered",
+          desc: "Simultaneous output for LinkedIn PDFs, Instagram 4:5, X 16:9, and Stories."
+        },
+        {
+          metric: "0 Hrs",
+          title: "In Canva/Figma",
+          desc: "Completely autonomous layout composition and high-res export."
+        }
+      ],
+      comparison: [
+        {
+          feature: "Design Workflow",
+          manual: "2 hours dragging boxes in Canva or waiting 4 days on a designer",
+          withAgent: "Rendered automatically alongside your post copy in seconds"
+        },
+        {
+          feature: "Visual Consistency",
+          manual: "Random templates that clash with your website aesthetic",
+          withAgent: "Unified design system calibrated to your exact brand DNA"
+        },
+        {
+          feature: "Aspect Ratios",
+          manual: "Manually resizing and fixing broken text across platforms",
+          withAgent: "Native 1:1, 4:5, 9:16, and 16:9 artboards generated at once"
+        },
+        {
+          feature: "Cost",
+          manual: "$3,500/mo design subscription or freelance bills",
+          withAgent: "Unlimited automated visual rendering included"
+        }
+      ]
+    },
+    workflowSteps: [
+      {
+        step: "01",
+        title: "Brand Palette & Font Crawl",
+        desc: "Extracts your primary/secondary hex codes, font pairings, and logo mark.",
+        codePreview: "Brand Tokens: #08080C · #7C3AED · Font: Inter Tight / Serif"
+      },
+      {
+        step: "02",
+        title: "Artboard Composition",
+        desc: "Selects optimal layout grid, visual hierarchy, and diagrammatic elements.",
+        codePreview: "Layout Engine: 8-Slide Carousel + 4:5 Hero Card Composed"
+      },
+      {
+        step: "03",
+        title: "High-Res Vector & PNG Render",
+        desc: "Renders crisp 2x retina graphics and multi-page PDF decks.",
+        codePreview: "Render Lock: Exported 1080x1350 @2x PNGs in 1.8s"
+      },
+      {
+        step: "04",
+        title: "Attached to Drafts",
+        desc: "Delivers finished visuals straight to WhatsApp with your copy.",
+        codePreview: "WhatsApp -> Visual + Copy Package Ready for 1-Tap Publish"
+      }
+    ],
+    sampleOutputs: [
+      {
+        type: "System Architecture Graphic",
+        title: "How 1 Voice Note Becomes 30 Native Assets",
+        hook: "Dark-mode architectural flowchart contrasting legacy $6k/mo agencies against autonomous multi-channel pipelines.",
+        previewMeta: "1080x1350 · Vector Diagram · Brand Palette Applied",
+        badge: "Visual Card"
+      },
+      {
+        type: "Executive Carousel Deck",
+        title: "The 2026 B2B Distribution Playbook",
+        hook: "8-slide minimalist editorial deck with custom typography, metric callouts, and branded footer.",
+        previewMeta: "8 Slides · Multi-Page PDF + Instagram Carousel",
+        badge: "Carousel Deck"
+      }
+    ]
+  },
+  {
+    slug: "blog",
+    name: "Blog & SEO Agent",
+    platform: "Editorial & Search",
+    role: "SEO Articles & Newsletters",
+    tagline: "Search-Ranked Long-Form Articles, Pillar Guides & Automated CMS Publishing",
+    heroHeadline: "Compounding SEO articles & newsletters on autopilot for",
+    heroHighlight: "category leaders.",
+    heroSubtitle: "Drop your website link. Our Blog & SEO Agent researches high-intent buyer keywords, structures deep technical articles in your brand voice, and publishes directly to your CMS.",
+    heroRotatingWords: ["category leaders.", "SaaS teams.", "consultancies.", "founders.", "publishers."],
+    icon: "blog_svg",
+    iconType: "svg",
+    accentColor: "#10B981",
+    accentGlow: "rgba(16, 185, 129, 0.25)",
+    whatIsItFor: {
+      lead: "Engineered to capture high-intent organic search and AI answer engine citations.",
+      description: "Social feeds create immediate awareness, but long-form SEO articles and newsletters build permanent search equity. The Blog Agent turns your product insights and voice memos into 1,800-word authoritative guides optimized for both Google Search and AI search engines.",
+      bullets: [
+        "High-intent keyword targeting focused on bottom-of-funnel buyer questions",
+        "Structured H2/H3 hierarchy, comparison tables, and FAQ schema blocks",
+        "Written in your authentic domain voice with real examples—not generic SEO filler",
+        "Direct webhook publishing to WordPress, Ghost, Webflow, or custom markdown feeds"
+      ],
+      capabilities: [
+        {
+          title: "Search & GEO Optimization",
+          desc: "Structured to rank on Google and get cited by ChatGPT, Perplexity, and Gemini.",
+          tag: "SEO + GEO"
+        },
+        {
+          title: "Deep Pillar Articles",
+          desc: "Writes comprehensive 1,500–2,500 word breakdowns with diagrams and takeaways.",
+          tag: "Long-Form"
+        },
+        {
+          title: "Newsletter Synthesis",
+          desc: "Formats companion weekly email editions ready for Substack, Beehiiv, or Resend.",
+          tag: "Newsletter"
+        },
+        {
+          title: "Direct CMS Webhooks",
+          desc: "Pushes formatted HTML/Markdown with meta tags and OG images straight to your blog.",
+          tag: "Auto-Publish"
+        }
+      ]
+    },
+    whyShouldYouUseIt: {
+      lead: "Own your industry's search keywords without paying $500 per article.",
+      description: "Turn every product update and founder insight into a permanent, search-indexed asset on your domain.",
+      benefits: [
+        {
+          metric: "2,000+",
+          title: "Words / Guide",
+          desc: "In-depth, structured articles with real domain authority."
+        },
+        {
+          metric: "100%",
+          title: "CMS Synced",
+          desc: "Auto-formatted with meta descriptions, slugs, and header hierarchy."
+        },
+        {
+          metric: "24/7",
+          title: "Organic Inbound",
+          desc: "Compounding search traffic that converts high-intent buyers."
+        }
+      ],
+      comparison: [
+        {
+          feature: "Article Quality",
+          manual: "Cheap SEO writers producing unreadable keyword-stuffed fluff",
+          withAgent: "Grounded in your actual product DNA and executive insights"
+        },
+        {
+          feature: "Formatting & Schema",
+          manual: "Hours manually formatting H2s, tables, and meta tags in CMS",
+          withAgent: "Complete Markdown/HTML with SEO metadata delivered automatically"
+        },
+        {
+          feature: "Social Syndication",
+          manual: "Blog posts sit on your site with zero social promotion",
+          withAgent: "Automatically sliced into LinkedIn carousels, X threads & pins"
+        },
+        {
+          feature: "Cost per Article",
+          manual: "$400–$800 per freelance technical article",
+          withAgent: "Unlimited long-form editorial output included"
+        }
+      ]
+    },
+    workflowSteps: [
+      {
+        step: "01",
+        title: "Search Intent & Gap Mapping",
+        desc: "Identifies high-converting buyer queries and competitor content gaps.",
+        codePreview: "Target Keyword: 'autonomous b2b content workflow' · Intent: High"
+      },
+      {
+        step: "02",
+        title: "Outline & Deep Drafting",
+        desc: "Synthesizes a 2,000-word article with H2/H3 structure, tables, and key takeaways.",
+        codePreview: "Draft Complete: 2,140 words · 6 Sections · FAQ Schema Included"
+      },
+      {
+        step: "03",
+        title: "WhatsApp Summary Approval",
+        desc: "Sends article title, outline, and preview link to your WhatsApp for quick sign-off.",
+        codePreview: "WhatsApp -> Article Ready: 'The 2026 B2B Content Stack'"
+      },
+      {
+        step: "04",
+        title: "CMS & Social Syndication",
+        desc: "Publishes live to your blog and dispatches companion social threads.",
+        codePreview: "Webhook 200 OK -> Live at /blog/2026-b2b-content-stack"
+      }
+    ],
+    sampleOutputs: [
+      {
+        type: "Pillar SEO Guide",
+        title: "Autonomous Marketing Systems vs. Traditional Retainer Agencies: 2026 Benchmark",
+        hook: "An exhaustive breakdown of cost-per-asset, publishing velocity, and pipeline attribution across 140 B2B organizations...",
+        previewMeta: "2,200 Words · Comparison Tables · SEO Meta Included",
+        badge: "Search Pillar"
+      },
+      {
+        type: "Founder Newsletter Issue",
+        title: "Issue #42: Why Speed of Distribution Beats Perfection",
+        hook: "In this week's deep dive, we look at why the fastest-growing consultancies publish 5x more frequently by removing desktop bottlenecks...",
+        previewMeta: "1,100 Words · Newsletter Edition · 48% Avg Open Rate",
+        badge: "Newsletter"
+      }
+    ]
+  },
+  {
+    slug: "video",
+    name: "Video Script Agent",
+    platform: "TikTok, Reels & YouTube",
+    role: "9:16 Video Scripts & Hooks",
+    tagline: "Retention-Engineered 9:16 Video Scripts, Audio Pacing & B-Roll Shot Lists",
+    heroHeadline: "Short-form & YouTube video scripts on autopilot for",
+    heroHighlight: "creators.",
+    heroSubtitle: "Drop your website link. Our Video Script Agent writes retention-optimized 30-to-60 second vertical scripts and YouTube briefs with visual hooks, on-screen text cues, and B-roll directions.",
+    heroRotatingWords: ["creators.", "founders.", "brands.", "advisors.", "educators."],
+    icon: "video_svg",
+    iconType: "svg",
+    accentColor: "#F59E0B",
+    accentGlow: "rgba(245, 158, 11, 0.25)",
+    whatIsItFor: {
+      lead: "Built for founders and brands that want massive organic reach through video without scripting bottlenecks.",
+      description: "Video is the fastest way to reach net-new audiences across TikTok, Reels, and YouTube Shorts, but scriptwriting requires specialized pacing. The Video Script Agent maps out 3-second hook variations, on-screen graphics, spoken scripts, and B-roll cues optimized for watch-time algorithms.",
+      bullets: [
+        "First 3-second visual and verbal hook formulas that stop the infinite scroll",
+        "Side-by-side teleprompter script and visual B-roll direction",
+        "Paced for high completion rates (55-70% target watch-through)",
+        "Ready-to-use AI video generation prompts for Runway, Luma, and Sora"
+      ],
+      capabilities: [
+        {
+          title: "3-Second Hook Architecture",
+          desc: "Generates 3 alternative opening lines and physical visual actions to hook viewers immediately.",
+          tag: "Hook Engine"
+        },
+        {
+          title: "B-Roll Shot Directives",
+          desc: "Provides clear filming instructions and on-screen text overlay cues.",
+          tag: "Production"
+        },
+        {
+          title: "Teleprompter Ready",
+          desc: "Formatted directly for mobile teleprompter apps with natural spoken cadence.",
+          tag: "Delivery"
+        },
+        {
+          title: "YouTube & Shorts Sync",
+          desc: "Generates both 60s vertical scripts and structured YouTube chapter outlines.",
+          tag: "Multi-Video"
+        }
+      ]
+    },
+    whyShouldYouUseIt: {
+      lead: "Scale your video presence without hiring expensive scriptwriters or video strategists.",
+      description: "Our agent writes hook-first, retention-backed scripts that keep viewers watching until the final frame.",
+      benefits: [
+        {
+          metric: "68%",
+          title: "Avg Watch Through",
+          desc: "Optimized pacing keeps viewers engaged past the critical 30-second mark."
+        },
+        {
+          metric: "3 Hooks",
+          title: "Per Script",
+          desc: "Test multiple opening hooks without re-writing the core body of the video."
+        },
+        {
+          metric: "15 Min",
+          title: "Weekly Filming",
+          desc: "Read off the teleprompter script in one take. No editing guesswork needed."
+        }
+      ],
+      comparison: [
+        {
+          feature: "Script Structure",
+          manual: "Wandering, rambling monologues with no clear hook",
+          withAgent: "Hook (0-3s) -> Tension (3-12s) -> Value (12-40s) -> CTA (40-50s)"
+        },
+        {
+          feature: "Filming Guidance",
+          manual: "Unsure what to show on screen while speaking",
+          withAgent: "Explicit shot-by-shot B-roll suggestions and text cues"
+        },
+        {
+          feature: "Voice Naturalness",
+          manual: "Stiff robotic corporate script that feels unnatural to speak",
+          withAgent: "Conversational cadence calibrated to your natural speaking rhythm"
+        },
+        {
+          feature: "Multi-Platform Export",
+          manual: "Separate writing for TikTok vs Reels vs YouTube Shorts",
+          withAgent: "Single master script optimized for all short-form video feeds"
+        }
+      ]
+    },
+    workflowSteps: [
+      {
+        step: "01",
+        title: "Topic & Hook Extraction",
+        desc: "Identifies the highest-curiosity angles from your website or voice memo.",
+        codePreview: "Topic Extracted: 'The hidden cost of manual agency reporting'"
+      },
+      {
+        step: "02",
+        title: "9:16 Pacing & Scripting",
+        desc: "Structures 3-second hook, spoken narration, and visual cuts.",
+        codePreview: "Script: 45s Duration · 140 words · 3 Visual Cut Directives"
+      },
+      {
+        step: "03",
+        title: "Delivery to Phone",
+        desc: "Script arrives on WhatsApp formatted for teleprompter apps.",
+        codePreview: "WhatsApp -> Script Delivered with Teleprompter Spacing"
+      },
+      {
+        step: "04",
+        title: "Publish Video Asset",
+        desc: "Upload clip or AI render; the agent supplies captions, tags, and titles.",
+        codePreview: "Video API: Reels, TikTok & Shorts metadata synchronized"
+      }
+    ],
+    sampleOutputs: [
+      {
+        type: "9:16 Video Script",
+        title: "Why 90% of Agencies Never Break $50k/mo",
+        hook: "[VISUAL: Pointing at screen showing chaotic spreadsheet] Verbal: 'If you want to know why agency owners work 70 hours a week, look at this exact number...'",
+        previewMeta: "48s Script · Teleprompter Ready · 3 Visual Cues",
+        badge: "Short-Form Video"
+      },
+      {
+        type: "Product Teardown Reel",
+        title: "We rebuilt our client workflow in 48 hours",
+        hook: "[VISUAL: Fast-paced screen recording] Verbal: 'We deleted 80% of manual steps last Tuesday. Here is what happened next...'",
+        previewMeta: "42s Script · B-Roll Shot List Included",
+        badge: "Product Reel"
+      }
+    ]
+  }
+];
+
+export const EXTRA_AGENTS_LIST: AgentData[] = [
   {
     slug: "tiktok",
     name: "TikTok & Reels Agent",
@@ -601,7 +1131,7 @@ export const AGENTS_LIST: AgentData[] = [
     accentGlow: "rgba(0, 242, 254, 0.25)",
     whatIsItFor: {
       lead: "Built for founders and brands that want massive organic reach through short-form video without being cringey.",
-      description: "Short-form video is the single fastest way to reach net-new audiences, but scriptwriting requires specialized pacing. The TikTok & Reels Agent maps out 3-second hook variations, on-screen graphics, spoken scripts, and call-to-actions specifically optimized for video watch-time algorithms.",
+      description: "Short-form video is the single fastest way to reach net-new audiences, but scriptwriting requires specialized pacing.",
       bullets: [
         "First 3-second visual and verbal hook formulas that stop the infinite scroll",
         "Side-by-side teleprompter script and visual B-roll direction",
@@ -609,510 +1139,32 @@ export const AGENTS_LIST: AgentData[] = [
         "On-screen text overlay prompts that drive curiosity and engagement"
       ],
       capabilities: [
-        {
-          title: "3-Second Hook Architecture",
-          desc: "Generates 3 alternative opening lines and physical visual actions to hook viewers before they swipe away.",
-          tag: "Hook Engine"
-        },
-        {
-          title: "B-Roll Shot Directives",
-          desc: "Provides clear filming instructions (e.g. 'Screen recording of dashboard', 'Cut to white board', 'Handheld camera walk').",
-          tag: "Production"
-        },
-        {
-          title: "Teleprompter Ready",
-          desc: "Formatted directly for teleprompter apps with clean punctuation and conversational cadence.",
-          tag: "Delivery"
-        },
-        {
-          title: "AI Video Prompt Generator",
-          desc: "Includes matching prompts ready for Runway, Luma, or Sora if you prefer generating AI video assets.",
-          tag: "AI Video"
-        }
+        { title: "3-Second Hook Architecture", desc: "Generates 3 alternative opening lines to hook viewers.", tag: "Hook Engine" },
+        { title: "B-Roll Shot Directives", desc: "Provides clear filming instructions and visual cues.", tag: "Production" },
+        { title: "Teleprompter Ready", desc: "Formatted directly for teleprompter apps.", tag: "Delivery" },
+        { title: "AI Video Prompt Generator", desc: "Includes prompts ready for Runway, Luma, or Sora.", tag: "AI Video" }
       ]
     },
     whyShouldYouUseIt: {
-      lead: "Scale your video presence without hiring expensive scriptwriters or video strategists.",
-      description: "Most business video content fails because it starts with 'Hi, I'm John and today I want to talk about...'. Our agent writes hook-first, retention-backed scripts that keep viewers watching until the last frame.",
+      lead: "Scale your video presence without hiring expensive scriptwriters.",
+      description: "Hook-first, retention-backed scripts that keep viewers watching until the last frame.",
       benefits: [
-        {
-          metric: "68%",
-          title: "Avg Watch Through",
-          desc: "Optimized pacing keeps viewers engaged past the critical 30-second mark."
-        },
-        {
-          metric: "3 Hooks",
-          title: "Per Script",
-          desc: "Test multiple opening hooks without re-writing the core body of the video."
-        },
-        {
-          metric: "15 Min",
-          title: "Weekly Filming Time",
-          desc: "Read off the teleprompter script in one take. No editing guesswork needed."
-        }
+        { metric: "68%", title: "Avg Watch Through", desc: "Optimized pacing keeps viewers engaged." },
+        { metric: "3 Hooks", title: "Per Script", desc: "Test multiple opening hooks effortlessly." },
+        { metric: "15 Min", title: "Weekly Filming Time", desc: "Read off the teleprompter script in one take." }
       ],
       comparison: [
-        {
-          feature: "Script Structure",
-          manual: "Wandering, rambling monologues with no clear hook",
-          withAgent: "Hook (0-3s) -> Conflict (3-12s) -> Value (12-40s) -> CTA (40-50s)"
-        },
-        {
-          feature: "Filming Guidance",
-          manual: "Unsure what to show on screen while speaking",
-          withAgent: "Explicit shot-by-shot B-roll suggestions and on-screen text cues"
-        },
-        {
-          feature: "Voice Naturalness",
-          manual: "Stiff robotic corporate script that feels unnatural to speak",
-          withAgent: "Conversational, punchy cadence calibrated to your natural speaking rhythm"
-        },
-        {
-          feature: "Multi-Platform Export",
-          manual: "Separate writing for TikTok vs Reels vs Shorts",
-          withAgent: "Single master script optimized for TikTok, Reels, and YouTube Shorts"
-        }
+        { feature: "Script Structure", manual: "Wandering monologues", withAgent: "Hook -> Conflict -> Value -> CTA" }
       ]
     },
     workflowSteps: [
-      {
-        step: "01",
-        title: "Website & Topic Synthesis",
-        desc: "Identifies the highest-curiosity features and value propositions from your website.",
-        codePreview: "Topic Extracted: 'The hidden cost of manual agency reporting'"
-      },
-      {
-        step: "02",
-        title: "Hook Pacing & Scripting",
-        desc: "Structures 3-second hook, spoken narration, and visual actions in 9:16 layout.",
-        codePreview: "Script: 45s Duration · 140 words · 3 Visual Cut Directives"
-      },
-      {
-        step: "03",
-        title: "Delivery to Phone",
-        desc: "Script arrives on WhatsApp formatted for teleprompter apps or direct camera recording.",
-        codePreview: "WhatsApp -> Script Delivered with Teleprompter Spacing"
-      },
-      {
-        step: "04",
-        title: "Publish Video Asset",
-        desc: "Upload filmed clip or generated video; the agent supplies captions, hashtags, and titles.",
-        codePreview: "TikTok & Reels API: Meta descriptions and tags synchronized"
-      }
+      { step: "01", title: "Website Synthesis", desc: "Identifies high-curiosity angles.", codePreview: "Topic Extracted" },
+      { step: "02", title: "Hook Pacing", desc: "Structures 3-second hook and narration.", codePreview: "Script: 45s Duration" },
+      { step: "03", title: "Delivery to Phone", desc: "Arrives on WhatsApp.", codePreview: "WhatsApp -> Delivered" },
+      { step: "04", title: "Publish Video", desc: "Syncs captions and tags.", codePreview: "API: Synchronized" }
     ],
     sampleOutputs: [
-      {
-        type: "9:16 Video Script",
-        title: "Why 90% of Agencies Never Break $50k/mo",
-        hook: "[VISUAL: Pointing at screen showing chaotic spreadsheet] Verbal: 'If you want to know why agency owners work 70 hours a week and take home less than their junior devs, look at this exact number...'",
-        previewMeta: "48s Script · Teleprompter Ready · 3 Visual Cues",
-        badge: "Short-Form Video"
-      },
-      {
-        type: "Product Teardown Reel",
-        title: "We rebuilt our client dashboard in 48 hours",
-        hook: "[VISUAL: Fast-paced screen recording with highlight markers] Verbal: 'We deleted 80% of our software features last Tuesday. Our clients thought we lost our minds. Here is what happened next...'",
-        previewMeta: "42s Script · B-Roll Shot List Included",
-        badge: "Product Showcase"
-      }
-    ]
-  },
-  {
-    slug: "youtube",
-    name: "YouTube Agent",
-    platform: "YouTube",
-    role: "Long-Form Video Briefs & Shorts SEO",
-    tagline: "Search-Indexed Descriptions, Chapter Outlines & Community Tab Engagement",
-    heroHeadline: "YouTube search dominance & shorts on autopilot for",
-    heroHighlight: "enterprises.",
-    heroSubtitle: "Drop your website link. Our YouTube Agent crafts structured long-form video briefs, high-retention Shorts scripts, click-worthy titles, SEO descriptions, and weekly Community Tab polls.",
-    heroRotatingWords: ["enterprises.", "founders.", "educators.", "consultancies.", "software."],
-    icon: "youtube_svg",
-    iconType: "svg",
-    accentColor: "#FF0000",
-    accentGlow: "rgba(255, 0, 0, 0.25)",
-    whatIsItFor: {
-      lead: "Engineered to transform your company into the definitive, search-ranked authority in your domain.",
-      description: "YouTube is the world’s second-largest search engine. Unlike social feeds where content dies in 24 hours, YouTube videos drive high-intent enterprise pipeline for years. The YouTube Agent structures complete video outlines, title variations, timestamped chapters, and community tab polls.",
-      bullets: [
-        "Search-optimized title variations balancing curiosity with SEO keywords",
-        "Timestamped chapter outlines that rank in Google Search results",
-        "Complete description copy with contextual timestamps, links, and resource calls-to-action",
-        "Weekly Community Tab posts to maintain algorithmic vitality between main video drops"
-      ],
-      capabilities: [
-        {
-          title: "Chapter & Timestamp Outlines",
-          desc: "Generates clear timestamps that help Google index your video directly inside Google Search SERP features.",
-          tag: "SEO Chapters"
-        },
-        {
-          title: "Title & Thumbnail Briefs",
-          desc: "Provides 5 tested title variations with matching thumbnail composition guidelines and emotional hooks.",
-          tag: "Click Velocity"
-        },
-        {
-          title: "Community Tab Engine",
-          desc: "Writes weekly interactive polls, behind-the-scenes teasers, and discussion prompts that warm up your subscriber base.",
-          tag: "Community"
-        },
-        {
-          title: "Shorts-to-Longform Funnel",
-          desc: "Scripts companion YouTube Shorts designed specifically to drive viewers into your flagship long-form videos.",
-          tag: "Funnel Routing"
-        }
-      ]
-    },
-    whyShouldYouUseIt: {
-      lead: "Compounding evergreen discovery that feeds your inbound pipeline for years.",
-      description: "Stop relying solely on feeds that disappear by tomorrow morning. YouTube videos continue attracting high-value buyers 18 months after publishing when structured with proper search metadata.",
-      benefits: [
-        {
-          metric: "18+ Mo",
-          title: "Content Longevity",
-          desc: "Videos rank and attract qualified traffic long after initial publication date."
-        },
-        {
-          metric: "5 Titles",
-          title: "CTR Tested",
-          desc: "Pre-tested title variations combining search intent with psychological curiosity."
-        },
-        {
-          metric: "Google #1",
-          title: "Search Ranking",
-          desc: "Timestamped chapter markers enable direct video feature snippets on Google."
-        }
-      ],
-      comparison: [
-        {
-          feature: "Video Outlining",
-          manual: "Hours figuring out how to structure a 10-minute technical video",
-          withAgent: "Complete outline with introduction hook, 4 teaching pillars, and CTA"
-        },
-        {
-          feature: "YouTube SEO Metadata",
-          manual: "Blank descriptions or hasty 1-sentence summaries",
-          withAgent: "Rich, keyword-targeted description with timestamps and links"
-        },
-        {
-          feature: "Community Engagement",
-          manual: "Forgetting the Community tab exists for months at a time",
-          withAgent: "Weekly automated polls and discussions that maintain channel momentum"
-        },
-        {
-          feature: "Shorts Repurposing",
-          manual: "Manually re-editing clips with zero context",
-          withAgent: "Scripted companion Shorts engineered to drive traffic to the main video"
-        }
-      ]
-    },
-    workflowSteps: [
-      {
-        step: "01",
-        title: "Search Keyword & Topic Analysis",
-        desc: "Finds high-intent search queries your ideal customers are actively typing on YouTube.",
-        codePreview: "Query Identified: 'How to automate marketing operations in 2026'"
-      },
-      {
-        step: "02",
-        title: "Long-Form Outline & Chaptering",
-        desc: "Constructs 10-minute narrative arc with retention peaks, timestamps, and slide cues.",
-        codePreview: "Generated: 6 Chapters with exact timestamp intervals and talking points"
-      },
-      {
-        step: "03",
-        title: "SEO Metadata & Titles",
-        desc: "Drafts 5 high-CTR titles, full SEO description, and targeted channel tags.",
-        codePreview: "Metadata Complete: 5 Titles · 2,400 char description · 15 tags"
-      },
-      {
-        step: "04",
-        title: "Publish to Channel",
-        desc: "Syncs directly to your YouTube Studio with metadata, playlists, and cards prefilled.",
-        codePreview: "YouTube API: Video Draft Saved to Studio with Chapters"
-      }
-    ],
-    sampleOutputs: [
-      {
-        type: "Long-Form Master Brief",
-        title: "The Death of Traditional Agencies: The Autonomous Content Engine Explained",
-        hook: "Intro (0:00 - 1:15): 'If you are paying an agency $10,000/mo to schedule 12 social posts, you are participating in a dying economic model. In this video, we break down the autonomous stack...'",
-        previewMeta: "12-Min Video Brief · 5 Chapters · SEO Description",
-        badge: "Evergreen Authority"
-      },
-      {
-        type: "Community Tab Poll",
-        title: "Weekly Engagement Poll",
-        hook: "Question: 'What is the biggest bottleneck in your company's marketing right now?' Options: A) Copywriting quality B) Visual consistency C) Publishing cadence D) Client approvals",
-        previewMeta: "Community Post · Interactive Poll · 4 Options",
-        badge: "Audience Warming"
-      }
-    ]
-  },
-  {
-    slug: "facebook",
-    name: "Facebook Agent",
-    platform: "Facebook Pages & Groups",
-    role: "Company Page Feeds & Case Studies",
-    tagline: "Automated Business Announcements, Client Case Studies & Group Discussions",
-    heroHeadline: "Facebook company syndication on autopilot for",
-    heroHighlight: "businesses.",
-    heroSubtitle: "Drop your website link. Keep your Facebook business page and client community groups active with automated company case studies, customer transformations, and discussion posts.",
-    heroRotatingWords: ["businesses.", "agencies.", "local leaders.", "brands.", "services."],
-    icon: "/native-marketing-on-autopilot.svg.svg-647.Woblo.svg",
-    iconType: "img",
-    iconSrc: "/native-marketing-on-autopilot.svg.svg-647.Woblo.svg",
-    accentColor: "#1877F2",
-    accentGlow: "rgba(24, 119, 242, 0.25)",
-    whatIsItFor: {
-      lead: "Ensures your business maintains an active, credible presence on Meta's ecosystem without manual busywork.",
-      description: "B2B and high-ticket service buyers frequently check Facebook pages and groups to verify legitimate business operations, reviews, and community activity. The Facebook Agent formats long-form storytelling posts, case study breakdowns, and scheduled announcements that maintain professional credibility.",
-      bullets: [
-        "Long-form customer transformation and case study storytelling",
-        "Business updates, feature rollouts, and company milestone announcements",
-        "Community group discussion starters designed to generate real comments",
-        "Zero-friction automated syndication directly alongside your other feeds"
-      ],
-      capabilities: [
-        {
-          title: "Case Study Storytelling",
-          desc: "Formats detailed customer success stories with rich imagery, quotes, and measurable outcomes.",
-          tag: "Case Studies"
-        },
-        {
-          title: "Group Discussion Posts",
-          desc: "Crafts open-ended questions and prompts that encourage community members to participate and comment.",
-          tag: "Community"
-        },
-        {
-          title: "Milestone Announcements",
-          desc: "Celebrates team achievements, product updates, and client wins with clean professional tone.",
-          tag: "Social Proof"
-        },
-        {
-          title: "Dual Feed Distribution",
-          desc: "Publishes simultaneously to your official Facebook Business Page and linked private Facebook Groups.",
-          tag: "Distribution"
-        }
-      ]
-    },
-    whyShouldYouUseIt: {
-      lead: "Keep your Meta footprint alive and trustworthy without spending mental energy on it.",
-      description: "An abandoned Facebook page with the last post from 8 months ago damages buyer trust. The Facebook Agent automatically keeps your page fresh, professional, and full of social proof.",
-      benefits: [
-        {
-          metric: "100%",
-          title: "Page Freshness",
-          desc: "Prospective clients always find recent posts, case studies, and updates on your page."
-        },
-        {
-          metric: "0 Extra Mins",
-          title: "Double-Posting",
-          desc: "Never manually re-upload images or re-paste captions into Facebook Business Suite."
-        },
-        {
-          metric: "High Trust",
-          title: "Social Proof",
-          desc: "Detailed client results and testimonials displayed prominently where buyers look."
-        }
-      ],
-      comparison: [
-        {
-          feature: "Facebook Page Management",
-          manual: "Abandoned for months because nobody wants to open Meta Business Suite",
-          withAgent: "Maintained automatically with fresh, relevant company updates every week"
-        },
-        {
-          feature: "Case Study Formatting",
-          manual: "Dry technical summaries that get zero engagement",
-          withAgent: "Compelling narrative storytelling with before-and-after outcomes"
-        },
-        {
-          feature: "Workflow",
-          manual: "Logging into complicated Meta Business Manager settings",
-          withAgent: "Approved in 10 seconds via WhatsApp alongside all other platforms"
-        },
-        {
-          feature: "Community Groups",
-          manual: "Dead silence in your company group or customer forum",
-          withAgent: "Consistent value drops and structured discussion starters"
-        }
-      ]
-    },
-    workflowSteps: [
-      {
-        step: "01",
-        title: "Company Update Extraction",
-        desc: "Extracts latest company milestones, client outcomes, and blog posts from your website.",
-        codePreview: "Extracted Update: 'New feature launch & client case study'"
-      },
-      {
-        step: "02",
-        title: "Storytelling Formulation",
-        desc: "Constructs conversational, engaging Facebook posts with clean layout and relevant imagery.",
-        codePreview: "Formatted Post: 850 characters with bulleted results and call-to-action"
-      },
-      {
-        step: "03",
-        title: "Mobile Push via WhatsApp",
-        desc: "Delivered to WhatsApp with your company page preview card ready for one-tap approval.",
-        codePreview: "WhatsApp -> Facebook Post Preview Ready"
-      },
-      {
-        step: "04",
-        title: "Meta Graph API Dispatch",
-        desc: "Directly published via official Meta API to your Page and linked groups.",
-        codePreview: "Meta Graph API: Status 200 OK -> Post Live"
-      }
-    ],
-    sampleOutputs: [
-      {
-        type: "Client Case Study Post",
-        title: "How Northstar Logistics cut client communication overhead by 73%",
-        hook: "When Northstar first approached us, their account managers were drowning in 400+ weekly WhatsApp messages. Here is the exact autonomous system we rolled out...",
-        previewMeta: "Facebook Page Post · Image Attached · 920 chars",
-        badge: "Social Proof"
-      },
-      {
-        type: "Community Discussion",
-        title: "The Future of B2B Operations",
-        hook: "Quick question for the operators here: If you could automate one manual task in your company tomorrow morning, what would it be? Drop yours below—we are compiling the top answers.",
-        previewMeta: "Group Discussion Starter · 280 chars",
-        badge: "Community Engagement"
-      }
-    ]
-  },
-  {
-    slug: "pinterest",
-    name: "Pinterest Agent",
-    platform: "Pinterest",
-    role: "Visual Search Pins & Infographics",
-    tagline: "Evergreen 2:3 Vertical Pins, Infographic Summaries & Long-Term Search Traffic",
-    heroHeadline: "Evergreen visual search traffic on autopilot for",
-    heroHighlight: "brands.",
-    heroSubtitle: "Drop your website link. Our Pinterest Agent transforms your core frameworks and insights into high-intent 2:3 vertical pins, infographic cards, and automated board destinations.",
-    heroRotatingWords: ["brands.", "publishers.", "consultancies.", "software.", "educators."],
-    icon: "/native-marketing-on-autopilot.svg.svg-1022.Woblo.svg",
-    iconType: "img",
-    iconSrc: "/native-marketing-on-autopilot.svg.svg-1022.Woblo.svg",
-    accentColor: "#E60023",
-    accentGlow: "rgba(230, 0, 35, 0.25)",
-    whatIsItFor: {
-      lead: "Engineered to unlock the world's most underrated evergreen visual search engine.",
-      description: "Unlike social feeds where posts disappear after 24 hours, a Pinterest pin has an average lifespan of 6 to 12 months. Users search Pinterest for frameworks, cheat-sheets, workflows, and solutions. The Pinterest Agent generates 2:3 vertical infographic pins that rank for search terms and drive continuous organic referral clicks to your website.",
-      bullets: [
-        "2:3 vertical aspect ratio optimized for mobile Pinterest search feeds",
-        "Search-indexed keyword titles and descriptions tailored to high-intent buyer queries",
-        "Infographic summaries, workflow diagrams, and visual checklists",
-        "Direct outbound URL linking to your website, landing page, or case study"
-      ],
-      capabilities: [
-        {
-          title: "2:3 Infographic Pins",
-          desc: "Generates high-contrast vertical pins with diagrams, checklists, and bulleted takeaways that users save to their boards.",
-          tag: "Infographics"
-        },
-        {
-          title: "Pinterest Search SEO",
-          desc: "Researches keyword density and search tags to ensure your pins rank when buyers search for your category.",
-          tag: "Search SEO"
-        },
-        {
-          title: "Automated Board Routing",
-          desc: "Categorizes and schedules pins across multiple themed boards on your business profile automatically.",
-          tag: "Board Routing"
-        },
-        {
-          title: "Direct Referral Links",
-          desc: "Embeds direct tracking links to your landing page, driving qualified inbound traffic with high buying intent.",
-          tag: "Inbound Clicks"
-        }
-      ]
-    },
-    whyShouldYouUseIt: {
-      lead: "Build a perpetual traffic engine that keeps sending visitors months after you post.",
-      description: "If you are tired of the treadmill of daily social posting where yesterday's effort vanishes today, Pinterest is your compounding moat. Pins published in January still drive leads in September.",
-      benefits: [
-        {
-          metric: "9+ Mo",
-          title: "Avg Pin Lifespan",
-          desc: "Pins continue to generate impressions, saves, and clicks for nearly a full year."
-        },
-        {
-          metric: "2:3 Ratio",
-          title: "Optimal Format",
-          desc: "High-resolution vertical pins that maximize visual presence in the search grid."
-        },
-        {
-          metric: "High Intent",
-          title: "Search Traffic",
-          desc: "Reaches users who are actively searching for solutions, not passively scrolling."
-        }
-      ],
-      comparison: [
-        {
-          feature: "Content Lifespan",
-          manual: "24 to 48 hours on LinkedIn, X, or Instagram",
-          withAgent: "6 to 12 months of compounding search visibility on Pinterest"
-        },
-        {
-          feature: "Infographic Design",
-          manual: "Hiring a designer to build complex 2:3 vertical graphics",
-          withAgent: "Instant automated rendering of high-density visual frameworks"
-        },
-        {
-          feature: "Outbound Linking",
-          manual: "Penalized by algorithms on LinkedIn and X",
-          withAgent: "Fully supported and encouraged by Pinterest; direct link on every pin"
-        },
-        {
-          feature: "Effort Required",
-          manual: "Forgetting Pinterest because manual pinning is tedious",
-          withAgent: "Syndicated automatically from your website crawl alongside all other feeds"
-        }
-      ]
-    },
-    workflowSteps: [
-      {
-        step: "01",
-        title: "Framework & Article Crawl",
-        desc: "Extracts key concepts, checklists, and step-by-step guides from your website.",
-        codePreview: "Extracted Framework: 'The 7 Steps to Automated Marketing'"
-      },
-      {
-        step: "02",
-        title: "2:3 Vertical Pin Rendering",
-        desc: "Renders vertical infographic card with high-contrast typography and visual hierarchy.",
-        codePreview: "Canvas Engine: 1000x1500px High-Resolution Pin Generated"
-      },
-      {
-        step: "03",
-        title: "Pinterest Keyword SEO",
-        desc: "Applies targeted search terms to title, pin description, and destination link.",
-        codePreview: "SEO Optimization: Targeted 'business automation workflow'"
-      },
-      {
-        step: "04",
-        title: "Board Syndication",
-        desc: "Saves pin directly to your targeted Pinterest boards with outbound link attached.",
-        codePreview: "Pinterest API: Pin Saved to 'Business Growth Strategies'"
-      }
-    ],
-    sampleOutputs: [
-      {
-        type: "2:3 Vertical Infographic",
-        title: "The Ultimate Guide to Founder Brand Automation",
-        hook: "Vertical Pin: 5-step visual diagram detailing how to capture voice notes and turn them into multi-channel marketing with zero retainers.",
-        previewMeta: "1000x1500 · High-Resolution Infographic · Outbound Link Included",
-        badge: "Evergreen Search Pin"
-      },
-      {
-        type: "Checklist Pin",
-        title: "10 Things to Check Before Hiring a Marketing Agency",
-        hook: "Vertical Checklist Pin: Clean numbered checklist highlighting agency red flags and alternatives.",
-        previewMeta: "2:3 Ratio · Save-Magnet Layout",
-        badge: "Checklist Magnet"
-      }
+      { type: "9:16 Video Script", title: "Why 90% of Agencies Plateau", hook: "Look at this exact number...", previewMeta: "48s Script", badge: "Short-Form" }
     ]
   }
 ];
@@ -1120,7 +1172,8 @@ export const AGENTS_LIST: AgentData[] = [
 export function getAgentBySlug(slug: string): AgentData | undefined {
   const normalized = slug?.toLowerCase().trim();
   if (normalized === 'twitter') return AGENTS_LIST.find(a => a.slug === 'x');
-  return AGENTS_LIST.find(a => a.slug === normalized);
+  if (normalized === 'tiktok' || normalized === 'youtube') return AGENTS_LIST.find(a => a.slug === 'video') || EXTRA_AGENTS_LIST.find(a => a.slug === normalized);
+  return AGENTS_LIST.find(a => a.slug === normalized) || EXTRA_AGENTS_LIST.find(a => a.slug === normalized);
 }
 
 export function renderAgentIcon(agent: AgentData, sizeClass = "w-5 h-5"): React.ReactNode {
@@ -1143,10 +1196,50 @@ export function renderAgentIcon(agent: AgentData, sizeClass = "w-5 h-5"): React.
       </svg>
     );
   }
-  if (agent.slug === 'tiktok') {
+  if (agent.slug === 'writing') {
     return (
-      <svg className={`${sizeClass} fill-[#00F2FE]`} viewBox="0 0 24 24">
-        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.32a6.34 6.34 0 0 0-.86-.06A6.33 6.33 0 0 0 3 15.59 6.33 6.33 0 0 0 9.33 22a6.33 6.33 0 0 0 6.34-6.33V9.22a8.16 8.16 0 0 0 4.67 1.48V7.27a4.84 4.84 0 0 1-.75-.58z"/>
+      <svg className={`${sizeClass} text-[#C084FC]`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+        <path d="M2 2l7.586 7.586"/>
+        <circle cx="11" cy="11" r="2"/>
+      </svg>
+    );
+  }
+  if (agent.slug === 'designer') {
+    return (
+      <svg className={`${sizeClass} text-[#38BDF8]`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+        <polyline points="2 17 12 22 22 17"/>
+        <polyline points="2 12 12 17 22 12"/>
+      </svg>
+    );
+  }
+  if (agent.slug === 'blog') {
+    return (
+      <svg className={`${sizeClass} text-[#10B981]`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <line x1="10" y1="9" x2="8" y2="9"/>
+      </svg>
+    );
+  }
+  if (agent.slug === 'research') {
+    return (
+      <svg className={`${sizeClass} text-[#34D399]`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+    );
+  }
+  if (agent.slug === 'video' || agent.slug === 'tiktok') {
+    return (
+      <svg className={`${sizeClass} text-[#F59E0B]`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
       </svg>
     );
   }

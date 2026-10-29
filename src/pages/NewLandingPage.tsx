@@ -195,101 +195,106 @@ export function NewLandingPage() {
     }
   ];
 
-  // Autonomous Agent Fleet Registry (Social Media Platform Named Agents)
+  // Autonomous Agent Fleet Registry (Mixed Social Media & Specialized Creative Agents)
   const agentFleet: Array<{
     step: string;
+    slug: string;
     role: string;
+    tag: string;
+    spec: string;
+    hoverInfo: string;
+    chips: [string, string];
     icon: React.ReactNode;
-    desc: string;
-    output: string;
   }> = [
     {
       step: "01",
+      slug: "linkedin",
       role: "LinkedIn Agent",
+      tag: "Social",
+      spec: "B2B Carousels & Posts",
+      hoverInfo: "Drafts 10-slide PDF decks & executive posts directly from your URL.",
+      chips: ["PDF Carousels", "Personal + Page"],
       icon: (
         <img 
           src="/native-marketing-on-autopilot.svg.svg-100.Woblo.svg" 
           alt="LinkedIn" 
-          className="w-6 h-6 object-contain" 
+          className="w-5 h-5 object-contain" 
         />
-      ),
-      desc: "Drafts high-authority B2B posts, multi-slide PDF carousels, and founder takeaways.",
-      output: "Native B2B carousels & posts"
+      )
     },
     {
       step: "02",
-      role: "X (Twitter) Agent",
-      icon: (
-        <svg className="w-6 h-6 fill-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-      ),
-      desc: "Writes punchy viral threads, founder takes, contrarian hooks, and market commentary.",
-      output: "Viral threads & quick takes"
+      slug: "writing",
+      role: "Writing Agent",
+      tag: "Copy",
+      spec: "Founder Voice Clone",
+      hoverInfo: "Clones your exact sentence cadence and vocabulary with zero AI clichés.",
+      chips: ["99% Voice Match", "Zero AI Slop"],
+      icon: <PenTool className="w-5 h-5 text-[#C084FC]" strokeWidth={1.8} />
     },
     {
       step: "03",
-      role: "Instagram Agent",
+      slug: "x",
+      role: "X (Twitter) Agent",
+      tag: "Social",
+      spec: "Viral Threads & Hooks",
+      hoverInfo: "Writes 8-tweet viral threads, contrarian takes & daily founder hooks.",
+      chips: ["Viral Threads", "Daily Hooks"],
       icon: (
-        <svg className="w-6 h-6 text-[#E1306C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>
-      ),
-      desc: "Generates high-aesthetic 4:5 visual cards, carousel decks, and platform-tailored captions.",
-      output: "4:5 visual carousels & reels"
+        <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      )
     },
     {
       step: "04",
-      role: "WhatsApp Agent",
-      icon: (
-        <img 
-          src="/okara-the-only-ai-cmo-that-puts-marketing-on-autopilot.svg.svg-55.Woblo.svg" 
-          alt="WhatsApp" 
-          className="w-6 h-6 object-contain" 
-        />
-      ),
-      desc: "Receives your 20-second voice notes and delivers finished drafts for 1-tap mobile approval.",
-      output: "1-tap mobile voice approvals"
+      slug: "designer",
+      role: "Designer Agent",
+      tag: "Design",
+      spec: "Brand Visuals & Slides",
+      hoverInfo: "Extracts your fonts, hex palette & logo to render studio-grade graphics.",
+      chips: ["1:1 · 4:5 · 9:16", "Auto-Branded"],
+      icon: <Palette className="w-5 h-5 text-[#38BDF8]" strokeWidth={1.8} />
     },
     {
       step: "05",
-      role: "TikTok & Reels Agent",
+      slug: "instagram",
+      role: "Instagram Agent",
+      tag: "Social",
+      spec: "4:5 Feeds & Reels",
+      hoverInfo: "Generates 4:5 visual carousel cards, storyboards & native captions.",
+      chips: ["4:5 Carousels", "Reels Captions"],
       icon: (
-        <svg className="w-6 h-6 fill-[#00F2FE]" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.32a6.34 6.34 0 0 0-.86-.06A6.33 6.33 0 0 0 3 15.59 6.33 6.33 0 0 0 9.33 22a6.33 6.33 0 0 0 6.34-6.33V9.22a8.16 8.16 0 0 0 4.67 1.48V7.27a4.84 4.84 0 0 1-.75-.58z"/></svg>
-      ),
-      desc: "Scripts fast-paced 9:16 vertical video hooks, visual B-roll cues, and voiceover prompts.",
-      output: "9:16 short-form video scripts"
+        <svg className="w-5 h-5 text-[#E1306C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>
+      )
     },
     {
       step: "06",
-      role: "YouTube Agent",
-      icon: (
-        <svg className="w-6 h-6 fill-[#FF0000]" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-      ),
-      desc: "Structures video scripts, description metadata, and community post discussions.",
-      output: "Video briefs & community posts"
+      slug: "blog",
+      role: "Blog & SEO Agent",
+      tag: "Editorial",
+      spec: "Long-Form Articles",
+      hoverInfo: "Publishes 2,000-word search-ranked guides & newsletters to your CMS.",
+      chips: ["Google + AI SEO", "Direct Webhook"],
+      icon: <Layers className="w-5 h-5 text-[#10B981]" strokeWidth={1.8} />
     },
     {
       step: "07",
-      role: "Facebook Agent",
-      icon: (
-        <img 
-          src="/native-marketing-on-autopilot.svg.svg-647.Woblo.svg" 
-          alt="Facebook" 
-          className="w-6 h-6 object-contain" 
-        />
-      ),
-      desc: "Formats and schedules company updates, announcements, and visual case studies.",
-      output: "Automated business page feeds"
+      slug: "research",
+      role: "Research Agent",
+      tag: "Intel",
+      spec: "Market & ICP Trends",
+      hoverInfo: "Crawls your URL, competitor angles & live market trends to ground every post.",
+      chips: ["Competitor Gaps", "Live Trends"],
+      icon: <Globe className="w-5 h-5 text-[#34D399]" strokeWidth={1.8} />
     },
     {
       step: "08",
-      role: "Pinterest Agent",
-      icon: (
-        <img 
-          src="/native-marketing-on-autopilot.svg.svg-1022.Woblo.svg" 
-          alt="Pinterest" 
-          className="w-6 h-6 object-contain" 
-        />
-      ),
-      desc: "Transforms insights and blog posts into high-intent search pins and visual infographics.",
-      output: "Search-optimized visual pins"
+      slug: "video",
+      role: "Video Script Agent",
+      tag: "Motion",
+      spec: "9:16 Scripts & Hooks",
+      hoverInfo: "Scripts 3-second scroll-stopping hooks, B-roll cues & teleprompter lines.",
+      chips: ["TikTok · Reels · Shorts", "3s Hook Engine"],
+      icon: <Video className="w-5 h-5 text-[#F59E0B]" strokeWidth={1.8} />
     }
   ];
 
@@ -777,18 +782,13 @@ export function NewLandingPage() {
             >
               <div className="absolute -top-3 left-0 right-0 h-3" />
               {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-white/10">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-2 h-2 rounded-full bg-[#7C3AED] animate-pulse"></span>
-                    <h3 className="text-sm font-semibold text-white tracking-tight">Autonomous Platform Agents</h3>
-                    <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">
-                      8 Dedicated Engines
-                    </span>
-                  </div>
-                  <p className="text-xs text-white/50">
-                    Each agent specializes in platform-native algorithms, formatting, and high-retention storytelling.
-                  </p>
+              <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#7C3AED] animate-pulse"></span>
+                  <h3 className="text-sm font-semibold text-white tracking-tight">Autonomous Agent Fleet</h3>
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">
+                    Social + Creative
+                  </span>
                 </div>
                 <button
                   onClick={() => setAgentsOpen(false)}
@@ -799,46 +799,38 @@ export function NewLandingPage() {
                 </button>
               </div>
 
-              {/* Agents Grid (Clean Logos, Zero Boxes) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 py-5">
+              {/* Minimalist Agents Grid (Zero Clutter) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 py-4">
                 {AGENTS_LIST.map((agent) => (
                   <Link
                     key={agent.slug}
                     to={`/agents/${agent.slug}`}
                     onClick={() => setAgentsOpen(false)}
-                    className="group/agent p-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/20 transition-all flex flex-col justify-between"
+                    className="group/agent p-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.06] hover:border-[#7C3AED]/50 transition-all flex items-center gap-3"
                   >
-                    <div>
-                      {/* Clean Logo: No box container */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                          {renderAgentIcon(agent, "w-5 h-5")}
-                        </div>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-white/30 group-hover/agent:text-white transition-colors" />
+                    <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 group-hover/agent:border-[#7C3AED]/40 transition-colors">
+                      {renderAgentIcon(agent, "w-4 h-4")}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <h4 className="text-xs font-semibold text-white group-hover/agent:text-[#C084FC] transition-colors truncate">
+                          {agent.name}
+                        </h4>
+                        <ArrowUpRight className="w-3 h-3 text-white/25 group-hover/agent:text-[#C084FC] transition-colors shrink-0" />
                       </div>
-                      <h4 className="text-xs font-semibold text-white group-hover/agent:text-[#C084FC] transition-colors mb-1">
-                        {agent.name}
-                      </h4>
-                      <p className="text-[10px] font-mono text-[#A78BFA] mb-2">
+                      <p className="text-[10px] font-mono text-white/45 truncate mt-0.5">
                         {agent.role}
                       </p>
-                      <p className="text-[11px] text-white/50 line-clamp-2 leading-relaxed">
-                        {agent.tagline}
-                      </p>
-                    </div>
-                    <div className="mt-3 pt-2.5 border-t border-white/[0.06] flex items-center justify-between text-[10px] text-white/40 group-hover/agent:text-white/80 transition-colors">
-                      <span>Explore Agent</span>
-                      <span className="text-[#C084FC]">→</span>
                     </div>
                   </Link>
                 ))}
               </div>
 
               {/* Dropdown Footer CTA */}
-              <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 text-white/60">
+              <div className="pt-3.5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-white/50">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
-                  <span>All 8 agents synchronize with your central Brand DNA automatically</span>
+                  <span>Synced to your central Brand DNA</span>
                 </div>
                 <Link
                   to="/login?mode=signup"
@@ -1082,166 +1074,266 @@ export function NewLandingPage() {
 
 
       {/* ==========================================
-           2. HOW IT WORKS (Minimal Text, Zero Boxes, Ultra-Straightforward Vertical)
+           2. HOW IT WORKS (Architectural 2-Column Pipeline with Live Micro-UI Previews)
            ========================================== */}
-      <section className="w-full bg-[#08080C] text-white py-20 sm:py-28 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
+      <section className="w-full bg-[#08080C] text-white py-24 sm:py-32 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
         
         {/* Subtle Ambient Glow */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-[#7C3AED]/10 rounded-full blur-[140px] pointer-events-none"></div>
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[350px] bg-[#7C3AED]/10 rounded-full blur-[160px] pointer-events-none"></div>
 
-        <div className="max-w-5xl mx-auto relative z-10">
+        <div className="max-w-7xl mx-auto relative z-10">
           
-          {/* Header: Short, straight to the point */}
-          <div className="mb-14 sm:mb-16">
-            <span className="text-xs font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
-              HOW IT WORKS
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
-              From your link to 11 live feeds. <em className="italic text-[#C084FC]">Four steps.</em>
-            </h2>
+          {/* Section Header */}
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-16 sm:mb-20">
+            <div>
+              <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
+                00 / AUTONOMOUS WORKFLOW
+              </span>
+              <h2 className="text-4xl sm:text-6xl font-serif font-normal text-white tracking-tight leading-[1.06]">
+                From your link to 11 live feeds. <em className="italic text-[#C084FC]">Four steps.</em>
+              </h2>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>End-to-End Pipeline · ~60 Seconds Total Setup</span>
+            </div>
           </div>
 
-          {/* 4 Vertical Steps: Clean, Boxless, Minimal Text */}
-          <div className="space-y-10 sm:space-y-12">
-            
-            {/* Step 01 */}
-            <div className="flex items-start gap-6 sm:gap-10 group">
-              <span className="text-3xl sm:text-5xl font-serif text-white/20 group-hover:text-[#C084FC] transition-colors shrink-0 font-light select-none">
-                01
-              </span>
-              <div className="flex-1 pt-1 border-b border-white/10 pb-8 sm:pb-10">
-                <h3 className="text-xl sm:text-2xl font-medium text-white tracking-tight mb-1.5">
-                  Paste your link
-                </h3>
-                <p className="text-sm sm:text-base text-slate-400 font-light">
-                  We crawl your website, docs, and positioning in 3 seconds.
-                </p>
-                <div className="mt-3 flex items-center gap-2 text-xs font-mono text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>https://yourbrand.com ── Analyzed in 3.2s</span>
-                </div>
-              </div>
-            </div>
+          {/* 4-Stage Architectural Pipeline (Zero Background Boxes, Pure Hairline Canvas) */}
+          <div className="relative divide-y divide-white/10 border-t border-b border-white/10">
 
-            {/* Step 02 */}
-            <div className="flex items-start gap-6 sm:gap-10 group">
-              <span className="text-3xl sm:text-5xl font-serif text-white/20 group-hover:text-[#C084FC] transition-colors shrink-0 font-light select-none">
-                02
-              </span>
-              <div className="flex-1 pt-1 border-b border-white/10 pb-8 sm:pb-10">
-                <h3 className="text-xl sm:text-2xl font-medium text-white tracking-tight mb-1.5">
-                  We strategize 5 things
-                </h3>
-                <p className="text-sm sm:text-base text-slate-400 font-light mb-3">
-                  Before writing a word, our agents extract what actually converts:
-                </p>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs sm:text-sm font-mono text-slate-300">
-                  <span>1. Content Strategy</span>
-                  <span className="text-white/20">/</span>
-                  <span>2. Competitor Angles</span>
-                  <span className="text-white/20">/</span>
-                  <span>3. Brand DNA</span>
-                  <span className="text-white/20">/</span>
-                  <span>4. Buyer ICP</span>
-                  <span className="text-white/20">/</span>
-                  <span>5. Founder Voice Clone</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Step 03: Autonomous Agents */}
-            <div className="flex items-start gap-6 sm:gap-10 group">
-              <span className="text-3xl sm:text-5xl font-serif text-white/20 group-hover:text-[#C084FC] transition-colors shrink-0 font-light select-none">
-                03
-              </span>
-              <div className="flex-1 pt-1 border-b border-white/10 pb-8 sm:pb-10">
-                <h3 className="text-xl sm:text-2xl font-medium text-white tracking-tight mb-1.5">
-                  Autonomous agents craft your content
-                </h3>
-                <p className="text-sm sm:text-base text-slate-400 font-light mb-3">
-                  Dedicated engines collaborate across every format:
-                </p>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs sm:text-sm font-mono text-slate-300">
-                  <span>Copywriting</span>
-                  <span className="text-white/20">/</span>
-                  <span>Visual Design</span>
-                  <span className="text-white/20">/</span>
-                  <span>Video Scripts</span>
-                  <span className="text-white/20">/</span>
-                  <span>Voice Cloning</span>
-                  <span className="text-white/20">/</span>
-                  <span>Market Research</span>
-                  <span className="text-white/20">/</span>
-                  <span>Graphic Engine</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Step 04: Omnichannel Review & Broadcast */}
-            <div className="flex items-start gap-6 sm:gap-10 group">
-              <span className="text-3xl sm:text-5xl font-serif text-emerald-400/40 group-hover:text-emerald-400 transition-colors shrink-0 font-light select-none">
-                04
-              </span>
-              <div className="flex-1 pt-1 pb-2">
-                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 mb-1.5">
-                  <h3 className="text-xl sm:text-2xl font-medium text-white tracking-tight">
-                    1-Tap WhatsApp review. Live across 11 channels.
+            {/* ================= STEP 01 ================= */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center py-10 sm:py-12 group">
+              {/* Left Narrative (5 cols) */}
+              <div className="lg:col-span-5 flex items-start gap-6">
+                <span className="text-3xl sm:text-5xl font-serif text-white/25 group-hover:text-[#C084FC] transition-colors shrink-0 font-light select-none leading-none pt-1">
+                  01
+                </span>
+                <div>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#C084FC]">
+                      URL Ingestion
+                    </span>
+                    <span className="text-white/20">·</span>
+                    <span className="text-[11px] font-mono text-emerald-400">3.2s crawl</span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-medium text-white tracking-tight mb-1.5 group-hover:text-[#C084FC] transition-colors">
+                    Paste your website link
                   </h3>
-                  <span className="text-emerald-400 font-mono text-sm uppercase tracking-wider font-semibold">
-                    Boom, done.
-                  </span>
+                  <p className="text-xs sm:text-sm text-slate-400 font-light leading-relaxed">
+                    We crawl your domain, product pages, case studies, and visual identity in seconds—zero manual forms.
+                  </p>
                 </div>
-                <p className="text-sm sm:text-base text-slate-400 font-light mb-4">
-                  Review drafts on WhatsApp. Tap approve, and your content publishes simultaneously across all feeds:
-                </p>
+              </div>
 
-                {/* Social Media Channel Logos (Using Public Folder Assets) */}
-                <div className="flex items-center gap-4 sm:gap-5 flex-wrap mb-5 pt-1">
+              {/* Right Visual Strip (7 cols — Open Canvas, No Background Box) */}
+              <div className="lg:col-span-7 space-y-5 lg:pl-8 lg:border-l lg:border-white/10">
+                <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Globe className="w-4 h-4 text-[#C084FC] shrink-0" />
+                    <span className="text-xs sm:text-sm font-mono text-white truncate">https://yourcompany.com</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="text-[11px] font-mono text-emerald-400">100% Indexed · 14 pages</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-6 text-xs pt-1">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-2">Palette</span>
+                    <div className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded-full bg-[#08080C] border border-white/40"></span>
+                      <span className="w-3.5 h-3.5 rounded-full bg-[#7C3AED]"></span>
+                      <span className="w-3.5 h-3.5 rounded-full bg-[#C084FC]"></span>
+                      <span className="w-3.5 h-3.5 rounded-full bg-[#10B981]"></span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1.5">Typography</span>
+                    <span className="font-mono text-xs text-white">Inter Tight + Serif</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 block mb-1.5">Voice Tone</span>
+                    <span className="font-mono text-xs text-[#C084FC]">Executive · Direct</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ================= STEP 02 ================= */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center py-10 sm:py-12 group">
+              {/* Left Narrative (5 cols) */}
+              <div className="lg:col-span-5 flex items-start gap-6">
+                <span className="text-3xl sm:text-5xl font-serif text-white/25 group-hover:text-[#C084FC] transition-colors shrink-0 font-light select-none leading-none pt-1">
+                  02
+                </span>
+                <div>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#C084FC]">
+                      Strategic DNA
+                    </span>
+                    <span className="text-white/20">·</span>
+                    <span className="text-[11px] font-mono text-slate-400">5 Pillars Mapped</span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-medium text-white tracking-tight mb-1.5 group-hover:text-[#C084FC] transition-colors">
+                    We strategize 5 core pillars
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-400 font-light leading-relaxed">
+                    Before writing a single word, our intelligence engine extracts the exact angles that convert your buyers.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Visual Strip: 5 Strategic Pillars (Open Hairline Columns, No Boxes) */}
+              <div className="lg:col-span-7 lg:pl-8 lg:border-l lg:border-white/10">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-6">
+                  {[
+                    { num: "01", label: "Content Strategy", meta: "30-Day Matrix" },
+                    { num: "02", label: "Competitor Angles", meta: "Gap Analysis" },
+                    { num: "03", label: "Brand DNA", meta: "Visual + Copy" },
+                    { num: "04", label: "Buyer ICP", meta: "Pain Points" },
+                    { num: "05", label: "Founder Voice", meta: "99.4% Clone" }
+                  ].map((item) => (
+                    <div
+                      key={item.num}
+                      className="border-l border-white/15 pl-3.5 flex flex-col justify-between gap-2 group/pillar hover:border-[#C084FC] transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono text-[#C084FC] font-semibold">{item.num}</span>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-white leading-snug">{item.label}</div>
+                        <div className="text-[10px] font-mono text-slate-500 mt-0.5">{item.meta}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ================= STEP 03 ================= */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center py-10 sm:py-12 group">
+              {/* Left Narrative (5 cols) */}
+              <div className="lg:col-span-5 flex items-start gap-6">
+                <span className="text-3xl sm:text-5xl font-serif text-white/25 group-hover:text-[#C084FC] transition-colors shrink-0 font-light select-none leading-none pt-1">
+                  03
+                </span>
+                <div>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#C084FC]">
+                      Multi-Format Synthesis
+                    </span>
+                    <span className="text-white/20">·</span>
+                    <span className="text-[11px] font-mono text-slate-400">6 Active Engines</span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-medium text-white tracking-tight mb-1.5 group-hover:text-[#C084FC] transition-colors">
+                    Autonomous agents craft your content
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-400 font-light leading-relaxed">
+                    Specialized engines collaborate simultaneously across copy, vector design, video scripts, and SEO.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Visual Strip: 6 Collaborative Engines (Open Canvas, Zero Boxes) */}
+              <div className="lg:col-span-7 lg:pl-8 lg:border-l lg:border-white/10">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5">
+                  {[
+                    { title: "Copywriting", out: "Posts & Threads", icon: <PenTool className="w-4 h-4 text-[#C084FC]" /> },
+                    { title: "Visual Design", out: "4:5 & 1:1 Cards", icon: <Palette className="w-4 h-4 text-[#38BDF8]" /> },
+                    { title: "Video Scripts", out: "9:16 Hooks & Cues", icon: <Video className="w-4 h-4 text-[#F59E0B]" /> },
+                    { title: "Voice Cloning", out: "Founder Cadence", icon: <Fingerprint className="w-4 h-4 text-emerald-400" /> },
+                    { title: "Market Research", out: "Live Buyer Intel", icon: <Globe className="w-4 h-4 text-purple-400" /> },
+                    { title: "Graphic Engine", out: "Multi-Slide PDFs", icon: <Layers className="w-4 h-4 text-pink-400" /> }
+                  ].map((eng) => (
+                    <div
+                      key={eng.title}
+                      className="flex items-start gap-3"
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        {eng.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs sm:text-sm font-medium text-white truncate">{eng.title}</div>
+                        <div className="text-[11px] font-mono text-slate-500 truncate mt-0.5">{eng.out}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ================= STEP 04 ================= */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center py-10 sm:py-12 group">
+              {/* Left Narrative (5 cols) */}
+              <div className="lg:col-span-5 flex items-start gap-6">
+                <span className="text-3xl sm:text-5xl font-serif text-emerald-400/50 group-hover:text-emerald-400 transition-colors shrink-0 font-light select-none leading-none pt-1">
+                  04
+                </span>
+                <div>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-emerald-400">
+                      Autopilot Broadcast
+                    </span>
+                    <span className="text-white/20">·</span>
+                    <span className="text-[11px] font-mono text-emerald-400 font-semibold uppercase">Boom, done.</span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-medium text-white tracking-tight mb-1.5">
+                    1-Click review &amp; auto-schedule
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-400 font-light leading-relaxed">
+                    Inspect your 30-day calendar, make instant visual or copy edits if needed, and auto-publish across all connected feeds.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Visual Strip: Open Omnichannel Broadcast (No Background Boxes) */}
+              <div className="lg:col-span-7 space-y-5 lg:pl-8 lg:border-l lg:border-white/10">
+                <div className="flex items-center gap-5 flex-wrap">
                   <div title="LinkedIn" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <img src="/native-marketing-on-autopilot.svg.svg-100.Woblo.svg" alt="LinkedIn" className="w-6 h-6 object-contain rounded" />
+                    <img src="/native-marketing-on-autopilot.svg.svg-100.Woblo.svg" alt="LinkedIn" className="w-5 h-5 object-contain rounded" />
                   </div>
                   <div title="X" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                    <svg className="w-4.5 h-4.5 fill-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                   </div>
                   <div title="Instagram" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <svg className="w-6 h-6 text-[#E1306C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>
+                    <svg className="w-5 h-5 text-[#E1306C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>
                   </div>
                   <div title="YouTube" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <svg className="w-6 h-6 fill-[#FF0000]" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                    <svg className="w-5 h-5 fill-[#FF0000]" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                   </div>
                   <div title="TikTok" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.32a6.34 6.34 0 0 0-.86-.06A6.33 6.33 0 0 0 3 15.59 6.33 6.33 0 0 0 9.33 22a6.33 6.33 0 0 0 6.34-6.33V9.22a8.16 8.16 0 0 0 4.67 1.48V7.27a4.84 4.84 0 0 1-.75-.58z"/></svg>
-                  </div>
-                  <div title="WhatsApp" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <img src="/okara-the-only-ai-cmo-that-puts-marketing-on-autopilot.svg.svg-55.Woblo.svg" alt="WhatsApp" className="w-6 h-6 object-contain" />
+                    <svg className="w-4.5 h-4.5 fill-white" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.86.12V9.32a6.34 6.34 0 0 0-.86-.06A6.33 6.33 0 0 0 3 15.59 6.33 6.33 0 0 0 9.33 22a6.33 6.33 0 0 0 6.34-6.33V9.22a8.16 8.16 0 0 0 4.67 1.48V7.27a4.84 4.84 0 0 1-.75-.58z"/></svg>
                   </div>
                   <div title="Facebook" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <img src="/native-marketing-on-autopilot.svg.svg-647.Woblo.svg" alt="Facebook" className="w-6 h-6 object-contain rounded-full" />
+                    <img src="/native-marketing-on-autopilot.svg.svg-647.Woblo.svg" alt="Facebook" className="w-5 h-5 object-contain rounded-full" />
                   </div>
                   <div title="Threads" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24"><path d="M12.186 24C5.556 24 0 18.636 0 12.008 0 5.488 5.452.016 12.083 0c3.766 0 7.021 1.636 9.176 4.606l-2.47 1.796c-1.63-2.185-4.04-3.376-6.706-3.376-4.992 0-9.056 4.05-9.056 8.982 0 5.016 4.156 9.07 9.159 9.07 3.328 0 5.926-1.503 7.067-4.116.643-1.472.934-3.477.934-6.462h-8.08v-3.026h11.08c.045.54.067 1.144.067 1.796 0 3.734-.413 6.388-1.398 8.49C19.467 21.606 16.275 24 12.186 24z"/></svg>
+                    <svg className="w-4.5 h-4.5 fill-white" viewBox="0 0 24 24"><path d="M12.186 24C5.556 24 0 18.636 0 12.008 0 5.488 5.452.016 12.083 0c3.766 0 7.021 1.636 9.176 4.606l-2.47 1.796c-1.63-2.185-4.04-3.376-6.706-3.376-4.992 0-9.056 4.05-9.056 8.982 0 5.016 4.156 9.07 9.159 9.07 3.328 0 5.926-1.503 7.067-4.116.643-1.472.934-3.477.934-6.462h-8.08v-3.026h11.08c.045.54.067 1.144.067 1.796 0 3.734-.413 6.388-1.398 8.49C19.467 21.606 16.275 24 12.186 24z"/></svg>
                   </div>
                   <div title="Reddit" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <svg className="w-6 h-6 fill-[#FF4500]" viewBox="0 0 24 24"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.702zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
+                    <svg className="w-5 h-5 fill-[#FF4500]" viewBox="0 0 24 24"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.702zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
                   </div>
                   <div title="Pinterest" className="cursor-pointer transition-transform duration-200 hover:scale-110">
-                    <img src="/native-marketing-on-autopilot.svg.svg-1022.Woblo.svg" alt="Pinterest" className="w-6 h-6 object-contain" />
+                    <img src="/native-marketing-on-autopilot.svg.svg-1022.Woblo.svg" alt="Pinterest" className="w-5 h-5 object-contain" />
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
+                <div className="flex flex-wrap items-center gap-4 pt-1">
                   <a
                     href="#hero-input"
                     onClick={(e) => {
                       e.preventDefault();
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                    className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-full transition-colors inline-flex items-center gap-2"
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs rounded-lg transition-colors inline-flex items-center gap-2"
                   >
-                    <span>Approve &amp; Broadcast All 11 Feeds</span>
-                    <span>✓</span>
+                    <span>Approve &amp; Auto-Schedule All Feeds</span>
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                   </a>
-                  <span className="text-slate-500">Zero dashboard logins required</span>
+                  <span className="text-[11px] font-mono text-slate-500">Direct API publishing · Zero manual copy-pasting</span>
                 </div>
               </div>
             </div>
@@ -1252,61 +1344,84 @@ export function NewLandingPage() {
       </section>
 
       {/* ==========================================
-           2. FULL SPECTRUM PRODUCTION (Hover Minimalist Accordion + Interactive Artboard)
+           2. AUTONOMOUS AGENT FLEET (Minimalist Mixed Social & Creative Engines)
            ========================================== */}
-      {/* ==========================================
-           2. AUTONOMOUS AGENT FLEET (Domain-Specific Specialized Engines)
-           ========================================== */}
-      <section data-nav-theme="dark" className="w-full bg-[#08080C] text-white py-24 sm:py-32 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
+      <section data-nav-theme="dark" className="w-full bg-[#08080C] text-white py-20 sm:py-28 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
         {/* Subtle Ambient Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-[#7C3AED]/10 rounded-full blur-[160px] pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[300px] bg-[#7C3AED]/8 rounded-full blur-[160px] pointer-events-none"></div>
 
         <div className="max-w-7xl mx-auto relative z-10">
           
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-14">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-12">
             <div className="max-w-2xl">
               <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">01 / Autonomous Agent Fleet</span>
               <h2 className="text-4xl sm:text-6xl font-serif font-normal text-white tracking-tight leading-[1.06]">
-                8 platform agents. <em className="italic text-[#C084FC]">Zero human bottlenecks.</em>
+                8 specialized agents. <em className="italic text-[#C084FC]">Zero human bottlenecks.</em>
               </h2>
             </div>
-            <p className="text-xs sm:text-sm text-slate-400 font-mono uppercase tracking-wider flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC] animate-pulse"></span>
-              Autonomous pipeline · LinkedIn · X · Instagram · WhatsApp · TikTok · YouTube · Facebook · Pinterest
+            <p className="text-xs text-slate-400 font-mono uppercase tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]"></span>
+              Social Channels · Copywriting · Visual Design · Blog SEO · Video
             </p>
           </div>
 
-          {/* 8 Autonomous Platform Agents Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* 8 Minimalist Mixed Agents Grid (Opens Slightly on Hover to Reveal Straightforward Info) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-start">
             {agentFleet.map((agent) => (
-              <div 
+              <Link
                 key={agent.step}
-                className="bg-[#0F1017]/90 border border-white/10 hover:border-[#7C3AED]/60 p-6 rounded-xl flex flex-col justify-between transition-all duration-300 hover:shadow-[0_0_30px_rgba(124,58,237,0.15)] group backdrop-blur-sm"
+                to={`/agents/${agent.slug}`}
+                className="bg-[#0B0C12] hover:bg-[#11131C] border border-white/10 hover:border-[#7C3AED]/50 rounded-xl p-6 flex flex-col justify-between transition-all duration-300 hover:shadow-[0_12px_32px_-8px_rgba(124,58,237,0.2)] group"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-8 h-8 flex items-center justify-center transition-transform duration-200 group-hover:scale-110 shrink-0">
-                      {agent.icon}
-                    </div>
-                    <span className="font-mono text-xs font-semibold text-slate-500 group-hover:text-[#C084FC] transition-colors">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-white/[0.03] border border-white/[0.08] group-hover:border-[#7C3AED]/50 flex items-center justify-center transition-all duration-200 group-hover:scale-105 shrink-0">
+                    {agent.icon}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 rounded bg-white/[0.03] text-slate-400 border border-white/[0.06] group-hover:text-[#C084FC] group-hover:border-[#C084FC]/30 transition-colors">
+                      {agent.tag}
+                    </span>
+                    <span className="font-mono text-[11px] text-white/25 group-hover:text-white/60 transition-colors">
                       {agent.step}
                     </span>
                   </div>
-                  
-                  <h3 className="text-base sm:text-lg font-serif font-normal text-white mb-2 group-hover:text-purple-200 transition-colors">
-                    {agent.role}
-                  </h3>
-                  
-                  <p className="text-xs sm:text-[13px] text-slate-400 font-light leading-relaxed">
-                    {agent.desc}
-                  </p>
                 </div>
 
-                <div className="mt-5 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-slate-400">
-                  <span className="text-slate-500 uppercase text-[10px] tracking-wider">Output</span>
-                  <span className="text-slate-200 font-medium group-hover:text-white transition-colors">{agent.output}</span>
+                <div>
+                  <div className="flex items-end justify-between gap-2">
+                    <div>
+                      <h3 className="text-base sm:text-[17px] font-medium text-white tracking-tight group-hover:text-[#C084FC] transition-colors">
+                        {agent.role}
+                      </h3>
+                      <p className="text-xs font-mono text-slate-400 mt-1">
+                        {agent.spec}
+                      </p>
+                    </div>
+                    <ArrowUpRight className="w-4 h-4 text-white/20 group-hover:text-[#C084FC] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 mb-0.5" />
+                  </div>
+
+                  {/* Smooth Hover-Reveal Drawer (Opens slightly with straightforward info) */}
+                  <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows,opacity] duration-300 ease-out opacity-0 group-hover:opacity-100">
+                    <div className="overflow-hidden">
+                      <div className="pt-3.5 mt-3.5 border-t border-white/[0.08] space-y-2.5">
+                        <p className="text-xs text-slate-300 font-light leading-relaxed">
+                          {agent.hoverInfo}
+                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {agent.chips.map((chip) => (
+                            <span
+                              key={chip}
+                              className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#7C3AED]/10 text-[#C084FC] border border-[#7C3AED]/25"
+                            >
+                              {chip}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -1832,96 +1947,195 @@ export function NewLandingPage() {
 
 
       {/* ==========================================
-           FOUNDER AGENT: What it does for you (Clean Icons, Zero Emojis)
+           FOUNDER PERSONAL BRAND FLOW: Balanced Visual 3-Step Flow
            ========================================== */}
-      <section data-nav-theme="dark" className="w-full bg-[#08080C] text-white py-16 sm:py-24 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
+      <section data-nav-theme="dark" className="w-full bg-[#08080C] text-white py-20 sm:py-28 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
         {/* Subtle Ambient Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[260px] bg-[#7C3AED]/10 rounded-full blur-[140px] pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[280px] bg-[#7C3AED]/10 rounded-full blur-[150px] pointer-events-none"></div>
 
-        <div className="max-w-5xl mx-auto relative z-10">
+        <div className="max-w-6xl mx-auto relative z-10">
           
-          {/* Header */}
-          <div className="mb-12">
-            <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
-              FOUNDER AGENT
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
-              What it does for you. <em className="italic text-[#C084FC]">Zero hours writing.</em>
-            </h2>
-          </div>
-
-          {/* 3 Plain Minimal Columns (Clean SVG Icons, Zero Emojis) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 sm:gap-12 pt-2">
-            
-            {/* Step 01 */}
-            <div className="border-b md:border-b-0 md:border-r border-white/10 pb-6 md:pb-0 md:pr-8">
-              <span className="text-2xl sm:text-4xl font-serif text-white/30 font-light block mb-2 select-none">
-                01
-              </span>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
-                What you give us
-              </h3>
-              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
-                A 20-second voice note on WhatsApp while walking. Nothing else.
-              </p>
-              <div className="text-xs font-mono text-emerald-400 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Mic className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>20s WhatsApp voice note</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Step 02 */}
-            <div className="border-b md:border-b-0 md:border-r border-white/10 pb-6 md:pb-0 md:pr-8">
-              <span className="text-2xl sm:text-4xl font-serif text-[#C084FC]/60 font-light block mb-2 select-none">
-                02
-              </span>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
-                What the agent does
-              </h3>
-              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
-                Clones your exact voice and crafts ready-to-publish posts for LinkedIn &amp; X.
-              </p>
-              <div className="text-xs font-mono text-[#C084FC] flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]"></span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-[#C084FC] shrink-0" />
-                  <span>In your voice · Zero AI slop</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Step 03 */}
+          {/* Minimal Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-14">
             <div>
-              <span className="text-2xl sm:text-4xl font-serif text-emerald-400/60 font-light block mb-2 select-none">
-                03
+              <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
+                FOUNDER PERSONAL BRAND FLOW
               </span>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-1.5">
-                How it goes live
-              </h3>
-              <p className="text-sm text-slate-300 font-light leading-relaxed mb-3">
-                Draft arrives in WhatsApp. Reply "1" or tap approve. Goes live instantly.
-              </p>
-              <div className="text-xs font-mono text-emerald-400 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>10-second approval ── Done</span>
-                </span>
+              <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
+                Build your personal authority. <em className="italic text-[#C084FC]">Zero hours writing.</em>
+              </h2>
+            </div>
+            <Link
+              to="/founder"
+              className="inline-flex items-center gap-1.5 text-xs font-mono text-[#C084FC] hover:text-white transition-colors group shrink-0 pb-1"
+            >
+              <span>Explore Founder Studio</span>
+              <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </Link>
+          </div>
+
+          {/* 3 Balanced Steps: Visual Help on Top + Minimal Copy Below */}
+          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/10 border-t border-b border-white/10">
+            
+            {/* STEP 01: Voice + Brand Grounding */}
+            <div className="py-8 md:pr-8 lg:pr-10 flex flex-col justify-between gap-7">
+              {/* Visual Help 01: Voice Waveform + Brand Link */}
+              <div className="h-36 flex flex-col justify-center gap-3 border-b border-white/10 pb-6">
+                {/* Voice DNA Row */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full border border-[#C084FC]/40 bg-[#7C3AED]/15 flex items-center justify-center text-[#C084FC]">
+                      <Fingerprint className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-xs font-medium text-white">Founder Voice DNA</span>
+                  </div>
+                  {/* Visual Waveform Bars */}
+                  <div className="flex items-center gap-1 h-6">
+                    {[40, 75, 55, 95, 65, 100, 80, 50, 85, 60].map((h, i) => (
+                      <span
+                        key={i}
+                        className="w-1 rounded-full bg-gradient-to-t from-[#7C3AED] to-[#C084FC]"
+                        style={{ height: `${h}%` }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-400">99.4%</span>
+                </div>
+
+                {/* Plus Divider */}
+                <div className="flex items-center gap-2 pl-3">
+                  <div className="w-px h-3 bg-white/15"></div>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">+ Grounded with your brand</span>
+                </div>
+
+                {/* Owned Brand Row */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full border border-white/15 bg-white/[0.03] flex items-center justify-center text-slate-300">
+                      <Globe className="w-3.5 h-3.5 text-[#C084FC]" />
+                    </div>
+                    <span className="text-xs font-mono text-slate-200">yourcompany.com</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-[#C084FC] border border-[#C084FC]/30 px-2 py-0.5 rounded">
+                    Owned Brand
+                  </span>
+                </div>
+              </div>
+
+              {/* Minimal Step Text 01 */}
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="text-2xl font-serif text-[#C084FC] font-light">01</span>
+                  <h3 className="text-base sm:text-lg font-medium text-white">
+                    Clone voice &amp; link your brand
+                  </h3>
+                </div>
+                <p className="text-sm text-slate-400 font-light leading-relaxed">
+                  Share a past post to clone your exact tone, and link the products you own.
+                </p>
               </div>
             </div>
 
-          </div>
+            {/* STEP 02: 1-Line Thought -> Post + Visual */}
+            <div className="py-8 md:px-8 lg:px-10 flex flex-col justify-between gap-7">
+              {/* Visual Help 02: Prompt to Post + Visual Diagram */}
+              <div className="h-36 flex flex-col justify-center gap-2.5 border-b border-white/10 pb-6">
+                {/* Raw 1-Line Thought */}
+                <div className="flex items-center justify-between gap-2 text-xs border-l-2 border-[#C084FC] pl-2.5 py-0.5">
+                  <span className="text-slate-300 italic truncate">"Why we killed our $6k agency"</span>
+                  <span className="text-[10px] font-mono text-slate-500 shrink-0">1-Line Idea</span>
+                </div>
 
-          {/* Quick Flow Line */}
-          <div className="mt-12 pt-6 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-400">
-            <span className="text-slate-200">Send 20s voice memo</span>
-            <ArrowRight className="w-3.5 h-3.5 text-white/30 hidden sm:inline" />
-            <span className="text-slate-200">Agent crafts post in your voice</span>
-            <ArrowRight className="w-3.5 h-3.5 text-white/30 hidden sm:inline" />
-            <span className="text-emerald-400 font-medium">Approve on WhatsApp in 10s ── Boom, live</span>
+                {/* Transformation Arrow */}
+                <div className="flex items-center gap-2 pl-2.5 text-[10px] font-mono text-[#C084FC]">
+                  <span>↓</span>
+                  <span>Arthur drafts in 1st-person</span>
+                </div>
+
+                {/* Mini Post + Visual Card Preview */}
+                <div className="grid grid-cols-12 gap-3 items-center pt-0.5">
+                  <div className="col-span-7 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#C084FC]"></span>
+                      <span className="text-[11px] font-medium text-white">Founder Story Post</span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-white/20"></div>
+                    <div className="w-4/5 h-1.5 rounded-full bg-white/10"></div>
+                  </div>
+                  <div className="col-span-5 border border-[#C084FC]/30 bg-[#7C3AED]/10 rounded-lg p-2 flex items-center justify-center gap-1.5">
+                    <Palette className="w-3.5 h-3.5 text-[#C084FC] shrink-0" />
+                    <span className="text-[10px] font-mono text-white">Quote Card</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Minimal Step Text 02 */}
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="text-2xl font-serif text-[#C084FC] font-light">02</span>
+                  <h3 className="text-base sm:text-lg font-medium text-white">
+                    1-line thought to full post
+                  </h3>
+                </div>
+                <p className="text-sm text-slate-400 font-light leading-relaxed">
+                  Drop a rough idea or pick a suggested topic—we write the post and build the visual.
+                </p>
+              </div>
+            </div>
+
+            {/* STEP 03: Personal Feed Autopilot */}
+            <div className="py-8 md:pl-8 lg:pl-10 flex flex-col justify-between gap-7">
+              {/* Visual Help 03: Personal LinkedIn + X Feeds */}
+              <div className="h-36 flex flex-col justify-center gap-3 border-b border-white/10 pb-6">
+                {/* Personal LinkedIn Row */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-lg bg-[#0A66C2]/20 border border-[#0A66C2]/40 flex items-center justify-center text-[#3897f0] text-xs font-bold">
+                      in
+                    </span>
+                    <div>
+                      <div className="text-xs font-medium text-white">Personal LinkedIn</div>
+                      <div className="text-[10px] font-mono text-slate-400">Story + Visual Card</div>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Tue 9:00 AM</span>
+                  </span>
+                </div>
+
+                {/* Personal X Row */}
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white text-xs font-bold">
+                      𝕏
+                    </span>
+                    <div>
+                      <div className="text-xs font-medium text-white">Personal X Feed</div>
+                      <div className="text-[10px] font-mono text-slate-400">Founder Thread</div>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-emerald-400">
+                    <Check className="w-3 h-3 text-emerald-400" />
+                    <span>Auto-Publish</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Minimal Step Text 03 */}
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="text-2xl font-serif text-emerald-400 font-light">03</span>
+                  <h3 className="text-base sm:text-lg font-medium text-white">
+                    Auto-publish on LinkedIn &amp; X
+                  </h3>
+                </div>
+                <p className="text-sm text-slate-400 font-light leading-relaxed">
+                  Approve in one click or let your personal feeds run on daily autopilot.
+                </p>
+              </div>
+            </div>
+
           </div>
 
         </div>
