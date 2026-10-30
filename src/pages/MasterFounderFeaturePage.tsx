@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { UniversalNavbar } from "../components/UniversalNavbar";
 import { Globe, MessageSquare, Repeat, Heart, BarChart3, CheckCircle2, Sparkles } from "lucide-react";
 import { FaLinkedin, FaXTwitter, FaInstagram } from "react-icons/fa6";
+import { CloudShader } from "../components/ui/cloud-shader";
 
 export function MasterFounderFeaturePage() {
   return (
@@ -15,6 +16,21 @@ export function MasterFounderFeaturePage() {
       {/* 2. HERO SECTION — FLUID HIGH-IMPACT 2-COLUMN LAYOUT WITH LIGHT-MODE PREVIEW CARDS ON RIGHT */}
       <section data-nav-theme="dark" className="w-full relative overflow-hidden text-left pt-28 pb-16 px-6 md:px-16 lg:px-24 border-b border-white/10 bg-[#08080C]">
         
+        {/* Aceternity UI Cloud Shader Procedural Background */}
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+          <CloudShader
+            className="w-full h-full"
+            speed={0.8}
+            count={4}
+            cloudColor="#fbf8f2"
+            skyTopColor="#3876ba"
+            skyBottomColor="#8cbfe8"
+            resolutionScale={0.55}
+            maxFps={36}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#08080C]/75 via-[#08080C]/35 to-[#08080C]/90 pointer-events-none" />
+        </div>
+
         {/* Ambient Dark Studio Laser Glows */}
         <div className="absolute top-1/4 right-1/4 w-[55rem] h-[55rem] bg-purple-900/25 rounded-full blur-[260px] pointer-events-none" />
         <div className="absolute bottom-10 left-10 w-[35rem] h-[35rem] bg-pink-900/15 rounded-full blur-[200px] pointer-events-none" />

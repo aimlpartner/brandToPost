@@ -1,10 +1,414 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
-  ChevronDown, X, ArrowRight, CheckCircle2, Sparkles, Globe, 
-  ExternalLink, Layers, Cpu, ArrowUpRight, Check
+  ChevronDown, X, ArrowRight, CheckCircle2, Globe, 
+  Layers, Cpu, ArrowUpRight, Check, Fingerprint, Palette,
+  PenTool, Video, FileText, Bookmark, Repeat2, Heart, MessageCircle, Play
 } from 'lucide-react';
 import { AGENTS_LIST, getAgentBySlug, renderAgentIcon, AgentData } from '../data/agentsData';
+import { SOLUTIONS_LIST, renderSolutionIcon } from '../data/solutionsData';
+import { CloudShader } from '../components/ui/cloud-shader';
+
+function renderAgentVisualShowcase(agent: AgentData) {
+  switch (agent.slug) {
+    case 'linkedin':
+      return (
+        <div className="space-y-5">
+          {/* Post Header */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#0A66C2]/20 border border-[#0A66C2]/40 flex items-center justify-center text-white font-serif text-sm">
+                F
+              </div>
+              <div>
+                <div className="text-xs font-medium text-white">Founder &amp; CEO · 1st</div>
+                <div className="text-[10px] font-mono text-slate-400">Personal + Company Stream · 2h</div>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded border border-[#0A66C2]/40 bg-[#0A66C2]/15 text-[#60A5FA]">
+              PDF Carousel
+            </span>
+          </div>
+
+          {/* Hook Line */}
+          <p className="text-xs sm:text-sm text-slate-200 font-light leading-relaxed">
+            "We replaced a $6,000/mo retainer with an autonomous 7-slide system. Here is the exact architecture:"
+          </p>
+
+          {/* Visual 4:5 Carousel Slide Preview */}
+          <div className="border border-white/15 bg-gradient-to-br from-white/[0.04] to-transparent p-5 sm:p-6 relative">
+            <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-4">
+              <span className="text-[#C084FC]">SLIDE 01 / 10</span>
+              <span>1080 × 1350 PDF</span>
+            </div>
+            <div className="text-lg sm:text-2xl font-serif text-white leading-snug mb-5">
+              The Autonomous B2B Distribution Playbook
+            </div>
+            <div className="flex items-center justify-between pt-3 border-t border-white/10">
+              <div className="flex items-center gap-1.5">
+                <span className="w-4 h-1 rounded-full bg-[#C084FC]"></span>
+                <span className="w-1.5 h-1 rounded-full bg-white/20"></span>
+                <span className="w-1.5 h-1 rounded-full bg-white/20"></span>
+                <span className="w-1.5 h-1 rounded-full bg-white/20"></span>
+              </div>
+              <span className="text-[10px] font-mono text-emerald-400">Swipe Velocity: 3.4x →</span>
+            </div>
+          </div>
+
+          {/* Engagement Bar */}
+          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-1">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 text-slate-300"><Heart className="w-3.5 h-3.5 text-[#C084FC]" /> 184</span>
+              <span className="flex items-center gap-1.5 text-slate-300"><MessageCircle className="w-3.5 h-3.5 text-slate-400" /> 42</span>
+            </div>
+            <span className="text-emerald-400">✓ Zero-Click Formatted</span>
+          </div>
+        </div>
+      );
+
+    case 'x':
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-[#C084FC]">
+              CONNECTED THREAD ARCHITECTURE
+            </span>
+            <span className="text-[10px] font-mono text-emerald-400">Hook Score: 96/100</span>
+          </div>
+
+          {/* Tweet 1 */}
+          <div className="relative pl-6 border-l border-white/20 space-y-2 pb-3">
+            <span className="absolute -left-2.5 top-0 w-5 h-5 rounded-full bg-[#08080C] border border-[#C084FC] flex items-center justify-center text-[10px] font-mono text-[#C084FC]">
+              1
+            </span>
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-white">@founder · Opening Hook</span>
+              <span className="text-[10px] font-mono text-slate-500">Tweet 1/8</span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-200 font-light leading-relaxed">
+              Most teams spend 80% of their time formatting content and 20% on strategy. Here is how we flipped that ratio in 60 seconds: 🧵👇
+            </p>
+          </div>
+
+          {/* Tweet 2 */}
+          <div className="relative pl-6 border-l border-white/20 space-y-2 pb-3">
+            <span className="absolute -left-2.5 top-0 w-5 h-5 rounded-full bg-[#08080C] border border-white/30 flex items-center justify-center text-[10px] font-mono text-slate-300">
+              2
+            </span>
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-white">Framework Breakdown</span>
+              <span className="text-[10px] font-mono text-slate-500">Tweet 2/8</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-1 text-[10px] font-mono">
+              <span className="border border-white/10 px-2.5 py-1.5 text-slate-300">01. Crawl URL</span>
+              <span className="border border-[#C084FC]/30 px-2.5 py-1.5 text-[#C084FC]">02. Clone Voice</span>
+              <span className="border border-emerald-500/30 px-2.5 py-1.5 text-emerald-400">03. Auto-Post</span>
+            </div>
+          </div>
+
+          {/* Metrics Footer */}
+          <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[11px] font-mono text-slate-400">
+            <div className="flex items-center gap-5">
+              <span className="flex items-center gap-1.5 text-slate-300"><Repeat2 className="w-3.5 h-3.5 text-emerald-400" /> 94</span>
+              <span className="flex items-center gap-1.5 text-slate-300"><Bookmark className="w-3.5 h-3.5 text-[#C084FC]" /> 420 Saves</span>
+            </div>
+            <span className="text-emerald-400">4.2x Bookmark Rate</span>
+          </div>
+        </div>
+      );
+
+    case 'instagram':
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-pink-400">
+              4:5 PORTRAIT EDITORIAL SUITE
+            </span>
+            <span className="text-[10px] font-mono text-slate-400">1080 × 1350 Native</span>
+          </div>
+
+          {/* 2 Visual 4:5 Artboards Side by Side */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Artboard 1: Cover Slide */}
+            <div className="aspect-[4/5] border border-white/15 bg-gradient-to-b from-[#7C3AED]/15 via-transparent to-transparent p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                <span>01 / 07</span>
+                <span className="text-pink-400">CAROUSEL</span>
+              </div>
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-[#C084FC] mb-1">Architecture</div>
+                <div className="text-sm sm:text-base font-serif text-white leading-snug">
+                  5 Shifts Replacing Retainer Agencies
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10px] font-mono text-slate-400">
+                <span>Swipe</span>
+                <span>→</span>
+              </div>
+            </div>
+
+            {/* Artboard 2: Quote Card */}
+            <div className="aspect-[4/5] border border-white/15 bg-white/[0.02] p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                <span>QUOTE CARD</span>
+                <Bookmark className="w-3.5 h-3.5 text-pink-400" />
+              </div>
+              <div className="text-xs sm:text-sm font-serif italic text-slate-200 leading-relaxed">
+                "The best marketing looks like high-velocity conviction shared in public."
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                <span className="w-2 h-2 rounded-full bg-[#7C3AED]"></span>
+                <span className="text-[10px] font-mono text-slate-400">Brand DNA Locked</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'writing':
+      return (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-[#C084FC]">
+              ARTHUR VOICE CLONE ENGINE
+            </span>
+            <span className="text-[10px] font-mono text-emerald-400">99.4% Voice Accuracy</span>
+          </div>
+
+          {/* Step 1: Voice Fingerprint */}
+          <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div className="flex items-center gap-3">
+              <Fingerprint className="w-5 h-5 text-[#C084FC] shrink-0" />
+              <div>
+                <div className="text-xs font-medium text-white">Linguistic Cadence Mapped</div>
+                <div className="text-[11px] font-mono text-slate-400">Direct · First-Person · High Conviction</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 h-6">
+              {[45, 80, 60, 100, 70, 90, 55, 85].map((h, i) => (
+                <span key={i} className="w-1 rounded-full bg-[#C084FC]" style={{ height: `${h}%` }} />
+              ))}
+            </div>
+          </div>
+
+          {/* Step 2: Banned Slop vs Approved Voice */}
+          <div className="grid grid-cols-2 gap-4 text-xs border-b border-white/10 pb-4">
+            <div>
+              <span className="text-[10px] font-mono uppercase text-rose-400 block mb-1.5">× Blocked AI Clichés</span>
+              <div className="space-y-1 font-mono text-[11px] text-slate-500 line-through decoration-rose-500/60">
+                <div>"In today's fast-paced..."</div>
+                <div>"Unleash synergy..."</div>
+              </div>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-emerald-400 block mb-1.5">✓ Your Cloned Heuristics</span>
+              <div className="space-y-1 font-mono text-[11px] text-slate-200">
+                <div>Short, punchy hooks</div>
+                <div>Real unit-economics proof</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Output Sample Line */}
+          <div className="border-l-2 border-[#C084FC] pl-3.5 py-0.5">
+            <div className="text-[10px] font-mono text-slate-400 mb-1">DRAFTED IN YOUR VOICE:</div>
+            <p className="text-xs sm:text-sm text-white font-light italic">
+              "We cut our customer acquisition cost by 62% the week we stopped writing generic corporate posts."
+            </p>
+          </div>
+        </div>
+      );
+
+    case 'designer':
+      return (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-sky-400">
+              AUTOMATED BRAND DESIGN SYSTEM
+            </span>
+            <span className="text-[10px] font-mono text-emerald-400">0 Hrs in Figma</span>
+          </div>
+
+          {/* Extracted Tokens Bar */}
+          <div className="grid grid-cols-2 gap-4 border-b border-white/10 pb-4">
+            <div>
+              <span className="text-[10px] font-mono uppercase text-slate-400 block mb-2">Extracted Palette</span>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#08080C] border border-white/40" />
+                <span className="w-5 h-5 rounded-full bg-[#7C3AED]" />
+                <span className="w-5 h-5 rounded-full bg-[#38BDF8]" />
+                <span className="w-5 h-5 rounded-full bg-[#10B981]" />
+              </div>
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-slate-400 block mb-1.5">Typography Lock</span>
+              <div className="text-xs font-serif text-white">EB Garamond + Inter Tight</div>
+              <div className="text-[10px] font-mono text-sky-400">Auto-paired from URL</div>
+            </div>
+          </div>
+
+          {/* 3 Multi-Ratio Artboards */}
+          <div>
+            <span className="text-[10px] font-mono uppercase text-slate-400 block mb-2.5">Simultaneous Multi-Ratio Output</span>
+            <div className="grid grid-cols-3 gap-3 items-end">
+              <div className="aspect-[4/5] border border-sky-400/40 bg-sky-500/10 p-2.5 flex flex-col justify-between">
+                <span className="text-[9px] font-mono text-sky-300">4:5 DECK</span>
+                <div className="space-y-1">
+                  <div className="w-full h-1.5 bg-white/40 rounded-full" />
+                  <div className="w-2/3 h-1.5 bg-white/20 rounded-full" />
+                </div>
+              </div>
+              <div className="aspect-square border border-white/15 bg-white/[0.03] p-2.5 flex flex-col justify-between">
+                <span className="text-[9px] font-mono text-slate-300">1:1 CARD</span>
+                <div className="space-y-1">
+                  <div className="w-full h-1.5 bg-[#C084FC]/50 rounded-full" />
+                  <div className="w-3/4 h-1.5 bg-white/20 rounded-full" />
+                </div>
+              </div>
+              <div className="aspect-[9/12] border border-white/15 bg-white/[0.03] p-2.5 flex flex-col justify-between">
+                <span className="text-[9px] font-mono text-emerald-400">9:16 STORY</span>
+                <div className="space-y-1">
+                  <div className="w-full h-1.5 bg-emerald-400/50 rounded-full" />
+                  <div className="w-1/2 h-1.5 bg-white/20 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'blog':
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400">
+              SEO + AI SEARCH CITATION ENGINE
+            </span>
+            <span className="text-[10px] font-mono text-slate-400">2,140 Words · Auto-CMS</span>
+          </div>
+
+          {/* Search Intent Header */}
+          <div className="flex items-center justify-between gap-2 text-xs border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2">
+              <Globe className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="font-mono text-slate-200">/blog/autonomous-b2b-growth-2026</span>
+            </div>
+            <span className="text-[10px] font-mono text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded">
+              Rank Ready
+            </span>
+          </div>
+
+          {/* Structured Article Outline Preview */}
+          <div className="space-y-3 py-1">
+            <div>
+              <span className="text-[10px] font-mono text-[#C084FC] block">H1 · PILLAR GUIDE</span>
+              <div className="text-sm sm:text-base font-serif text-white">
+                Autonomous Marketing Systems vs. Retainer Agencies: 2026 Benchmark
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="border-l-2 border-emerald-400/60 pl-2.5">
+                <span className="text-[10px] font-mono text-slate-400 block">H2 · DATA TABLE</span>
+                <span className="text-xs text-slate-200">Cost-Per-Asset Breakdown</span>
+              </div>
+              <div className="border-l-2 border-[#C084FC]/60 pl-2.5">
+                <span className="text-[10px] font-mono text-slate-400 block">FAQ SCHEMA</span>
+                <span className="text-xs text-slate-200">Cited by Perplexity &amp; Search</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[11px] font-mono text-slate-400">
+            <span>WordPress · Webflow · Ghost</span>
+            <span className="text-emerald-400">✓ Webhook Synced</span>
+          </div>
+        </div>
+      );
+
+    case 'research':
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400">
+              LIVE MARKET &amp; ICP INTELLIGENCE
+            </span>
+            <span className="text-[10px] font-mono text-slate-400">60s Deep Crawl</span>
+          </div>
+
+          {/* Domain Crawl Row */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-3 text-xs">
+            <span className="font-mono text-white">https://yourcompany.com</span>
+            <span className="text-[10px] font-mono text-emerald-400">● 14 Pages Indexed</span>
+          </div>
+
+          {/* Extracted Intelligence Matrix */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="border-l-2 border-[#C084FC] pl-3 py-0.5">
+              <span className="text-[10px] font-mono uppercase text-[#C084FC] block">Buyer Pain Points</span>
+              <span className="text-xs text-white">High agency retainers &amp; slow 4-week turnarounds</span>
+            </div>
+            <div className="border-l-2 border-emerald-400 pl-3 py-0.5">
+              <span className="text-[10px] font-mono uppercase text-emerald-400 block">Competitor Gap</span>
+              <span className="text-xs text-white">84% post generic tips—win with real ROI teardowns</span>
+            </div>
+          </div>
+
+          {/* Output Topic Matrix Bar */}
+          <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs font-mono">
+            <span className="text-slate-300">Output: 30 Buyer-Aligned Topic Angles</span>
+            <span className="text-emerald-400">100% ICP Grounded</span>
+          </div>
+        </div>
+      );
+
+    default:
+      // Video / TikTok / Reels Agent
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400">
+              9:16 RETENTION STORYBOARD
+            </span>
+            <span className="text-[10px] font-mono text-emerald-400">68% Avg Watch-Through</span>
+          </div>
+
+          <div className="grid grid-cols-12 gap-4 items-center">
+            {/* 9:16 Frame */}
+            <div className="col-span-5 aspect-[9/13] border border-amber-400/40 bg-gradient-to-b from-amber-500/10 to-transparent p-3 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-[9px] font-mono text-amber-300">
+                <span>9:16 REEL</span>
+                <span>0:45s</span>
+              </div>
+              <div className="flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full border border-white/30 bg-white/10 flex items-center justify-center">
+                  <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
+                </div>
+              </div>
+              <div className="text-[10px] font-mono text-white leading-tight border-t border-white/10 pt-2">
+                "Look at this exact number..."
+              </div>
+            </div>
+
+            {/* 3-Step Pacing Timeline */}
+            <div className="col-span-7 space-y-3">
+              <div className="border-l-2 border-amber-400 pl-3">
+                <div className="text-[10px] font-mono text-amber-400">00:00 – 00:03 · VISUAL HOOK</div>
+                <div className="text-xs text-white">Point at chaotic agency spreadsheet</div>
+              </div>
+              <div className="border-l-2 border-[#C084FC] pl-3">
+                <div className="text-[10px] font-mono text-[#C084FC]">00:03 – 00:35 · CORE VALUE</div>
+                <div className="text-xs text-white">Teleprompter script + 3 B-roll cuts</div>
+              </div>
+              <div className="border-l-2 border-emerald-400 pl-3">
+                <div className="text-[10px] font-mono text-emerald-400">00:35 – 00:45 · PAYOFF CTA</div>
+                <div className="text-xs text-white">Direct profile conversion trigger</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+  }
+}
 
 export function AgentDetailPage() {
   const { agentSlug } = useParams<{ agentSlug?: string }>();
@@ -46,8 +450,14 @@ export function AgentDetailPage() {
   };
 
   // Dropdown States
+  const [solutionsOpen, setSolutionsOpen] = useState(false);
   const [agentsOpen, setAgentsOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
+
+  const solutionsDropdownRef = useRef<HTMLDivElement>(null);
+  const solutionsBtnRef = useRef<HTMLButtonElement>(null);
+  const solutionsTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const agentsDropdownRef = useRef<HTMLDivElement>(null);
   const agentsBtnRef = useRef<HTMLButtonElement>(null);
   const agentsTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -56,9 +466,27 @@ export function AgentDetailPage() {
   const integrationsBtnRef = useRef<HTMLButtonElement>(null);
   const integrationsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleAgentsMouseEnter = () => {
+  const handleSolutionsMouseEnter = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
     if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
     if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
+    setAgentsOpen(false);
+    setIntegrationsOpen(false);
+    setSolutionsOpen(true);
+  };
+
+  const handleSolutionsMouseLeave = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
+    solutionsTimerRef.current = setTimeout(() => {
+      setSolutionsOpen(false);
+    }, 200);
+  };
+
+  const handleAgentsMouseEnter = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
+    if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
+    setSolutionsOpen(false);
     setIntegrationsOpen(false);
     setAgentsOpen(true);
   };
@@ -71,8 +499,10 @@ export function AgentDetailPage() {
   };
 
   const handleIntegrationsMouseEnter = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
     if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
     if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    setSolutionsOpen(false);
     setAgentsOpen(false);
     setIntegrationsOpen(true);
   };
@@ -86,6 +516,14 @@ export function AgentDetailPage() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (
+        solutionsDropdownRef.current &&
+        !solutionsDropdownRef.current.contains(event.target as Node) &&
+        solutionsBtnRef.current &&
+        !solutionsBtnRef.current.contains(event.target as Node)
+      ) {
+        setSolutionsOpen(false);
+      }
       if (
         agentsDropdownRef.current &&
         !agentsDropdownRef.current.contains(event.target as Node) &&
@@ -105,6 +543,7 @@ export function AgentDetailPage() {
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        setSolutionsOpen(false);
         setAgentsOpen(false);
         setIntegrationsOpen(false);
       }
@@ -114,6 +553,7 @@ export function AgentDetailPage() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
+      if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
       if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
       if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
     };
@@ -147,7 +587,7 @@ export function AgentDetailPage() {
       `}</style>
 
       {/* ==========================================
-           NAVIGATION BAR (With Both Agents & Integrations Dropdowns)
+           NAVIGATION BAR (With Solutions, Agents & Integrations Dropdowns)
            ========================================== */}
       <nav id="main-nav" className="fixed top-0 left-0 right-0 z-50 transition-all duration-500 bg-[#08080C]/85 border-b border-white/[0.08] py-4 backdrop-blur-xl text-white">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 relative">
@@ -159,7 +599,29 @@ export function AgentDetailPage() {
             </Link>
 
             {/* Nav Triggers & Links */}
-            <div className="flex items-center gap-3 sm:gap-6 lg:gap-7">
+            <div className="flex items-center gap-2.5 sm:gap-4 lg:gap-5">
+              {/* Solutions Dropdown Trigger */}
+              <button
+                ref={solutionsBtnRef}
+                onMouseEnter={handleSolutionsMouseEnter}
+                onMouseLeave={handleSolutionsMouseLeave}
+                onClick={() => {
+                  setSolutionsOpen(!solutionsOpen);
+                  setAgentsOpen(false);
+                  setIntegrationsOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
+                  solutionsOpen 
+                    ? 'bg-white/10 border-white/30 text-white shadow-[0_0_15px_rgba(124,58,237,0.25)]' 
+                    : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/20'
+                }`}
+                aria-expanded={solutionsOpen}
+                aria-label="Toggle solutions dropdown"
+              >
+                <span className="tracking-tight font-medium">Solutions</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 text-white/60 ${solutionsOpen ? 'rotate-180 text-white' : ''}`} />
+              </button>
+
               {/* Agents Dropdown Trigger */}
               <button
                 ref={agentsBtnRef}
@@ -167,6 +629,7 @@ export function AgentDetailPage() {
                 onMouseLeave={handleAgentsMouseLeave}
                 onClick={() => {
                   setAgentsOpen(!agentsOpen);
+                  setSolutionsOpen(false);
                   setIntegrationsOpen(false);
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
@@ -188,9 +651,10 @@ export function AgentDetailPage() {
                 onMouseLeave={handleIntegrationsMouseLeave}
                 onClick={() => {
                   setIntegrationsOpen(!integrationsOpen);
+                  setSolutionsOpen(false);
                   setAgentsOpen(false);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
+                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
                   integrationsOpen 
                     ? 'bg-white/10 border-white/30 text-white shadow-[0_0_15px_rgba(124,58,237,0.25)]' 
                     : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/20'
@@ -202,12 +666,75 @@ export function AgentDetailPage() {
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 text-white/60 ${integrationsOpen ? 'rotate-180 text-white' : ''}`} />
               </button>
 
-              <Link className="text-xs font-medium opacity-70 hover:opacity-100 transition-opacity" to="/blog">Blog</Link>
+              <Link className="text-xs font-medium opacity-70 hover:opacity-100 transition-opacity hidden md:block" to="/blog">Blog</Link>
               <Link className="px-4 py-2 text-xs font-medium tracking-wide transition-all bg-[#7C3AED] hover:bg-[#6D28D9] text-white whitespace-nowrap" to="/login?mode=signup">
                 Start free trial
               </Link>
             </div>
           </div>
+
+          {/* Solutions Mega Dropdown */}
+          {solutionsOpen && (
+            <div
+              ref={solutionsDropdownRef}
+              onMouseEnter={handleSolutionsMouseEnter}
+              onMouseLeave={handleSolutionsMouseLeave}
+              className="absolute top-full left-4 right-4 sm:left-auto sm:right-6 lg:right-10 mt-2 sm:w-[700px] md:w-[820px] lg:w-[900px] max-h-[82vh] overflow-y-auto bg-[#0A0A0F]/95 border border-white/15 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_0_50px_rgba(124,58,237,0.15)] backdrop-blur-2xl rounded-2xl p-6 sm:p-7 z-50 text-left animate-in fade-in zoom-in-95 duration-200"
+            >
+              <div className="absolute -top-3 left-0 right-0 h-3" />
+              <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#C084FC] animate-pulse"></span>
+                  <h3 className="text-sm font-semibold text-white tracking-tight">High-Conviction Niche Solutions</h3>
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-[#7C3AED]/20 text-[#C084FC] border border-[#7C3AED]/30">
+                    Purpose-Built Playbooks
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSolutionsOpen(false)}
+                  className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 py-4">
+                {SOLUTIONS_LIST.map((sol) => (
+                  <Link
+                    key={sol.slug}
+                    to={`/solutions/${sol.slug}`}
+                    onClick={() => setSolutionsOpen(false)}
+                    className={`group/sol p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                      sol.isFlagship
+                        ? 'bg-[#7C3AED]/10 border-[#C084FC]/40 hover:bg-[#7C3AED]/15 hover:border-[#C084FC]'
+                        : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-[#7C3AED]/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+                        {renderSolutionIcon(sol.slug, "w-4 h-4")}
+                      </div>
+                      {sol.isFlagship ? (
+                        <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-[#7C3AED] text-white font-semibold">
+                          ★ Founder
+                        </span>
+                      ) : (
+                        <ArrowUpRight className="w-3.5 h-3.5 text-white/25 group-hover/sol:text-[#C084FC] transition-colors shrink-0" />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-white group-hover/sol:text-[#C084FC] transition-colors">
+                        {sol.shortName}
+                      </h4>
+                      <p className="text-[10px] font-mono text-white/50 truncate mt-0.5">
+                        {sol.role}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Agents Mega Dropdown */}
           {agentsOpen && (
@@ -413,11 +940,23 @@ export function AgentDetailPage() {
       </nav>
 
       {/* ==========================================
-           1. HERO SECTION (Identical to Landing Page with Command Bar)
+           1. HERO SECTION (With Cloud Shader & Command Bar)
            ========================================== */}
       <section data-nav-theme="dark" className="relative w-full min-h-[92vh] bg-[#08080C] text-white pt-36 pb-20 px-6 sm:px-10 lg:px-16 flex flex-col justify-between border-b border-white/10 overflow-hidden">
-        {/* Orbital Halo & Ambient Coordinate Frame */}
+        {/* Aceternity UI Cloud Shader Procedural Background */}
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+          <CloudShader
+            className="w-full h-full"
+            speed={0.8}
+            count={4}
+            cloudColor="#fbf8f2"
+            skyTopColor="#3876ba"
+            skyBottomColor="#8cbfe8"
+            resolutionScale={0.55}
+            maxFps={36}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#08080C]/75 via-[#08080C]/25 to-[#08080C]/90 pointer-events-none" />
+
           <div className="hero-halo-pulse absolute top-[44%] left-1/2 w-[540px] h-[540px] sm:w-[760px] sm:h-[760px] rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.18)_0%,rgba(192,132,252,0.04)_45%,transparent_70%)] blur-2xl"></div>
           
           <div className="hero-orbit-cw absolute top-[44%] left-1/2 w-[660px] h-[660px] sm:w-[920px] sm:h-[920px] lg:w-[1120px] lg:h-[1120px] rounded-full border border-white/[0.06]">
@@ -437,31 +976,31 @@ export function AgentDetailPage() {
           
           <div className="space-y-6 flex flex-col items-center w-full">
             {/* Top Tag */}
-            <div className="flex items-center justify-center gap-3 text-[11px] font-mono uppercase tracking-[0.22em] text-slate-400">
+            <div className="flex items-center justify-center gap-3 text-[11px] font-mono uppercase tracking-[0.22em] text-slate-300">
               <span className="w-1.5 h-1.5 bg-[#7C3AED] inline-block"></span>
               <span className="flex items-center gap-2">
                 <span className="text-white font-semibold">{activeAgent.name.toUpperCase()}</span>
                 <span>·</span>
-                <span>AUTONOMOUS ENGINE</span>
+                <span>{activeAgent.role.toUpperCase()}</span>
               </span>
               <span className="w-1.5 h-1.5 bg-[#7C3AED] inline-block"></span>
             </div>
 
             {/* Headline with Rotating Words */}
-            <h1 className="text-4xl sm:text-6xl lg:text-[76px] font-serif font-normal tracking-tight text-white leading-[1.04]">
+            <h1 className="text-4xl sm:text-6xl lg:text-[76px] font-serif font-normal tracking-tight text-white leading-[1.04] drop-shadow-[0_4px_28px_rgba(0,0,0,0.7)]">
               {activeAgent.heroHeadline} <br className="hidden sm:block" />
               <span className={`word-rotate text-[#C084FC] italic font-normal ${isWordIn ? 'in' : 'out'}`}>
                 {words[wordIdx]}
               </span>
             </h1>
 
-            {/* Subtitle */}
-            <p className="text-base sm:text-lg text-slate-300 font-light max-w-2xl mx-auto leading-relaxed">
-              {activeAgent.heroSubtitle}
+            {/* Concise 1-Line Subtitle */}
+            <p className="text-base sm:text-xl text-white/90 font-light max-w-xl mx-auto leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+              Drop your URL. Get 30 native {activeAgent.platform} assets in your exact voice, scheduled automatically.
             </p>
 
-            {/* Centered Command URL Input Bar (Identical to Landing Page) */}
-            <form onSubmit={handleHeroSubmit} className="pt-3 max-w-xl w-full mx-auto">
+            {/* Centered Command URL Input Bar */}
+            <form onSubmit={handleHeroSubmit} className="pt-2 max-w-xl w-full mx-auto">
               <div className="flex flex-col sm:flex-row items-stretch bg-[#0D0D14]/90 border border-white/15 p-1.5 transition-all duration-300 focus-within:border-[#7C3AED] shadow-[0_0_50px_rgba(124,58,237,0.18)] backdrop-blur-xl">
                 <div className="flex items-center gap-2 pl-3.5 pr-1 text-slate-500">
                   <Globe className="w-4 h-4 text-slate-500 shrink-0" />
@@ -485,7 +1024,7 @@ export function AgentDetailPage() {
               </div>
 
               {/* Trust Badges */}
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-[11px] font-mono text-slate-400">
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-[11px] font-mono text-slate-300">
                 <span>2-min setup</span>
                 <span>·</span>
                 <span>Founder + Company streams</span>
@@ -499,7 +1038,7 @@ export function AgentDetailPage() {
         {/* Fleet Quick Selector Bar */}
         <div className="max-w-5xl mx-auto w-full relative z-10 pt-6 border-t border-white/[0.08] overflow-x-auto no-scrollbar">
           <div className="flex items-center justify-center gap-2 sm:gap-3 py-1 min-w-max">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mr-2">FLEET:</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mr-2">FLEET:</span>
             {AGENTS_LIST.map((agent) => (
               <Link
                 key={agent.slug}
@@ -521,139 +1060,263 @@ export function AgentDetailPage() {
       </section>
 
       {/* ==========================================
-           2. WHAT IS IT FOR? SECTION
+           2. BALANCED VISUAL CAPABILITIES (Left: Concise Capabilities · Right: Simple Visual Preview)
            ========================================== */}
       <section className="w-full bg-[#08080C] text-white py-20 sm:py-28 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
-        <div className="max-w-5xl mx-auto relative z-10">
+        <div className="max-w-6xl mx-auto relative z-10">
           
-          <div className="mb-14">
-            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] mb-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]"></span>
-              <span>CORE PURPOSE &amp; CAPABILITIES</span>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-14">
+            <div>
+              <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
+                WHAT IT DOES FOR YOU
+              </span>
+              <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
+                Inside the <em className="italic text-[#C084FC]">{activeAgent.name}.</em>
+              </h2>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight mb-4">
-              What is the {activeAgent.name} for?
-            </h2>
-            <p className="text-base sm:text-xl text-slate-300 font-light max-w-3xl leading-relaxed">
-              {activeAgent.whatIsItFor.lead}
-            </p>
+            <span className="text-xs font-mono text-slate-400">
+              {activeAgent.tagline}
+            </span>
           </div>
 
-          <p className="text-sm sm:text-base text-slate-400 font-light leading-relaxed mb-10 max-w-3xl">
-            {activeAgent.whatIsItFor.description}
-          </p>
-
-          {/* 4 Feature Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-12">
-            {activeAgent.whatIsItFor.capabilities.map((cap, i) => (
-              <div 
-                key={i} 
-                className="p-6 rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-mono uppercase tracking-widest px-2.5 py-0.5 rounded bg-white/5 border border-white/10 text-[#C084FC]">
-                      {cap.tag}
-                    </span>
-                    <span className="text-xs font-mono text-slate-500">0{i + 1}</span>
+          {/* Balanced 2-Column Split: 4 Concise Capabilities on Left + Simple Visual Showcase on Right */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center border-t border-white/10 pt-10">
+            
+            {/* Left Column (6 cols): 2x2 Minimal Capabilities Grid */}
+            <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8">
+              {activeAgent.whatIsItFor.capabilities.map((cap, i) => (
+                <div key={i} className="border-l border-white/15 pl-4 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#C084FC]">
+                        {cap.tag}
+                      </span>
+                      <span className="text-[11px] font-mono text-white/30">0{i + 1}</span>
+                    </div>
+                    <h3 className="text-base font-medium text-white mb-1.5">
+                      {cap.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-400 leading-relaxed font-light">
+                      {cap.desc}
+                    </p>
                   </div>
-                  <h3 className="text-base sm:text-lg font-medium text-white mb-2">
-                    {cap.title}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-400 leading-relaxed font-light">
-                    {cap.desc}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Checklist Bullet Strip */}
-          <div className="p-6 rounded-xl border border-white/10 bg-[#0F1017]/80">
-            <h4 className="text-xs font-mono uppercase tracking-widest text-slate-400 mb-4">
-              NATIVE FORMAT DELIVERABLES:
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {activeAgent.whatIsItFor.bullets.map((bullet, i) => (
-                <div key={i} className="flex items-start gap-3 text-xs sm:text-sm text-slate-200">
-                  <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>{bullet}</span>
                 </div>
               ))}
             </div>
+
+            {/* Right Column (6 cols): Agent-Specific Simple Visual Showcase */}
+            <div className="lg:col-span-6 lg:pl-10 lg:border-l lg:border-white/10">
+              {renderAgentVisualShowcase(activeAgent)}
+            </div>
+
           </div>
 
         </div>
       </section>
 
       {/* ==========================================
-           3. WHY SHOULD YOU USE IT? SECTION
+           3. HOW IT WORKS: BALANCED 3-STEP VISUAL FLOW
            ========================================== */}
       <section className="w-full bg-[#08080C] text-white py-20 sm:py-28 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
-        {/* Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-[#7C3AED]/10 rounded-full blur-[160px] pointer-events-none"></div>
-
-        <div className="max-w-5xl mx-auto relative z-10">
+        <div className="max-w-6xl mx-auto relative z-10">
           
-          <div className="mb-14">
-            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] mb-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]"></span>
-              <span>ROI &amp; REASON TO DEPLOY</span>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-14">
+            <div>
+              <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
+                3-STEP AUTONOMOUS FLOW
+              </span>
+              <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
+                From your URL to live <em className="italic text-[#C084FC]">{activeAgent.platform}</em> reach.
+              </h2>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight mb-4">
-              Why you should use the {activeAgent.name}.
-            </h2>
-            <p className="text-base sm:text-xl text-slate-300 font-light max-w-3xl leading-relaxed">
-              {activeAgent.whyShouldYouUseIt.lead}
-            </p>
+            <span className="text-xs font-mono text-emerald-400 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>~60s Setup · Zero Manual Effort</span>
+            </span>
           </div>
 
-          {/* 3 Metric High-Impact Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+          {/* 3 Balanced Steps: Visual Help on Top + 1-Line Copy Below */}
+          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/10 border-t border-b border-white/10">
+            
+            {/* Step 01 */}
+            <div className="py-8 md:pr-8 lg:pr-10 flex flex-col justify-between gap-7">
+              <div className="h-32 flex flex-col justify-center gap-3 border-b border-white/10 pb-5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-[#C084FC]" />
+                    <span className="text-xs font-mono text-white">yourcompany.com</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-400">3.2s Crawl</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <span className="text-xs text-slate-300">Voice &amp; Brand DNA</span>
+                  <div className="flex items-center gap-1 h-5">
+                    {[40, 80, 55, 95, 70, 100, 65, 85].map((h, i) => (
+                      <span key={i} className="w-1 rounded-full bg-[#C084FC]" style={{ height: `${h}%` }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="text-2xl font-serif text-[#C084FC] font-light">01</span>
+                  <h3 className="text-base sm:text-lg font-medium text-white">
+                    Sync your Brand &amp; Voice DNA
+                  </h3>
+                </div>
+                <p className="text-sm text-slate-400 font-light leading-relaxed">
+                  Paste your link—we extract your positioning, palette, and exact founder tone.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 02 */}
+            <div className="py-8 md:px-8 lg:px-10 flex flex-col justify-between gap-7">
+              <div className="h-32 flex flex-col justify-center gap-3 border-b border-white/10 pb-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-lg border border-white/15 bg-white/[0.04] flex items-center justify-center">
+                      {renderAgentIcon(activeAgent, "w-4 h-4")}
+                    </span>
+                    <span className="text-xs font-medium text-white">{activeAgent.name}</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-[#C084FC]">30 Assets Built</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="w-11/12 h-full rounded-full bg-gradient-to-r from-[#7C3AED] to-[#C084FC]" />
+                </div>
+                <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
+                  <span>✓ {activeAgent.whatIsItFor.capabilities[0]?.tag}</span>
+                  <span>·</span>
+                  <span>✓ {activeAgent.whatIsItFor.capabilities[1]?.tag}</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="text-2xl font-serif text-[#C084FC] font-light">02</span>
+                  <h3 className="text-base sm:text-lg font-medium text-white">
+                    30 native assets generated
+                  </h3>
+                </div>
+                <p className="text-sm text-slate-400 font-light leading-relaxed">
+                  Builds a full month of ready-to-publish {activeAgent.platform} copy and visuals.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 03 */}
+            <div className="py-8 md:pl-8 lg:pl-10 flex flex-col justify-between gap-7">
+              <div className="h-32 flex flex-col justify-center gap-2.5 border-b border-white/10 pb-5">
+                <div className="grid grid-cols-3 gap-2 text-center font-mono text-[10px]">
+                  <div className="border border-white/15 py-2 text-slate-300">
+                    <div className="text-white font-semibold">MON</div>
+                    <div className="text-emerald-400 mt-0.5">● 09:00</div>
+                  </div>
+                  <div className="border border-[#C084FC]/40 bg-[#7C3AED]/10 py-2 text-white">
+                    <div className="font-semibold">WED</div>
+                    <div className="text-[#C084FC] mt-0.5">● 09:00</div>
+                  </div>
+                  <div className="border border-white/15 py-2 text-slate-300">
+                    <div className="text-white font-semibold">FRI</div>
+                    <div className="text-emerald-400 mt-0.5">● 09:00</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400 pt-0.5">
+                  <span>1-Click Queue Approval</span>
+                  <span>Auto-Published ✓</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="text-2xl font-serif text-emerald-400 font-light">03</span>
+                  <h3 className="text-base sm:text-lg font-medium text-white">
+                    Review, tweak &amp; auto-schedule
+                  </h3>
+                </div>
+                <p className="text-sm text-slate-400 font-light leading-relaxed">
+                  Approve your 30-day calendar in one click and let it publish on autopilot.
+                </p>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ==========================================
+           4. WHY USE IT: VISUAL METRICS & SIDE-BY-SIDE COMPARISON
+           ========================================== */}
+      <section className="w-full bg-[#08080C] text-white py-20 sm:py-28 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-[#7C3AED]/10 rounded-full blur-[160px] pointer-events-none"></div>
+
+        <div className="max-w-6xl mx-auto relative z-10">
+          
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-14">
+            <div>
+              <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
+                MEASURABLE ROI
+              </span>
+              <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
+                Why teams deploy the <em className="italic text-[#C084FC]">{activeAgent.name}.</em>
+              </h2>
+            </div>
+            <span className="text-xs font-mono text-slate-400">
+              {activeAgent.whyShouldYouUseIt.lead}
+            </span>
+          </div>
+
+          {/* 3 Visual Metric Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/10 border-t border-b border-white/10 mb-16">
             {activeAgent.whyShouldYouUseIt.benefits.map((b, i) => (
               <div 
                 key={i} 
-                className="p-6 rounded-xl border border-white/10 bg-white/[0.02] flex flex-col justify-between"
+                className="py-8 md:px-8 first:md:pl-0 last:md:pr-0 flex flex-col justify-between gap-4"
               >
                 <div>
-                  <div className="text-3xl sm:text-5xl font-serif text-white mb-2">
+                  <div className="text-4xl sm:text-6xl font-serif text-white mb-2 tracking-tight">
                     {b.metric}
                   </div>
-                  <div className="text-sm font-medium text-white mb-1.5">
+                  <div className="text-base font-medium text-[#C084FC] mb-1.5">
                     {b.title}
                   </div>
-                  <p className="text-xs text-slate-400 font-light leading-relaxed">
+                  <p className="text-xs sm:text-sm text-slate-400 font-light leading-relaxed">
                     {b.desc}
                   </p>
+                </div>
+                <div className="w-full h-1 bg-white/10 overflow-hidden mt-2">
+                  <div
+                    className="h-full bg-gradient-to-r from-[#7C3AED] to-emerald-400"
+                    style={{ width: i === 0 ? '94%' : i === 1 ? '88%' : '100%' }}
+                  />
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Comparison Table: Doing It Manually vs. With Agent */}
-          <div className="rounded-2xl border border-white/15 bg-[#0C0D14]/90 overflow-hidden shadow-2xl">
-            <div className="p-6 sm:p-8 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h3 className="text-lg sm:text-xl font-medium text-white">Manual Bottleneck vs. {activeAgent.name}</h3>
-                <p className="text-xs text-slate-400 font-light mt-0.5">How your workflow fundamentally changes once autonomous execution is turned on.</p>
-              </div>
-              <span className="text-[11px] font-mono uppercase px-3 py-1 rounded bg-[#7C3AED]/20 text-[#C084FC] border border-[#7C3AED]/30 w-fit">
-                Zero Retainers
-              </span>
+          {/* Clean Visual Comparison: Manual Way vs. Autonomous Agent */}
+          <div>
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pb-4 border-b border-white/15 text-xs font-mono uppercase tracking-wider text-slate-400">
+              <div className="md:col-span-3">Workflow Dimension</div>
+              <div className="md:col-span-4 text-rose-400/90">× Old Manual Way</div>
+              <div className="md:col-span-5 text-emerald-400">✓ With {activeAgent.name}</div>
             </div>
 
-            <div className="divide-y divide-white/[0.08]">
+            <div className="divide-y divide-white/10 border-b border-white/10">
               {activeAgent.whyShouldYouUseIt.comparison.map((comp, i) => (
-                <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 sm:p-6 text-xs sm:text-sm">
-                  <div className="font-medium text-slate-300 md:col-span-1 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white/40"></span>
-                    <span>{comp.feature}</span>
+                <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-4 py-5 items-center text-xs sm:text-sm">
+                  <div className="md:col-span-3 font-medium text-white">
+                    {comp.feature}
                   </div>
-                  <div className="text-slate-400 md:col-span-1 line-through decoration-red-500/60 font-light">
+                  <div className="md:col-span-4 text-slate-400 line-through decoration-rose-500/50 font-light">
                     {comp.manual}
                   </div>
-                  <div className="text-emerald-300 md:col-span-1 font-medium flex items-start gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="md:col-span-5 text-slate-100 font-normal flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>{comp.withAgent}</span>
                   </div>
                 </div>
@@ -665,91 +1328,57 @@ export function AgentDetailPage() {
       </section>
 
       {/* ==========================================
-           4. HOW IT WORKS: 4-STEP PIPELINE
-           ========================================== */}
-      <section className="w-full bg-[#08080C] text-white py-20 sm:py-28 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
-        <div className="max-w-5xl mx-auto relative z-10">
-          
-          <div className="mb-14">
-            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] mb-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]"></span>
-              <span>4-STEP AUTONOMOUS PIPELINE</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight mb-2">
-              From your link to live {activeAgent.platform} reach.
-            </h2>
-          </div>
-
-          <div className="space-y-8 sm:space-y-10">
-            {activeAgent.workflowSteps.map((step, i) => (
-              <div key={i} className="flex items-start gap-6 sm:gap-10 group">
-                <span className="text-3xl sm:text-5xl font-serif text-white/20 group-hover:text-[#C084FC] transition-colors shrink-0 font-light select-none">
-                  {step.step}
-                </span>
-                <div className="flex-1 pt-1 border-b border-white/10 pb-8 sm:pb-10">
-                  <h3 className="text-lg sm:text-2xl font-medium text-white tracking-tight mb-1.5">
-                    {step.title}
-                  </h3>
-                  <p className="text-sm sm:text-base text-slate-400 font-light mb-3 leading-relaxed">
-                    {step.desc}
-                  </p>
-                  <div className="font-mono text-xs text-emerald-400 flex items-center gap-2 bg-white/[0.02] border border-white/[0.06] p-2.5 rounded-lg w-fit">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>{step.codePreview}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-        </div>
-      </section>
-
-      {/* ==========================================
            5. LIVE SAMPLE OUTPUT SHOWCASE
            ========================================== */}
       <section className="w-full bg-[#08080C] text-white py-20 sm:py-28 px-6 sm:px-10 lg:px-16 border-b border-white/10 relative overflow-hidden">
-        <div className="max-w-5xl mx-auto relative z-10">
+        <div className="max-w-6xl mx-auto relative z-10">
           
-          <div className="mb-12">
-            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] mb-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#C084FC]"></span>
-              <span>OUTPUT SHOWCASE</span>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-12">
+            <div>
+              <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#C084FC] block mb-2">
+                LIVE SAMPLE OUTPUTS
+              </span>
+              <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight">
+                What the <em className="italic text-[#C084FC]">{activeAgent.name}</em> drafts.
+              </h2>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-serif font-normal text-white tracking-tight mb-2">
-              What the {activeAgent.name} drafts for you.
-            </h2>
-            <p className="text-sm sm:text-base text-slate-400 font-light max-w-2xl">
-              Real-world formatting calibrated specifically to satisfy {activeAgent.platform}'s latest recommendation algorithm.
-            </p>
+            <span className="text-xs font-mono text-slate-400">
+              Calibrated for {activeAgent.platform}
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-white/10 border-t border-b border-white/10">
             {activeAgent.sampleOutputs.map((sample, idx) => (
               <div 
                 key={idx}
-                className="p-6 sm:p-7 rounded-2xl border border-white/10 bg-[#0F1017]/90 flex flex-col justify-between"
+                className="py-8 md:px-8 first:md:pl-0 last:md:pr-0 flex flex-col justify-between gap-6"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded bg-white/10 text-white/80 border border-white/10">
+                  {/* Visual Platform Header */}
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-6 h-6 rounded bg-white/[0.06] border border-white/10 flex items-center justify-center">
+                        {renderAgentIcon(activeAgent, "w-3.5 h-3.5")}
+                      </span>
+                      <span className="text-xs font-mono text-slate-300">{sample.type}</span>
+                    </div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded bg-[#7C3AED]/15 text-[#C084FC] border border-[#7C3AED]/30">
                       {sample.badge}
                     </span>
-                    <span className="text-xs font-mono text-slate-400">{sample.type}</span>
                   </div>
 
-                  <h3 className="text-base sm:text-lg font-medium text-white mb-3">
+                  <h3 className="text-lg font-medium text-white mb-3">
                     {sample.title}
                   </h3>
 
-                  <div className="p-4 rounded-xl bg-black/60 border border-white/5 font-sans text-xs sm:text-sm text-slate-300 leading-relaxed italic mb-4">
+                  <div className="border-l-2 border-[#C084FC] pl-4 py-1 font-sans text-xs sm:text-sm text-slate-300 leading-relaxed italic">
                     "{sample.hook}"
                   </div>
                 </div>
 
                 <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] font-mono text-slate-400">
                   <span>{sample.previewMeta}</span>
-                  <span className="text-emerald-400 font-medium">✓ Ready to Post</span>
+                  <span className="text-emerald-400 font-medium">✓ Ready to Publish</span>
                 </div>
               </div>
             ))}
@@ -804,7 +1433,7 @@ export function AgentDetailPage() {
               <span>·</span>
               <span>No card required</span>
               <span>·</span>
-              <span>Review on WhatsApp</span>
+              <span>1-click auto-scheduling</span>
             </div>
           </form>
         </div>

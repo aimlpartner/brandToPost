@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, X, ArrowRight, ArrowUpRight } from "lucide-react";
 import { AGENTS_LIST, renderAgentIcon } from "../data/agentsData";
+import { SOLUTIONS_LIST, renderSolutionIcon } from "../data/solutionsData";
 
 interface UniversalNavbarProps {
   forcedTheme?: 'dark' | 'light';
@@ -10,13 +11,35 @@ interface UniversalNavbarProps {
 export function UniversalNavbar({ forcedTheme }: UniversalNavbarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isDarkNavbar, setIsDarkNavbar] = useState(true);
+
+  const [solutionsOpen, setSolutionsOpen] = useState(false);
+  const solutionsDropdownRef = useRef<HTMLDivElement>(null);
+  const solutionsBtnRef = useRef<HTMLButtonElement>(null);
+  const solutionsTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const [agentsOpen, setAgentsOpen] = useState(false);
   const agentsDropdownRef = useRef<HTMLDivElement>(null);
   const agentsBtnRef = useRef<HTMLButtonElement>(null);
   const agentsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleAgentsMouseEnter = () => {
+  const handleSolutionsMouseEnter = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
     if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    setAgentsOpen(false);
+    setSolutionsOpen(true);
+  };
+
+  const handleSolutionsMouseLeave = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
+    solutionsTimerRef.current = setTimeout(() => {
+      setSolutionsOpen(false);
+    }, 200);
+  };
+
+  const handleAgentsMouseEnter = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
+    if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    setSolutionsOpen(false);
     setAgentsOpen(true);
   };
 
@@ -30,6 +53,14 @@ export function UniversalNavbar({ forcedTheme }: UniversalNavbarProps) {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
+        solutionsDropdownRef.current &&
+        !solutionsDropdownRef.current.contains(event.target as Node) &&
+        solutionsBtnRef.current &&
+        !solutionsBtnRef.current.contains(event.target as Node)
+      ) {
+        setSolutionsOpen(false);
+      }
+      if (
         agentsDropdownRef.current &&
         !agentsDropdownRef.current.contains(event.target as Node) &&
         agentsBtnRef.current &&
@@ -39,9 +70,12 @@ export function UniversalNavbar({ forcedTheme }: UniversalNavbarProps) {
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setAgentsOpen(false);
+      if (event.key === 'Escape') {
+        setSolutionsOpen(false);
+        setAgentsOpen(false);
+      }
     };
-    if (agentsOpen) {
+    if (solutionsOpen || agentsOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
     }
@@ -49,7 +83,7 @@ export function UniversalNavbar({ forcedTheme }: UniversalNavbarProps) {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [agentsOpen]);
+  }, [solutionsOpen, agentsOpen]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -95,13 +129,39 @@ export function UniversalNavbar({ forcedTheme }: UniversalNavbarProps) {
             <span className={`text-xl tracking-tight font-display font-bold transition-colors duration-300 ${isDarkNavbar ? 'text-white' : 'text-slate-900'}`}>BrandToPost</span>
           </Link>
           
-          <div className="flex items-center gap-3 sm:gap-5">
+          <div className="flex items-center gap-2.5 sm:gap-4">
+            {/* Solutions Dropdown Trigger */}
+            <button
+              ref={solutionsBtnRef}
+              onMouseEnter={handleSolutionsMouseEnter}
+              onMouseLeave={handleSolutionsMouseLeave}
+              onClick={() => {
+                setSolutionsOpen(!solutionsOpen);
+                setAgentsOpen(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
+                solutionsOpen 
+                  ? 'bg-white/15 border-white/30 text-white shadow-[0_0_15px_rgba(124,58,237,0.25)]' 
+                  : (isDarkNavbar 
+                      ? 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/20'
+                      : 'bg-slate-900/[0.04] border-slate-900/10 text-slate-800 hover:text-slate-950 hover:bg-slate-900/[0.08]')
+              }`}
+              aria-expanded={solutionsOpen}
+              aria-label="Toggle solutions dropdown"
+            >
+              <span className="tracking-tight font-medium">Solutions</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${solutionsOpen ? 'rotate-180' : 'opacity-60'}`} />
+            </button>
+
             {/* Agents Dropdown Trigger */}
             <button
               ref={agentsBtnRef}
               onMouseEnter={handleAgentsMouseEnter}
               onMouseLeave={handleAgentsMouseLeave}
-              onClick={() => setAgentsOpen(!agentsOpen)}
+              onClick={() => {
+                setAgentsOpen(!agentsOpen);
+                setSolutionsOpen(false);
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
                 agentsOpen 
                   ? 'bg-white/15 border-white/30 text-white shadow-[0_0_15px_rgba(124,58,237,0.25)]' 
@@ -123,6 +183,69 @@ export function UniversalNavbar({ forcedTheme }: UniversalNavbarProps) {
             </Link>
           </div>
         </div>
+
+        {/* Solutions Mega Dropdown Panel */}
+        {solutionsOpen && (
+          <div
+            ref={solutionsDropdownRef}
+            onMouseEnter={handleSolutionsMouseEnter}
+            onMouseLeave={handleSolutionsMouseLeave}
+            className="absolute top-full left-4 right-4 sm:left-auto sm:right-6 lg:right-8 mt-2 sm:w-[700px] md:w-[820px] lg:w-[900px] max-h-[82vh] overflow-y-auto bg-[#0A0A0F]/95 border border-white/15 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_0_50px_rgba(124,58,237,0.15)] backdrop-blur-2xl rounded-2xl p-6 sm:p-7 z-50 text-left animate-in fade-in zoom-in-95 duration-200"
+          >
+            <div className="absolute -top-3 left-0 right-0 h-3" />
+            <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-[#C084FC] animate-pulse"></span>
+                <h3 className="text-sm font-semibold text-white tracking-tight">High-Conviction Niche Solutions</h3>
+                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-[#7C3AED]/20 text-[#C084FC] border border-[#7C3AED]/30">
+                  Purpose-Built Playbooks
+                </span>
+              </div>
+              <button
+                onClick={() => setSolutionsOpen(false)}
+                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 py-4">
+              {SOLUTIONS_LIST.map((sol) => (
+                <Link
+                  key={sol.slug}
+                  to={`/solutions/${sol.slug}`}
+                  onClick={() => setSolutionsOpen(false)}
+                  className={`group/sol p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                    sol.isFlagship
+                      ? 'bg-[#7C3AED]/10 border-[#C084FC]/40 hover:bg-[#7C3AED]/15 hover:border-[#C084FC]'
+                      : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-[#7C3AED]/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+                      {renderSolutionIcon(sol.slug, "w-4 h-4")}
+                    </div>
+                    {sol.isFlagship ? (
+                      <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-[#7C3AED] text-white font-semibold">
+                        ★ Founder
+                      </span>
+                    ) : (
+                      <ArrowUpRight className="w-3.5 h-3.5 text-white/25 group-hover/sol:text-[#C084FC] transition-colors shrink-0" />
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold text-white group-hover/sol:text-[#C084FC] transition-colors">
+                      {sol.shortName}
+                    </h4>
+                    <p className="text-[10px] font-mono text-white/50 truncate mt-0.5">
+                      {sol.role}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Agents Mega Dropdown Panel */}
         {agentsOpen && (

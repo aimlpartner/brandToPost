@@ -96,9 +96,9 @@ export const AGENTS_LIST: AgentData[] = [
           tag: "Social Proof"
         },
         {
-          title: "1-Tap Mobile Dispatch",
-          desc: "Delivers complete drafts straight to your WhatsApp. Review in 10 seconds, reply '1', and it publishes live to your personal and company page.",
-          tag: "Workflow"
+          title: "Dual-Stream Autopilot",
+          desc: "Schedules and publishes directly to both your personal founder profile and company LinkedIn page.",
+          tag: "Autopilot"
         }
       ]
     },
@@ -109,7 +109,7 @@ export const AGENTS_LIST: AgentData[] = [
         {
           metric: "94%",
           title: "Time Saved Weekly",
-          desc: "Cut executive drafting time from 10 hours to 60 seconds of WhatsApp approval per post."
+          desc: "Cut executive drafting time from 10 hours a week to a 60-second queue review."
         },
         {
           metric: "3.4x",
@@ -141,7 +141,7 @@ export const AGENTS_LIST: AgentData[] = [
         {
           feature: "Publishing Workflow",
           manual: "Log in to 3 different scheduling dashboards",
-          withAgent: "Review on WhatsApp on your phone; reply 1 to go live"
+          withAgent: "1-click approval and automated peak-hour scheduling"
         }
       ]
     },
@@ -249,16 +249,16 @@ export const AGENTS_LIST: AgentData[] = [
           desc: "Maintains optimal algorithmic posting cadence without requiring you to open the app all day."
         },
         {
-          metric: "0 Min",
-          title: "Laptop Time Required",
-          desc: "Approve daily threads and posts directly via WhatsApp mobile notifications."
+          metric: "60 Sec",
+          title: "Weekly Review Time",
+          desc: "Approve your entire week of daily threads and single-take posts in one click."
         }
       ],
       comparison: [
         {
           feature: "Thread Drafting",
           manual: "Hours pacing around trying to write a 10-tweet thread",
-          withAgent: "Full thread generated from one voice note or link in 15 seconds"
+          withAgent: "Full thread generated from one link or topic in 15 seconds"
         },
         {
           feature: "Hook Quality",
@@ -268,7 +268,7 @@ export const AGENTS_LIST: AgentData[] = [
         {
           feature: "Time Commitment",
           manual: "Stuck reading your timeline for 2 hours every day",
-          withAgent: "Review on WhatsApp in 15 seconds; completely hands-off"
+          withAgent: "Review your queue in 60 seconds; completely hands-off"
         },
         {
           feature: "Repurposing",
@@ -405,7 +405,7 @@ export const AGENTS_LIST: AgentData[] = [
         {
           feature: "Review Process",
           manual: "Endless email threads and Google Drive links",
-          withAgent: "Preview card sent straight to WhatsApp; 1 tap to approve"
+          withAgent: "Instant visual studio preview; 1 click to approve and schedule"
         }
       ]
     },
@@ -669,7 +669,7 @@ export const AGENTS_LIST: AgentData[] = [
         {
           feature: "Revision Loop",
           manual: "Endless Google Doc comment threads",
-          withAgent: "Reply on WhatsApp to tweak tone and publish in 1 tap"
+          withAgent: "Tweak hooks inline in one click and auto-schedule"
         }
       ]
     },

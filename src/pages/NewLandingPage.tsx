@@ -6,6 +6,7 @@ import {
   ChevronDown, X, CheckCircle2, ArrowRight, ArrowUpRight, ThumbsUp, Mic, Zap, Check
 } from 'lucide-react';
 import { AGENTS_LIST, renderAgentIcon } from '../data/agentsData';
+import { SOLUTIONS_LIST, renderSolutionIcon } from '../data/solutionsData';
 import { CloudShader } from '../components/ui/cloud-shader';
 
 const HeroRotatingWord = React.memo(() => {
@@ -34,7 +35,12 @@ const HeroRotatingWord = React.memo(() => {
 export function NewLandingPage() {
   const navigate = useNavigate();
 
-  // Agents & Integrations Hamburger Dropdowns State
+  // Solutions, Agents & Integrations Dropdowns State
+  const [solutionsOpen, setSolutionsOpen] = useState(false);
+  const solutionsDropdownRef = useRef<HTMLDivElement>(null);
+  const solutionsBtnRef = useRef<HTMLButtonElement>(null);
+  const solutionsTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const [agentsOpen, setAgentsOpen] = useState(false);
   const agentsDropdownRef = useRef<HTMLDivElement>(null);
   const agentsBtnRef = useRef<HTMLButtonElement>(null);
@@ -45,9 +51,27 @@ export function NewLandingPage() {
   const integrationsBtnRef = useRef<HTMLButtonElement>(null);
   const integrationsTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleAgentsMouseEnter = () => {
+  const handleSolutionsMouseEnter = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
     if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
     if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
+    setAgentsOpen(false);
+    setIntegrationsOpen(false);
+    setSolutionsOpen(true);
+  };
+
+  const handleSolutionsMouseLeave = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
+    solutionsTimerRef.current = setTimeout(() => {
+      setSolutionsOpen(false);
+    }, 200);
+  };
+
+  const handleAgentsMouseEnter = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
+    if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
+    setSolutionsOpen(false);
     setIntegrationsOpen(false);
     setAgentsOpen(true);
   };
@@ -60,8 +84,10 @@ export function NewLandingPage() {
   };
 
   const handleIntegrationsMouseEnter = () => {
+    if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
     if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
     if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
+    setSolutionsOpen(false);
     setAgentsOpen(false);
     setIntegrationsOpen(true);
   };
@@ -75,6 +101,14 @@ export function NewLandingPage() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (
+        solutionsDropdownRef.current &&
+        !solutionsDropdownRef.current.contains(event.target as Node) &&
+        solutionsBtnRef.current &&
+        !solutionsBtnRef.current.contains(event.target as Node)
+      ) {
+        setSolutionsOpen(false);
+      }
       if (
         integrationsDropdownRef.current &&
         !integrationsDropdownRef.current.contains(event.target as Node) &&
@@ -94,21 +128,23 @@ export function NewLandingPage() {
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        setSolutionsOpen(false);
         setIntegrationsOpen(false);
         setAgentsOpen(false);
       }
     };
-    if (integrationsOpen || agentsOpen) {
+    if (solutionsOpen || integrationsOpen || agentsOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
+      if (solutionsTimerRef.current) clearTimeout(solutionsTimerRef.current);
       if (agentsTimerRef.current) clearTimeout(agentsTimerRef.current);
       if (integrationsTimerRef.current) clearTimeout(integrationsTimerRef.current);
     };
-  }, [integrationsOpen, agentsOpen]);
+  }, [solutionsOpen, integrationsOpen, agentsOpen]);
 
   // 11 Core Integrations Directory
   const integrationsList = [
@@ -720,8 +756,30 @@ export function NewLandingPage() {
               <span className="text-base tracking-tight font-semibold">BrandToPost</span>
             </Link>
 
-            {/* Clean Text Links + Agents & Integrations Hamburger Triggers */}
-            <div className="flex items-center gap-3 sm:gap-5 lg:gap-6">
+            {/* Clean Text Links + Solutions, Agents & Integrations Triggers */}
+            <div className="flex items-center gap-2.5 sm:gap-4 lg:gap-5">
+              {/* Solutions Dropdown Trigger */}
+              <button
+                ref={solutionsBtnRef}
+                onMouseEnter={handleSolutionsMouseEnter}
+                onMouseLeave={handleSolutionsMouseLeave}
+                onClick={() => {
+                  setSolutionsOpen(!solutionsOpen);
+                  setAgentsOpen(false);
+                  setIntegrationsOpen(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
+                  solutionsOpen 
+                    ? 'bg-white/10 border-white/30 text-white shadow-[0_0_15px_rgba(124,58,237,0.25)]' 
+                    : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/20'
+                }`}
+                aria-expanded={solutionsOpen}
+                aria-label="Toggle solutions dropdown"
+              >
+                <span className="tracking-tight font-medium">Solutions</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 text-white/60 ${solutionsOpen ? 'rotate-180 text-white' : ''}`} />
+              </button>
+
               {/* Agents Dropdown Trigger */}
               <button
                 ref={agentsBtnRef}
@@ -729,6 +787,7 @@ export function NewLandingPage() {
                 onMouseLeave={handleAgentsMouseLeave}
                 onClick={() => {
                   setAgentsOpen(!agentsOpen);
+                  setSolutionsOpen(false);
                   setIntegrationsOpen(false);
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
@@ -750,9 +809,10 @@ export function NewLandingPage() {
                 onMouseLeave={handleIntegrationsMouseLeave}
                 onClick={() => {
                   setIntegrationsOpen(!integrationsOpen);
+                  setSolutionsOpen(false);
                   setAgentsOpen(false);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
+                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
                   integrationsOpen 
                     ? 'bg-white/10 border-white/30 text-white shadow-[0_0_15px_rgba(124,58,237,0.25)]' 
                     : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/20'
@@ -764,13 +824,92 @@ export function NewLandingPage() {
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 text-white/60 ${integrationsOpen ? 'rotate-180 text-white' : ''}`} />
               </button>
 
-              <Link className="text-xs font-medium opacity-70 hover:opacity-100 transition-opacity" to="/blog">Blog</Link>
+              <Link className="text-xs font-medium opacity-70 hover:opacity-100 transition-opacity hidden md:block" to="/blog">Blog</Link>
               <Link className="text-xs font-medium opacity-70 hover:opacity-100 transition-opacity hidden md:block" to="/login">Sign In</Link>
               <Link className="px-4 py-2 text-xs font-medium tracking-wide transition-all bg-[#7C3AED] hover:bg-[#6D28D9] text-white whitespace-nowrap" to="/login?mode=signup">
                 Start free trial
               </Link>
             </div>
           </div>
+
+          {/* Solutions Mega Dropdown Panel */}
+          {solutionsOpen && (
+            <div
+              ref={solutionsDropdownRef}
+              onMouseEnter={handleSolutionsMouseEnter}
+              onMouseLeave={handleSolutionsMouseLeave}
+              className="absolute top-full left-4 right-4 sm:left-auto sm:right-6 lg:right-10 mt-2 sm:w-[700px] md:w-[820px] lg:w-[900px] max-h-[82vh] overflow-y-auto bg-[#0A0A0F]/95 border border-white/15 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_0_50px_rgba(124,58,237,0.15)] backdrop-blur-2xl rounded-2xl p-6 sm:p-7 z-50 text-left animate-in fade-in zoom-in-95 duration-200"
+            >
+              <div className="absolute -top-3 left-0 right-0 h-3" />
+              <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-[#C084FC] animate-pulse"></span>
+                  <h3 className="text-sm font-semibold text-white tracking-tight">High-Conviction Niche Solutions</h3>
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-[#7C3AED]/20 text-[#C084FC] border border-[#7C3AED]/30">
+                    Purpose-Built Playbooks
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSolutionsOpen(false)}
+                  className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Close solutions menu"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 py-4">
+                {SOLUTIONS_LIST.map((sol) => (
+                  <Link
+                    key={sol.slug}
+                    to={`/solutions/${sol.slug}`}
+                    onClick={() => setSolutionsOpen(false)}
+                    className={`group/sol p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                      sol.isFlagship
+                        ? 'bg-[#7C3AED]/10 border-[#C084FC]/40 hover:bg-[#7C3AED]/15 hover:border-[#C084FC]'
+                        : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-[#7C3AED]/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+                        {renderSolutionIcon(sol.slug, "w-4 h-4")}
+                      </div>
+                      {sol.isFlagship ? (
+                        <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-[#7C3AED] text-white font-semibold">
+                          ★ Founder
+                        </span>
+                      ) : (
+                        <ArrowUpRight className="w-3.5 h-3.5 text-white/25 group-hover/sol:text-[#C084FC] transition-colors shrink-0" />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-white group-hover/sol:text-[#C084FC] transition-colors">
+                        {sol.shortName}
+                      </h4>
+                      <p className="text-[10px] font-mono text-white/50 truncate mt-0.5">
+                        {sol.role}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="pt-3.5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-white/50">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
+                  <span>Calibrated for high-trust B2B, founder, and operator workflows</span>
+                </div>
+                <Link
+                  to="/solutions/founders"
+                  onClick={() => setSolutionsOpen(false)}
+                  className="inline-flex items-center gap-1.5 font-medium text-[#C084FC] hover:text-white transition-colors group/cta"
+                >
+                  <span>Explore Flagship Founder Engine</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover/cta:translate-x-0.5 transition-transform" />
+                </Link>
+              </div>
+            </div>
+          )}
 
           {/* Agents Mega Dropdown Panel */}
           {agentsOpen && (

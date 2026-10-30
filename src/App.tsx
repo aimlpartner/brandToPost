@@ -50,6 +50,7 @@ import { XTemplateCollector } from "./pages/XTemplateCollector";
 import { CampaignTemplateTest } from "./pages/CampaignTemplateTest";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
+import { SolutionDetailPage } from "./pages/SolutionDetailPage";
 
 export default function App() {
   return (
@@ -64,6 +65,9 @@ export default function App() {
               <Route path="/new-landing" element={<NewLandingPage />} />
               <Route path="/new" element={<NewLandingPage />} />
               <Route path="/classic-landing" element={<LandingPage />} />
+              <Route path="/solutions" element={<SolutionDetailPage />} />
+              <Route path="/solutions/:solutionSlug" element={<SolutionDetailPage />} />
+              <Route path="/solution/:solutionSlug" element={<SolutionDetailPage />} />
               <Route path="/agents" element={<AgentDetailPage />} />
               <Route path="/agents/:agentSlug" element={<AgentDetailPage />} />
               <Route path="/agent/:agentSlug" element={<AgentDetailPage />} />
